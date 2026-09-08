@@ -222,6 +222,14 @@ CUresult ensure_module(Module* m) {
   if (m->loaded) return CUDA_SUCCESS;
   if (m->tried) return CUDA_ERROR_INVALID_IMAGE;
   m->tried = true;
+  // Loading ships the whole image to the server. The math libraries carry very
+  // large fatbins, so the size is worth seeing: it is the main cost of the
+  // first launch of any kernel from a given library.
+  const size_t bytes = rgpu::image_size(m->image);
+  if (bytes > (1u << 20)) {
+    rgpu::log("shipping a %.1f MiB module image to the server",
+              double(bytes) / (1 << 20));
+  }
   CUresult r = cuModuleLoadData(&m->loaded, m->image);
   if (r != CUDA_SUCCESS) {
     rgpu::log("cuModuleLoadData failed (%d) while loading a registered fatbin",
@@ -714,6 +722,45 @@ void __cudaRegisterVar(void** fatCubinHandle, char* hostVar,
   if (!hostVar || !deviceName) return;
   std::lock_guard<std::mutex> lk(g_reg_mu);
   g_vars[static_cast<const void*>(hostVar)] = deviceName;
+}
+
+// The rest of the family nvcc can emit. A library referencing one we do not
+// define would fail to load at all, so they exist even where there is nothing
+// useful to do: textures and surfaces are not reachable remotely, and managed
+// variables need managed memory, which cannot span a network.
+void __cudaRegisterManagedVar(void** fatCubinHandle, void** hostVarPtrAddress,
+                              char* deviceAddress, const char* deviceName,
+                              int ext, size_t size, int constant, int global) {
+  (void)fatCubinHandle; (void)hostVarPtrAddress; (void)deviceAddress;
+  (void)ext; (void)size; (void)constant; (void)global;
+  rgpu::unimplemented_rt("__cudaRegisterManagedVar");
+  (void)deviceName;
+}
+
+void __cudaRegisterHostVar(void** fatCubinHandle, const char* deviceName,
+                           char* hostVar, size_t size) {
+  (void)fatCubinHandle; (void)deviceName; (void)hostVar; (void)size;
+}
+
+void __cudaRegisterTexture(void** fatCubinHandle, const void* hostVar,
+                           const void** deviceAddress, const char* deviceName,
+                           int dim, int norm, int ext) {
+  (void)fatCubinHandle; (void)hostVar; (void)deviceAddress; (void)deviceName;
+  (void)dim; (void)norm; (void)ext;
+  rgpu::unimplemented_rt("__cudaRegisterTexture");
+}
+
+void __cudaRegisterSurface(void** fatCubinHandle, const void* hostVar,
+                           const void** deviceAddress, const char* deviceName,
+                           int dim, int ext) {
+  (void)fatCubinHandle; (void)hostVar; (void)deviceAddress; (void)deviceName;
+  (void)dim; (void)ext;
+  rgpu::unimplemented_rt("__cudaRegisterSurface");
+}
+
+char __cudaInitModule(void** fatCubinHandle) {
+  (void)fatCubinHandle;
+  return 1;
 }
 
 unsigned __cudaPushCallConfiguration(dim3 gridDim, dim3 blockDim,
