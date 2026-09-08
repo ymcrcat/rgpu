@@ -2013,6 +2013,17 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
     *out = r_; return true;
   }
 
+  case rgpu::API_cuPointerGetAttribute: {
+    uint8_t has_data{}; uint64_t n_data{};
+    if (!req.get(&has_data) || !req.get(&n_data)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    std::vector<uint8_t> b_data(has_data ? n_data : 0);
+    CUpointer_attribute v_attribute{}; if (!req.get(&v_attribute)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdeviceptr v_ptr{}; if (!req.get(&v_ptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUresult r_ = ::cuPointerGetAttribute(has_data ? (void *)b_data.data() : nullptr, v_attribute, v_ptr);
+    if (has_data) rsp->put_sized(b_data.data(), b_data.size());
+    *out = r_; return true;
+  }
+
   case rgpu::API_cuStreamAttachMemAsync: {
     uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);

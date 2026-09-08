@@ -99,6 +99,21 @@ set_target_properties(rgpu_server_fake PROPERTIES OUTPUT_NAME rgpu-server-fake)
 target_link_libraries(rgpu_server_fake PRIVATE Threads::Threads)
 target_compile_options(rgpu_server_fake PRIVATE -Wno-deprecated-declarations)
 
+# The phase-2 test: stock libcudart on top of the shim. Built only when the
+# runtime has been fetched, since it is not part of a plain client build.
+find_library(CUDART_LIB cudart
+  HINTS ${CMAKE_SOURCE_DIR}/third_party/cudart /usr/local/cuda/lib64
+  NO_DEFAULT_PATH)
+if(CUDART_LIB)
+  add_executable(cudart_smoke tests/cudart_smoke.cpp)
+  target_link_libraries(cudart_smoke PRIVATE ${CUDART_LIB})
+  # cudart dlopens nothing here; it resolves libcuda.so.1 through the loader,
+  # which LD_LIBRARY_PATH points at our shim.
+else()
+  message(STATUS "libcudart not found; run scripts/fetch_cudart.sh to enable "
+                 "the runtime API test")
+endif()
+
 # Driver-API vector add. On the GPU host it links the real driver; on a client
 # with no driver it links the shim, which carries the same SONAME. Either way
 # the loader resolves libcuda.so.1 at run time.

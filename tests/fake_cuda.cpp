@@ -32,7 +32,7 @@ bool range_ok(CUdeviceptr p, size_t n) {
 }
 
 constexpr int kFakeDevice = 0;
-constexpr int kFakeDriverVersion = 12060;
+constexpr int kFakeDriverVersion = 12080;
 
 }  // namespace
 

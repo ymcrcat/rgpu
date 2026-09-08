@@ -10,6 +10,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 VERSION=${CUDA_HEADER_VERSION:-12.8.90}
+NVCC_VERSION=${NVCC_HEADER_VERSION:-12.8.93}
 DEST=third_party/cuda_include
 
 if [[ -f "$DEST/cuda.h" ]]; then
@@ -36,5 +37,20 @@ fi
 
 mkdir -p "$DEST"
 cp -R "$src"/. "$DEST"/
+
+# cuda_runtime_api.h includes crt/host_defines.h, which lives in the nvcc
+# wheel rather than the runtime one. Only the headers are taken.
+echo "downloading nvidia-cuda-nvcc-cu12==$NVCC_VERSION for crt headers ..."
+python3 -m pip download "nvidia-cuda-nvcc-cu12==$NVCC_VERSION" \
+  --platform manylinux2014_x86_64 --only-binary=:all: --no-deps -d "$tmp/nvcc" \
+  >/dev/null
+python3 -m zipfile -e "$(echo "$tmp"/nvcc/*.whl)" "$tmp/nvcc_out"
+nvcc_inc="$tmp/nvcc_out/nvidia/cuda_nvcc/include"
+if [[ -d "$nvcc_inc/crt" ]]; then
+  cp -R "$nvcc_inc/crt" "$DEST/"
+else
+  echo "warning: crt headers not found in the nvcc wheel" >&2
+fi
+
 echo "extracted $(ls "$DEST" | wc -l | tr -d ' ') headers into $DEST"
 grep -E '^#define CUDA_VERSION' "$DEST/cuda.h"

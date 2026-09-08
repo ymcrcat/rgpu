@@ -151,3 +151,45 @@ clear error rather than corrupting silently. PyTorch needs neither by default.
 - Torch operations compared against CPU references within tolerance.
 - Any call reaching an unimplemented stub logs its name and fails loudly, so a clean
   run proves nothing was silently skipped.
+
+## Finding, 2026-09-08: the driver-only design cannot carry the stock runtime
+
+Testing the shim under a stock `libcudart` 12.8 showed that `cuGetProcAddress`
+interception works exactly as intended: cudart asks us for entry points and we
+answer. It then calls `cuGetExportTable` immediately after `cuInit`, and
+refuses to initialise when it does not get one. `cudaGetDeviceCount` fails.
+
+`cuGetExportTable` returns a table of undocumented internal driver function
+pointers keyed by UUID. cudart 12.8 asks for two:
+
+    6bd5fb6c-5bf4-e74a-8987-d93912fd9df9
+    a094798c-2e74-2e74-93f2-0800200c0a66
+
+The refusal is not sensitive to the error code returned. `CUDA_ERROR_NOT_FOUND`,
+`CUDA_ERROR_NOT_SUPPORTED` and even `CUDA_SUCCESS` with a null table all fail;
+success with a null table simply makes cudart ask for the second table before
+giving up.
+
+The table cannot be forwarded, because its contents are function pointers into
+the server's address space and the client would call straight into them.
+
+This is a known result rather than a mistake in our implementation. The Cricket
+paper states that these hidden functions are used extensively by the runtime
+API and that their undocumented nature means a virtualization layer at the
+driver API level does not allow the use of the original runtime API on top of
+it. LUPINE, which advertises a `libcuda.so.1` shim, also ships its own CUDA
+runtime translation stubs rather than running the stock runtime. ZLUDA does
+implement the tables, as reverse-engineered work against an undocumented
+interface.
+
+### Consequence
+
+The premise that stock `libcudart`, cuBLAS and cuDNN could sit unmodified on a
+driver-level shim is false. Reaching PyTorch requires replacing `libcudart` as
+well, which is what every working system in this space does.
+
+What phase 1 built still stands: the code generator, the wire format and
+transport, the server framework, the fake-driver test harness, and the
+`libcuda.so.1` shim itself, which is still needed for direct driver API users
+and for the driver calls the math libraries make. The generator reads any
+header, so pointing it at `cuda_runtime_api.h` reuses the same machinery.

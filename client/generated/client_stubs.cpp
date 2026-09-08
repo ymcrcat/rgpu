@@ -955,10 +955,6 @@ extern "C" CUresult cuFuncSetSharedSize(CUfunction hfunc, unsigned int bytes) {
   return r_;
 }
 
-extern "C" CUresult cuGetExportTable(const void **ppExportTable, const CUuuid *pExportTableId) {
-  return rgpu::unimplemented("cuGetExportTable", "pointer-to-pointer");
-}
-
 extern "C" CUresult cuGraphAddBatchMemOpNode(CUgraphNode *phGraphNode, CUgraph hGraph, const CUgraphNode *dependencies, size_t numDependencies, const CUDA_BATCH_MEM_OP_NODE_PARAMS *nodeParams) {
   return rgpu::unimplemented("cuGraphAddBatchMemOpNode", "pointer-to-pointer");
 }
@@ -2978,7 +2974,18 @@ extern "C" CUresult cuParamSetv(CUfunction hfunc, int offset, void *ptr, unsigne
 }
 
 extern "C" CUresult cuPointerGetAttribute(void *data, CUpointer_attribute attribute, CUdeviceptr ptr) {
-  return rgpu::unimplemented("cuPointerGetAttribute", "void-pointer");
+  rgpu::Buffer req;
+  req.put<uint8_t>(data ? 1 : 0);
+  req.put<uint64_t>((uint64_t)(rgpu::pointer_attr_size(attribute)));
+  req.put<CUpointer_attribute>(attribute);
+  req.put<CUdeviceptr>(ptr);
+  rgpu::Buffer rsp;
+  CUresult r_ = rgpu::call(rgpu::API_cuPointerGetAttribute, req, &rsp);
+  if (r_ != CUDA_SUCCESS) return r_;
+  if (data) { const uint8_t* b_; size_t n_;
+            if (!rsp.get_sized(&b_, &n_)) return CUDA_ERROR_UNKNOWN;
+            memcpy(data, b_, n_); }
+  return r_;
 }
 
 extern "C" CUresult cuPointerGetAttributes(unsigned int numAttributes, CUpointer_attribute *attributes, void **data, CUdeviceptr ptr) {

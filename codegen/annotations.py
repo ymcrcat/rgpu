@@ -45,6 +45,10 @@ HANDWRITTEN = {
     "cuMemHostUnregister",
     # Version negotiation is answered locally.
     "cuDriverGetVersion",
+    # Undocumented table of internal driver function pointers. cudart asks for
+    # it immediately after cuInit. Hand-written so we can log which table is
+    # wanted and control exactly what we answer.
+    "cuGetExportTable",
 }
 
 # Explicitly refused, with the reason surfaced in the log. These cannot work
@@ -85,6 +89,12 @@ ANNOTATIONS = {
     # Not async in our sense: the caller may read dstHost right after the next
     # stream sync, and we must have the bytes by then, so we round trip.
     "cuMemcpyDtoHAsync_v2": {"params": {"dstHost": "out_buffer(ByteCount)"}},
+
+    # The value size depends on which attribute is asked for, so the size
+    # expression calls a helper rather than naming another parameter.
+    "cuPointerGetAttribute": {
+        "params": {"data": "out_buffer(rgpu::pointer_attr_size(attribute))"},
+    },
 
     # ---- modules and kernels --------------------------------------------
     "cuModuleLoadData": {"params": {"image": "fatbin"}, "record": True},

@@ -4,6 +4,7 @@
 // discovers entry points, how kernel arguments are sized, and which objects
 // live on the client rather than the server.
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <map>
@@ -293,6 +294,36 @@ CUresult cuDriverGetVersion(int* driverVersion) {
   }
   *driverVersion = cached;
   return CUDA_SUCCESS;
+}
+
+// cuGetExportTable hands back a table of undocumented internal driver
+// function pointers, keyed by UUID. cudart calls it right after cuInit and
+// uses it extensively.
+//
+// It cannot be forwarded: the pointers would be addresses in the server
+// process, and the client would call straight into them. The Cricket paper
+// reaches the same conclusion, that a driver-level layer cannot carry the
+// stock runtime on top of it for exactly this reason.
+//
+// We log which table was asked for and refuse. RGPU_EXPORT_TABLE_ERROR lets
+// the refusal code be changed while probing what cudart tolerates.
+CUresult cuGetExportTable(const void** ppExportTable,
+                          const CUuuid* pExportTableId) {
+  if (!ppExportTable || !pExportTableId) return CUDA_ERROR_INVALID_VALUE;
+  char uuid[64];
+  const unsigned char* b =
+      reinterpret_cast<const unsigned char*>(pExportTableId->bytes);
+  std::snprintf(uuid, sizeof(uuid),
+                "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-"
+                "%02x%02x%02x%02x%02x%02x",
+                b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+                b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]);
+  rgpu::log("cuGetExportTable requested for %s", uuid);
+  *ppExportTable = nullptr;
+
+  const char* mode = std::getenv("RGPU_EXPORT_TABLE_ERROR");
+  if (mode) return static_cast<CUresult>(std::atoi(mode));
+  return CUDA_ERROR_NOT_FOUND;
 }
 
 CUresult cuLaunchKernel(CUfunction f, unsigned int gridDimX,

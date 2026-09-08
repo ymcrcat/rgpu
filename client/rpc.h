@@ -23,6 +23,12 @@ CUresult unimplemented(const char* name, const char* why);
 // Returns 0 if the image is not recognized.
 size_t image_size(const void* image);
 
+// Size of the value cuPointerGetAttribute writes for a given attribute. The
+// API takes a bare void* whose meaning depends on the attribute, so the
+// generated stub asks this how many bytes to expect. Returns 0 for an
+// attribute we do not know, which the caller reports as invalid.
+size_t pointer_attr_size(unsigned int attribute);
+
 void log(const char* fmt, ...);
 
 }  // namespace rgpu
