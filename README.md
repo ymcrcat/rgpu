@@ -17,9 +17,15 @@ client (no GPU, no driver)
   rgpu-server → real libcuda.so.1 → GPU                    (GPU host)
 ```
 
-Interception happens at the CUDA driver API. Replacing `libcuda.so.1` means the
-stock runtime and every math library run unmodified on the client and funnel
-through one API, so cuBLAS and cuDNN come free from a single surface.
+Interception happens at two levels. `libcuda.so.1` is replaced and forwards
+driver calls to the GPU host. `libcudart.so.12` is replaced too, and translates
+the CUDA runtime API into driver calls locally.
+
+The second one is not optional. Stock `libcudart` calls `cuGetExportTable`
+immediately after `cuInit` and refuses to start without a table of undocumented
+internal driver function pointers. Those are addresses inside the driver's own
+process, so they cannot be forwarded anywhere. Every working system in this
+space replaces the runtime for this reason.
 
 See `docs/superpowers/specs/2026-09-07-cuda-api-remoting-design.md` for the
 design, the prior art it draws on, and the three hard problems it has to solve.
@@ -31,8 +37,10 @@ design, the prior art it draws on, and the three hard problems it has to solve.
 | Wire format and transport | working |
 | Code generation from `cuda.h` | working, 259 of 435 functions generated |
 | Client shim `libcuda.so.1` | builds, 436 exported entry points |
+| Client shim `libcudart.so.12` | builds, 38 translated and 278 stubs |
 | Server | compiles; not yet run against a real GPU |
-| End-to-end with a fake driver | passing |
+| Driver API end-to-end, fake driver | passing |
+| Runtime API end-to-end, fake driver | passing |
 | End-to-end on a real GPU | needs a GPU host |
 | PyTorch client image and test ladder | written, not yet run |
 
@@ -110,6 +118,7 @@ the whole picture.
 | `codegen/emit.py` | generates client stubs, server dispatch, entry table, fake driver |
 | `common/wire.h` | frame format and serialization |
 | `client/shim.cpp` | `cuGetProcAddress`, kernel launch marshalling, host allocations |
+| `client/cudart_impl.cpp` | the runtime API translated into driver calls, plus kernel registration |
 | `server/main.cpp` | accept loop, dispatch, parameter layout lookup |
 | `tests/fake_cuda.cpp` | a driver backed by host memory, for testing without a GPU |
 

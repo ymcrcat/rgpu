@@ -135,7 +135,7 @@ def builtin_include_dirs():
     return dirs
 
 
-def parse(header, extra_args):
+def parse(header, extra_args, prefix="cu", result_type="CUresult"):
     index = ci.Index.create()
     args = ["-x", "c", "-std=c11"]
     args += ["-I" + d for d in builtin_include_dirs()]
@@ -154,10 +154,11 @@ def parse(header, extra_args):
         if cur.kind != ci.CursorKind.FUNCTION_DECL:
             continue
         name = cur.spelling
-        if not name.startswith("cu") or name in seen:
+        if not name.startswith(prefix) or name in seen:
             continue
-        # The driver API is the set of functions returning CUresult.
-        if cur.result_type.spelling != "CUresult":
+        # An API is the set of functions returning its error type: CUresult for
+        # the driver, cudaError_t for the runtime.
+        if cur.result_type.spelling != result_type:
             continue
         seen.add(name)
 
@@ -190,14 +191,23 @@ def main():
     ap.add_argument("--libclang", default=None, help="path to libclang.so")
     ap.add_argument("-I", dest="includes", action="append", default=[])
     ap.add_argument("-o", dest="out", default="-")
+    ap.add_argument("--prefix", default="cu",
+                    help="function name prefix: cu for the driver API, "
+                         "cuda for the runtime API")
+    ap.add_argument("--result-type", default="CUresult",
+                    help="CUresult for the driver API, cudaError_t for the "
+                         "runtime API")
     a = ap.parse_args()
 
     if a.libclang:
         ci.Config.set_library_file(a.libclang)
 
-    funcs = parse(a.header, ["-I" + i for i in a.includes])
+    funcs = parse(a.header, ["-I" + i for i in a.includes],
+                  prefix=a.prefix, result_type=a.result_type)
     aliases = parse_aliases(a.header)
-    doc = {"header": a.header, "functions": funcs, "aliases": aliases}
+    doc = {"header": a.header, "prefix": a.prefix,
+           "result_type": a.result_type,
+           "functions": funcs, "aliases": aliases}
     text = json.dumps(doc, indent=1)
     if a.out == "-":
         print(text)

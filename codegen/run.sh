@@ -27,8 +27,16 @@ run() {
   docker run --rm --platform "$PLATFORM" -v "$PWD:/src" -w /src "$IMAGE" "$@"
 }
 
+# Driver API: generated client stubs and server dispatch, both remoted.
 run codegen/parse.py --header "$HEADERS/cuda.h" -o codegen/api.json
 run codegen/emit.py --api codegen/api.json
+
+# Runtime API: weak stubs only. The runtime is translated to driver calls in
+# client/cudart_impl.cpp, so there is nothing mechanical to generate; these
+# just make the symbol set complete and name anything not yet translated.
+run codegen/parse.py --header "$HEADERS/cuda_runtime_api.h" \
+  --prefix cuda --result-type cudaError_t -o codegen/runtime_api.json
+run codegen/emit_runtime.py --api codegen/runtime_api.json
 
 echo
 echo "coverage summary (codegen/report.txt):"

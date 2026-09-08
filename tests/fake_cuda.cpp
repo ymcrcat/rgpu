@@ -97,6 +97,24 @@ CUresult cuCtxDestroy_v2(CUcontext ctx) {
 
 CUresult cuCtxSynchronize(void) { return CUDA_SUCCESS; }
 
+// The runtime binds a primary context per device, so the fake needs these too.
+CUresult cuDevicePrimaryCtxRetain(CUcontext* pctx, CUdevice dev) {
+  if (!pctx || dev != kFakeDevice) return CUDA_ERROR_INVALID_VALUE;
+  *pctx = reinterpret_cast<CUcontext>(0xC0FFEE01);
+  return CUDA_SUCCESS;
+}
+
+CUresult cuDevicePrimaryCtxRelease_v2(CUdevice dev) {
+  return dev == kFakeDevice ? CUDA_SUCCESS : CUDA_ERROR_INVALID_VALUE;
+}
+
+CUresult cuMemGetInfo_v2(size_t* free, size_t* total) {
+  if (!free || !total) return CUDA_ERROR_INVALID_VALUE;
+  *total = size_t(24) << 30;
+  *free = size_t(20) << 30;
+  return CUDA_SUCCESS;
+}
+
 CUresult cuCtxSetCurrent(CUcontext) { return CUDA_SUCCESS; }
 
 CUresult cuMemAlloc_v2(CUdeviceptr* dptr, size_t bytesize) {

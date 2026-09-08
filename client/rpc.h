@@ -29,6 +29,10 @@ size_t image_size(const void* image);
 // attribute we do not know, which the caller reports as invalid.
 size_t pointer_attr_size(unsigned int attribute);
 
+// Same idea as unimplemented(), for CUDA runtime entry points we have not
+// translated to driver calls yet.
+void unimplemented_rt(const char* name);
+
 void log(const char* fmt, ...);
 
 }  // namespace rgpu

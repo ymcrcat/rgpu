@@ -16,6 +16,7 @@ find_path(CUDA_INCLUDE_DIR cuda.h
 include_directories(${CUDA_INCLUDE_DIR})
 
 set(GEN_CLIENT ${CMAKE_SOURCE_DIR}/client/generated/client_stubs.cpp)
+set(GEN_CUDART ${CMAKE_SOURCE_DIR}/client/generated/cudart_stubs.cpp)
 set(GEN_SERVER ${CMAKE_SOURCE_DIR}/server/generated/dispatch.cpp)
 set(GEN_NAMES  ${CMAKE_SOURCE_DIR}/common/generated/api_names.cpp)
 
@@ -43,6 +44,24 @@ set_source_files_properties(${GEN_CLIENT} PROPERTIES
   COMPILE_OPTIONS "-Wno-deprecated-declarations")
 find_package(Threads REQUIRED)
 target_link_libraries(rgpu_client PRIVATE Threads::Threads)
+
+# ---------------------------------------------------------------------------
+# Client: a drop-in replacement for libcudart.so.12.
+#
+# Stock libcudart cannot run on a remoted driver, because it demands
+# undocumented export tables that cannot cross a process boundary. So the
+# runtime API stops here and is translated into driver calls, which the shim
+# above remotes.
+# ---------------------------------------------------------------------------
+add_library(rgpu_cudart SHARED
+  client/cudart_impl.cpp
+  ${GEN_CUDART}
+)
+set_target_properties(rgpu_cudart PROPERTIES
+  OUTPUT_NAME cudart
+  SOVERSION 12
+)
+target_link_libraries(rgpu_cudart PRIVATE rgpu_client Threads::Threads)
 
 # ---------------------------------------------------------------------------
 # Server: runs on the GPU host against the real driver.

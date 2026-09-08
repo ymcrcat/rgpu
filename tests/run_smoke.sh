@@ -20,4 +20,14 @@ for _ in $(seq 1 50); do
   sleep 0.1
 done
 
-LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$PORT" "$BUILD/rpc_smoke"
+rc=0
+LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$PORT" "$BUILD/rpc_smoke" || rc=1
+
+# The runtime API path, if it was built. Our libcudart must come first so the
+# loader picks it over any stock one.
+if [[ -x "$BUILD/cudart_smoke" ]]; then
+  echo
+  LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$PORT" \
+    "$BUILD/cudart_smoke" 2>&1 | grep -v "no version information" || rc=1
+fi
+exit $rc

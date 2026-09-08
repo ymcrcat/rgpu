@@ -152,6 +152,16 @@ CUresult unimplemented(const char* name, const char* why) {
   return CUDA_ERROR_NOT_SUPPORTED;
 }
 
+void unimplemented_rt(const char* name) {
+  static std::mutex mu;
+  static std::set<std::string> seen;
+  {
+    std::lock_guard<std::mutex> lk(mu);
+    if (!seen.insert(name).second) return;
+  }
+  log("UNTRANSLATED runtime call %s", name);
+}
+
 size_t pointer_attr_size(unsigned int attribute) {
   switch (attribute) {
     // Handles and addresses: one pointer-sized value.

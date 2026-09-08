@@ -1,0 +1,8726 @@
+{
+ "header": "third_party/cuda_include/cuda_runtime_api.h",
+ "prefix": "cuda",
+ "result_type": "cudaError_t",
+ "functions": [
+  {
+   "name": "cudaArrayGetInfo",
+   "params": [
+    {
+     "name": "desc",
+     "type": "struct cudaChannelFormatDesc *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaChannelFormatDesc",
+     "pointee": "struct cudaChannelFormatDesc"
+    },
+    {
+     "name": "extent",
+     "type": "struct cudaExtent *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaExtent",
+     "pointee": "struct cudaExtent"
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int *",
+     "kind": "out_scalar",
+     "detail": "unsigned int",
+     "pointee": "unsigned int"
+    },
+    {
+     "name": "array",
+     "type": "cudaArray_t",
+     "kind": "handle",
+     "detail": "struct cudaArray",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaArrayGetMemoryRequirements",
+   "params": [
+    {
+     "name": "memoryRequirements",
+     "type": "struct cudaArrayMemoryRequirements *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaArrayMemoryRequirements",
+     "pointee": "struct cudaArrayMemoryRequirements"
+    },
+    {
+     "name": "array",
+     "type": "cudaArray_t",
+     "kind": "handle",
+     "detail": "struct cudaArray",
+     "pointee": null
+    },
+    {
+     "name": "device",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaArrayGetPlane",
+   "params": [
+    {
+     "name": "pPlaneArray",
+     "type": "cudaArray_t *",
+     "kind": "out_handle",
+     "detail": "struct cudaArray",
+     "pointee": "cudaArray_t"
+    },
+    {
+     "name": "hArray",
+     "type": "cudaArray_t",
+     "kind": "handle",
+     "detail": "struct cudaArray",
+     "pointee": null
+    },
+    {
+     "name": "planeIdx",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaArrayGetSparseProperties",
+   "params": [
+    {
+     "name": "sparseProperties",
+     "type": "struct cudaArraySparseProperties *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaArraySparseProperties",
+     "pointee": "struct cudaArraySparseProperties"
+    },
+    {
+     "name": "array",
+     "type": "cudaArray_t",
+     "kind": "handle",
+     "detail": "struct cudaArray",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaChooseDevice",
+   "params": [
+    {
+     "name": "device",
+     "type": "int *",
+     "kind": "out_scalar",
+     "detail": "int",
+     "pointee": "int"
+    },
+    {
+     "name": "prop",
+     "type": "const struct cudaDeviceProp *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaDeviceProp",
+     "pointee": "struct cudaDeviceProp"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaCreateSurfaceObject",
+   "params": [
+    {
+     "name": "pSurfObject",
+     "type": "cudaSurfaceObject_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long long",
+     "pointee": "cudaSurfaceObject_t"
+    },
+    {
+     "name": "pResDesc",
+     "type": "const struct cudaResourceDesc *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaResourceDesc",
+     "pointee": "struct cudaResourceDesc"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaCreateTextureObject",
+   "params": [
+    {
+     "name": "pTexObject",
+     "type": "cudaTextureObject_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long long",
+     "pointee": "cudaTextureObject_t"
+    },
+    {
+     "name": "pResDesc",
+     "type": "const struct cudaResourceDesc *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaResourceDesc",
+     "pointee": "struct cudaResourceDesc"
+    },
+    {
+     "name": "pTexDesc",
+     "type": "const struct cudaTextureDesc *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaTextureDesc",
+     "pointee": "struct cudaTextureDesc"
+    },
+    {
+     "name": "pResViewDesc",
+     "type": "const struct cudaResourceViewDesc *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaResourceViewDesc",
+     "pointee": "struct cudaResourceViewDesc"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaCtxResetPersistingL2Cache",
+   "params": [],
+   "auto": true
+  },
+  {
+   "name": "cudaDestroyExternalMemory",
+   "params": [
+    {
+     "name": "extMem",
+     "type": "cudaExternalMemory_t",
+     "kind": "handle",
+     "detail": "struct CUexternalMemory_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDestroyExternalSemaphore",
+   "params": [
+    {
+     "name": "extSem",
+     "type": "cudaExternalSemaphore_t",
+     "kind": "handle",
+     "detail": "struct CUexternalSemaphore_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDestroySurfaceObject",
+   "params": [
+    {
+     "name": "surfObject",
+     "type": "cudaSurfaceObject_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDestroyTextureObject",
+   "params": [
+    {
+     "name": "texObject",
+     "type": "cudaTextureObject_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceCanAccessPeer",
+   "params": [
+    {
+     "name": "canAccessPeer",
+     "type": "int *",
+     "kind": "out_scalar",
+     "detail": "int",
+     "pointee": "int"
+    },
+    {
+     "name": "device",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "peerDevice",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceDisablePeerAccess",
+   "params": [
+    {
+     "name": "peerDevice",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceEnablePeerAccess",
+   "params": [
+    {
+     "name": "peerDevice",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceFlushGPUDirectRDMAWrites",
+   "params": [
+    {
+     "name": "target",
+     "type": "enum cudaFlushGPUDirectRDMAWritesTarget",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "scope",
+     "type": "enum cudaFlushGPUDirectRDMAWritesScope",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceGetAttribute",
+   "params": [
+    {
+     "name": "value",
+     "type": "int *",
+     "kind": "out_scalar",
+     "detail": "int",
+     "pointee": "int"
+    },
+    {
+     "name": "attr",
+     "type": "enum cudaDeviceAttr",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "device",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceGetByPCIBusId",
+   "params": [
+    {
+     "name": "device",
+     "type": "int *",
+     "kind": "out_scalar",
+     "detail": "int",
+     "pointee": "int"
+    },
+    {
+     "name": "pciBusId",
+     "type": "const char *",
+     "kind": "string",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceGetCacheConfig",
+   "params": [
+    {
+     "name": "pCacheConfig",
+     "type": "enum cudaFuncCache *",
+     "kind": "out_scalar",
+     "detail": "enum cudaFuncCache",
+     "pointee": "enum cudaFuncCache"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceGetDefaultMemPool",
+   "params": [
+    {
+     "name": "memPool",
+     "type": "cudaMemPool_t *",
+     "kind": "out_handle",
+     "detail": "struct CUmemPoolHandle_st",
+     "pointee": "cudaMemPool_t"
+    },
+    {
+     "name": "device",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceGetGraphMemAttribute",
+   "params": [
+    {
+     "name": "device",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "attr",
+     "type": "enum cudaGraphMemAttributeType",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "value",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaDeviceGetLimit",
+   "params": [
+    {
+     "name": "pValue",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    },
+    {
+     "name": "limit",
+     "type": "enum cudaLimit",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceGetMemPool",
+   "params": [
+    {
+     "name": "memPool",
+     "type": "cudaMemPool_t *",
+     "kind": "out_handle",
+     "detail": "struct CUmemPoolHandle_st",
+     "pointee": "cudaMemPool_t"
+    },
+    {
+     "name": "device",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceGetNvSciSyncAttributes",
+   "params": [
+    {
+     "name": "nvSciSyncAttrList",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "device",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaDeviceGetP2PAttribute",
+   "params": [
+    {
+     "name": "value",
+     "type": "int *",
+     "kind": "out_scalar",
+     "detail": "int",
+     "pointee": "int"
+    },
+    {
+     "name": "attr",
+     "type": "enum cudaDeviceP2PAttr",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "srcDevice",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "dstDevice",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceGetPCIBusId",
+   "params": [
+    {
+     "name": "pciBusId",
+     "type": "char *",
+     "kind": "out_scalar",
+     "detail": "char",
+     "pointee": "char"
+    },
+    {
+     "name": "len",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "device",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceGetSharedMemConfig",
+   "params": [
+    {
+     "name": "pConfig",
+     "type": "enum cudaSharedMemConfig *",
+     "kind": "out_scalar",
+     "detail": "enum cudaSharedMemConfig",
+     "pointee": "enum cudaSharedMemConfig"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceGetStreamPriorityRange",
+   "params": [
+    {
+     "name": "leastPriority",
+     "type": "int *",
+     "kind": "out_scalar",
+     "detail": "int",
+     "pointee": "int"
+    },
+    {
+     "name": "greatestPriority",
+     "type": "int *",
+     "kind": "out_scalar",
+     "detail": "int",
+     "pointee": "int"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceGetTexture1DLinearMaxWidth",
+   "params": [
+    {
+     "name": "maxWidthInElements",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    },
+    {
+     "name": "fmtDesc",
+     "type": "const struct cudaChannelFormatDesc *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaChannelFormatDesc",
+     "pointee": "struct cudaChannelFormatDesc"
+    },
+    {
+     "name": "device",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaDeviceGraphMemTrim",
+   "params": [
+    {
+     "name": "device",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceRegisterAsyncNotification",
+   "params": [
+    {
+     "name": "device",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "callbackFunc",
+     "type": "cudaAsyncCallback",
+     "kind": "unknown",
+     "detail": "struct-pointer:void (struct cudaAsyncNotificationInfo *, void *, struct cudaAsyncCallbackEntry *)",
+     "pointee": "void (struct cudaAsyncNotificationInfo *, void *, struct cudaAsyncCallbackEntry *)"
+    },
+    {
+     "name": "userData",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "callback",
+     "type": "cudaAsyncCallbackHandle_t *",
+     "kind": "out_handle",
+     "detail": "struct cudaAsyncCallbackEntry",
+     "pointee": "cudaAsyncCallbackHandle_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaDeviceReset",
+   "params": [],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceSetCacheConfig",
+   "params": [
+    {
+     "name": "cacheConfig",
+     "type": "enum cudaFuncCache",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceSetGraphMemAttribute",
+   "params": [
+    {
+     "name": "device",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "attr",
+     "type": "enum cudaGraphMemAttributeType",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "value",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaDeviceSetLimit",
+   "params": [
+    {
+     "name": "limit",
+     "type": "enum cudaLimit",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "value",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceSetMemPool",
+   "params": [
+    {
+     "name": "device",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "memPool",
+     "type": "cudaMemPool_t",
+     "kind": "handle",
+     "detail": "struct CUmemPoolHandle_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceSetSharedMemConfig",
+   "params": [
+    {
+     "name": "config",
+     "type": "enum cudaSharedMemConfig",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceSynchronize",
+   "params": [],
+   "auto": true
+  },
+  {
+   "name": "cudaDeviceUnregisterAsyncNotification",
+   "params": [
+    {
+     "name": "device",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "callback",
+     "type": "cudaAsyncCallbackHandle_t",
+     "kind": "handle",
+     "detail": "struct cudaAsyncCallbackEntry",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaDriverGetVersion",
+   "params": [
+    {
+     "name": "driverVersion",
+     "type": "int *",
+     "kind": "out_scalar",
+     "detail": "int",
+     "pointee": "int"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaEventCreate",
+   "params": [
+    {
+     "name": "event",
+     "type": "cudaEvent_t *",
+     "kind": "out_handle",
+     "detail": "struct CUevent_st",
+     "pointee": "cudaEvent_t"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaEventCreateWithFlags",
+   "params": [
+    {
+     "name": "event",
+     "type": "cudaEvent_t *",
+     "kind": "out_handle",
+     "detail": "struct CUevent_st",
+     "pointee": "cudaEvent_t"
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaEventDestroy",
+   "params": [
+    {
+     "name": "event",
+     "type": "cudaEvent_t",
+     "kind": "handle",
+     "detail": "struct CUevent_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaEventElapsedTime",
+   "params": [
+    {
+     "name": "ms",
+     "type": "float *",
+     "kind": "out_scalar",
+     "detail": "float",
+     "pointee": "float"
+    },
+    {
+     "name": "start",
+     "type": "cudaEvent_t",
+     "kind": "handle",
+     "detail": "struct CUevent_st",
+     "pointee": null
+    },
+    {
+     "name": "end",
+     "type": "cudaEvent_t",
+     "kind": "handle",
+     "detail": "struct CUevent_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaEventElapsedTime_v2",
+   "params": [
+    {
+     "name": "ms",
+     "type": "float *",
+     "kind": "out_scalar",
+     "detail": "float",
+     "pointee": "float"
+    },
+    {
+     "name": "start",
+     "type": "cudaEvent_t",
+     "kind": "handle",
+     "detail": "struct CUevent_st",
+     "pointee": null
+    },
+    {
+     "name": "end",
+     "type": "cudaEvent_t",
+     "kind": "handle",
+     "detail": "struct CUevent_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaEventQuery",
+   "params": [
+    {
+     "name": "event",
+     "type": "cudaEvent_t",
+     "kind": "handle",
+     "detail": "struct CUevent_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaEventRecord",
+   "params": [
+    {
+     "name": "event",
+     "type": "cudaEvent_t",
+     "kind": "handle",
+     "detail": "struct CUevent_st",
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaEventRecordWithFlags",
+   "params": [
+    {
+     "name": "event",
+     "type": "cudaEvent_t",
+     "kind": "handle",
+     "detail": "struct CUevent_st",
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaEventSynchronize",
+   "params": [
+    {
+     "name": "event",
+     "type": "cudaEvent_t",
+     "kind": "handle",
+     "detail": "struct CUevent_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaExternalMemoryGetMappedBuffer",
+   "params": [
+    {
+     "name": "devPtr",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "extMem",
+     "type": "cudaExternalMemory_t",
+     "kind": "handle",
+     "detail": "struct CUexternalMemory_st",
+     "pointee": null
+    },
+    {
+     "name": "bufferDesc",
+     "type": "const struct cudaExternalMemoryBufferDesc *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaExternalMemoryBufferDesc",
+     "pointee": "struct cudaExternalMemoryBufferDesc"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaExternalMemoryGetMappedMipmappedArray",
+   "params": [
+    {
+     "name": "mipmap",
+     "type": "cudaMipmappedArray_t *",
+     "kind": "out_handle",
+     "detail": "struct cudaMipmappedArray",
+     "pointee": "cudaMipmappedArray_t"
+    },
+    {
+     "name": "extMem",
+     "type": "cudaExternalMemory_t",
+     "kind": "handle",
+     "detail": "struct CUexternalMemory_st",
+     "pointee": null
+    },
+    {
+     "name": "mipmapDesc",
+     "type": "const struct cudaExternalMemoryMipmappedArrayDesc *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaExternalMemoryMipmappedArrayDesc",
+     "pointee": "struct cudaExternalMemoryMipmappedArrayDesc"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaFree",
+   "params": [
+    {
+     "name": "devPtr",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaFreeArray",
+   "params": [
+    {
+     "name": "array",
+     "type": "cudaArray_t",
+     "kind": "handle",
+     "detail": "struct cudaArray",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaFreeAsync",
+   "params": [
+    {
+     "name": "devPtr",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "hStream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaFreeHost",
+   "params": [
+    {
+     "name": "ptr",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaFreeMipmappedArray",
+   "params": [
+    {
+     "name": "mipmappedArray",
+     "type": "cudaMipmappedArray_t",
+     "kind": "handle",
+     "detail": "struct cudaMipmappedArray",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaFuncGetAttributes",
+   "params": [
+    {
+     "name": "attr",
+     "type": "struct cudaFuncAttributes *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaFuncAttributes",
+     "pointee": "struct cudaFuncAttributes"
+    },
+    {
+     "name": "func",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaFuncGetName",
+   "params": [
+    {
+     "name": "name",
+     "type": "const char **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "func",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaFuncGetParamInfo",
+   "params": [
+    {
+     "name": "func",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "paramIndex",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "paramOffset",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    },
+    {
+     "name": "paramSize",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaFuncSetAttribute",
+   "params": [
+    {
+     "name": "func",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "attr",
+     "type": "enum cudaFuncAttribute",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "value",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaFuncSetCacheConfig",
+   "params": [
+    {
+     "name": "func",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "cacheConfig",
+     "type": "enum cudaFuncCache",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaFuncSetSharedMemConfig",
+   "params": [
+    {
+     "name": "func",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "config",
+     "type": "enum cudaSharedMemConfig",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGetChannelDesc",
+   "params": [
+    {
+     "name": "desc",
+     "type": "struct cudaChannelFormatDesc *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaChannelFormatDesc",
+     "pointee": "struct cudaChannelFormatDesc"
+    },
+    {
+     "name": "array",
+     "type": "cudaArray_const_t",
+     "kind": "handle",
+     "detail": "const struct cudaArray",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGetDevice",
+   "params": [
+    {
+     "name": "device",
+     "type": "int *",
+     "kind": "out_scalar",
+     "detail": "int",
+     "pointee": "int"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGetDeviceCount",
+   "params": [
+    {
+     "name": "count",
+     "type": "int *",
+     "kind": "out_scalar",
+     "detail": "int",
+     "pointee": "int"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGetDeviceFlags",
+   "params": [
+    {
+     "name": "flags",
+     "type": "unsigned int *",
+     "kind": "out_scalar",
+     "detail": "unsigned int",
+     "pointee": "unsigned int"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGetDeviceProperties_v2",
+   "params": [
+    {
+     "name": "prop",
+     "type": "struct cudaDeviceProp *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaDeviceProp",
+     "pointee": "struct cudaDeviceProp"
+    },
+    {
+     "name": "device",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGetDriverEntryPoint",
+   "params": [
+    {
+     "name": "symbol",
+     "type": "const char *",
+     "kind": "string",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "funcPtr",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned long long",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "driverStatus",
+     "type": "enum cudaDriverEntryPointQueryResult *",
+     "kind": "out_scalar",
+     "detail": "enum cudaDriverEntryPointQueryResult",
+     "pointee": "enum cudaDriverEntryPointQueryResult"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGetDriverEntryPointByVersion",
+   "params": [
+    {
+     "name": "symbol",
+     "type": "const char *",
+     "kind": "string",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "funcPtr",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "cudaVersion",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned long long",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "driverStatus",
+     "type": "enum cudaDriverEntryPointQueryResult *",
+     "kind": "out_scalar",
+     "detail": "enum cudaDriverEntryPointQueryResult",
+     "pointee": "enum cudaDriverEntryPointQueryResult"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGetExportTable",
+   "params": [
+    {
+     "name": "ppExportTable",
+     "type": "const void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "pExportTableId",
+     "type": "const cudaUUID_t *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct CUuuid_st",
+     "pointee": "cudaUUID_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGetFuncBySymbol",
+   "params": [
+    {
+     "name": "functionPtr",
+     "type": "cudaFunction_t *",
+     "kind": "out_handle",
+     "detail": "struct CUfunc_st",
+     "pointee": "cudaFunction_t"
+    },
+    {
+     "name": "symbolPtr",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGetKernel",
+   "params": [
+    {
+     "name": "kernelPtr",
+     "type": "cudaKernel_t *",
+     "kind": "out_handle",
+     "detail": "struct CUkern_st",
+     "pointee": "cudaKernel_t"
+    },
+    {
+     "name": "entryFuncAddr",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGetLastError",
+   "params": [],
+   "auto": true
+  },
+  {
+   "name": "cudaGetMipmappedArrayLevel",
+   "params": [
+    {
+     "name": "levelArray",
+     "type": "cudaArray_t *",
+     "kind": "out_handle",
+     "detail": "struct cudaArray",
+     "pointee": "cudaArray_t"
+    },
+    {
+     "name": "mipmappedArray",
+     "type": "cudaMipmappedArray_const_t",
+     "kind": "handle",
+     "detail": "const struct cudaMipmappedArray",
+     "pointee": null
+    },
+    {
+     "name": "level",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGetSurfaceObjectResourceDesc",
+   "params": [
+    {
+     "name": "pResDesc",
+     "type": "struct cudaResourceDesc *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaResourceDesc",
+     "pointee": "struct cudaResourceDesc"
+    },
+    {
+     "name": "surfObject",
+     "type": "cudaSurfaceObject_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGetSymbolAddress",
+   "params": [
+    {
+     "name": "devPtr",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "symbol",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGetSymbolSize",
+   "params": [
+    {
+     "name": "size",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    },
+    {
+     "name": "symbol",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGetTextureObjectResourceDesc",
+   "params": [
+    {
+     "name": "pResDesc",
+     "type": "struct cudaResourceDesc *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaResourceDesc",
+     "pointee": "struct cudaResourceDesc"
+    },
+    {
+     "name": "texObject",
+     "type": "cudaTextureObject_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGetTextureObjectResourceViewDesc",
+   "params": [
+    {
+     "name": "pResViewDesc",
+     "type": "struct cudaResourceViewDesc *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaResourceViewDesc",
+     "pointee": "struct cudaResourceViewDesc"
+    },
+    {
+     "name": "texObject",
+     "type": "cudaTextureObject_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGetTextureObjectTextureDesc",
+   "params": [
+    {
+     "name": "pTexDesc",
+     "type": "struct cudaTextureDesc *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaTextureDesc",
+     "pointee": "struct cudaTextureDesc"
+    },
+    {
+     "name": "texObject",
+     "type": "cudaTextureObject_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphAddChildGraphNode",
+   "params": [
+    {
+     "name": "pGraphNode",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "pDependencies",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "childGraph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphAddDependencies",
+   "params": [
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "from",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "to",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphAddDependencies_v2",
+   "params": [
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "from",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "to",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "edgeData",
+     "type": "const cudaGraphEdgeData *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaGraphEdgeData_st",
+     "pointee": "cudaGraphEdgeData"
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphAddEmptyNode",
+   "params": [
+    {
+     "name": "pGraphNode",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "pDependencies",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphAddEventRecordNode",
+   "params": [
+    {
+     "name": "pGraphNode",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "pDependencies",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "event",
+     "type": "cudaEvent_t",
+     "kind": "handle",
+     "detail": "struct CUevent_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphAddEventWaitNode",
+   "params": [
+    {
+     "name": "pGraphNode",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "pDependencies",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "event",
+     "type": "cudaEvent_t",
+     "kind": "handle",
+     "detail": "struct CUevent_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphAddExternalSemaphoresSignalNode",
+   "params": [
+    {
+     "name": "pGraphNode",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "pDependencies",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "nodeParams",
+     "type": "const struct cudaExternalSemaphoreSignalNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaExternalSemaphoreSignalNodeParams",
+     "pointee": "struct cudaExternalSemaphoreSignalNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphAddExternalSemaphoresWaitNode",
+   "params": [
+    {
+     "name": "pGraphNode",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "pDependencies",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "nodeParams",
+     "type": "const struct cudaExternalSemaphoreWaitNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaExternalSemaphoreWaitNodeParams",
+     "pointee": "struct cudaExternalSemaphoreWaitNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphAddHostNode",
+   "params": [
+    {
+     "name": "pGraphNode",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "pDependencies",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "pNodeParams",
+     "type": "const struct cudaHostNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaHostNodeParams",
+     "pointee": "struct cudaHostNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphAddKernelNode",
+   "params": [
+    {
+     "name": "pGraphNode",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "pDependencies",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "pNodeParams",
+     "type": "const struct cudaKernelNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaKernelNodeParams",
+     "pointee": "struct cudaKernelNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphAddMemAllocNode",
+   "params": [
+    {
+     "name": "pGraphNode",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "pDependencies",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "nodeParams",
+     "type": "struct cudaMemAllocNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaMemAllocNodeParams",
+     "pointee": "struct cudaMemAllocNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphAddMemFreeNode",
+   "params": [
+    {
+     "name": "pGraphNode",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "pDependencies",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "dptr",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphAddMemcpyNode",
+   "params": [
+    {
+     "name": "pGraphNode",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "pDependencies",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "pCopyParams",
+     "type": "const struct cudaMemcpy3DParms *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaMemcpy3DParms",
+     "pointee": "struct cudaMemcpy3DParms"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphAddMemcpyNode1D",
+   "params": [
+    {
+     "name": "pGraphNode",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "pDependencies",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "dst",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphAddMemcpyNodeFromSymbol",
+   "params": [
+    {
+     "name": "pGraphNode",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "pDependencies",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "dst",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "symbol",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "offset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphAddMemcpyNodeToSymbol",
+   "params": [
+    {
+     "name": "pGraphNode",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "pDependencies",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "symbol",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "offset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphAddMemsetNode",
+   "params": [
+    {
+     "name": "pGraphNode",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "pDependencies",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "pMemsetParams",
+     "type": "const struct cudaMemsetParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaMemsetParams",
+     "pointee": "struct cudaMemsetParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphAddNode",
+   "params": [
+    {
+     "name": "pGraphNode",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "pDependencies",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "nodeParams",
+     "type": "struct cudaGraphNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaGraphNodeParams",
+     "pointee": "struct cudaGraphNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphAddNode_v2",
+   "params": [
+    {
+     "name": "pGraphNode",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "pDependencies",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "dependencyData",
+     "type": "const cudaGraphEdgeData *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaGraphEdgeData_st",
+     "pointee": "cudaGraphEdgeData"
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "nodeParams",
+     "type": "struct cudaGraphNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaGraphNodeParams",
+     "pointee": "struct cudaGraphNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphChildGraphNodeGetGraph",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "pGraph",
+     "type": "cudaGraph_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraph_st",
+     "pointee": "cudaGraph_t"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphClone",
+   "params": [
+    {
+     "name": "pGraphClone",
+     "type": "cudaGraph_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraph_st",
+     "pointee": "cudaGraph_t"
+    },
+    {
+     "name": "originalGraph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphConditionalHandleCreate",
+   "params": [
+    {
+     "name": "pHandle_out",
+     "type": "cudaGraphConditionalHandle *",
+     "kind": "out_scalar",
+     "detail": "unsigned long long",
+     "pointee": "cudaGraphConditionalHandle"
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "defaultLaunchValue",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphCreate",
+   "params": [
+    {
+     "name": "pGraph",
+     "type": "cudaGraph_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraph_st",
+     "pointee": "cudaGraph_t"
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphDebugDotPrint",
+   "params": [
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "path",
+     "type": "const char *",
+     "kind": "string",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphDestroy",
+   "params": [
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphDestroyNode",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphEventRecordNodeGetEvent",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "event_out",
+     "type": "cudaEvent_t *",
+     "kind": "out_handle",
+     "detail": "struct CUevent_st",
+     "pointee": "cudaEvent_t"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphEventRecordNodeSetEvent",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "event",
+     "type": "cudaEvent_t",
+     "kind": "handle",
+     "detail": "struct CUevent_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphEventWaitNodeGetEvent",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "event_out",
+     "type": "cudaEvent_t *",
+     "kind": "out_handle",
+     "detail": "struct CUevent_st",
+     "pointee": "cudaEvent_t"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphEventWaitNodeSetEvent",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "event",
+     "type": "cudaEvent_t",
+     "kind": "handle",
+     "detail": "struct CUevent_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphExecChildGraphNodeSetParams",
+   "params": [
+    {
+     "name": "hGraphExec",
+     "type": "cudaGraphExec_t",
+     "kind": "handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": null
+    },
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "childGraph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphExecDestroy",
+   "params": [
+    {
+     "name": "graphExec",
+     "type": "cudaGraphExec_t",
+     "kind": "handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphExecEventRecordNodeSetEvent",
+   "params": [
+    {
+     "name": "hGraphExec",
+     "type": "cudaGraphExec_t",
+     "kind": "handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": null
+    },
+    {
+     "name": "hNode",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "event",
+     "type": "cudaEvent_t",
+     "kind": "handle",
+     "detail": "struct CUevent_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphExecEventWaitNodeSetEvent",
+   "params": [
+    {
+     "name": "hGraphExec",
+     "type": "cudaGraphExec_t",
+     "kind": "handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": null
+    },
+    {
+     "name": "hNode",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "event",
+     "type": "cudaEvent_t",
+     "kind": "handle",
+     "detail": "struct CUevent_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphExecExternalSemaphoresSignalNodeSetParams",
+   "params": [
+    {
+     "name": "hGraphExec",
+     "type": "cudaGraphExec_t",
+     "kind": "handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": null
+    },
+    {
+     "name": "hNode",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "nodeParams",
+     "type": "const struct cudaExternalSemaphoreSignalNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaExternalSemaphoreSignalNodeParams",
+     "pointee": "struct cudaExternalSemaphoreSignalNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphExecExternalSemaphoresWaitNodeSetParams",
+   "params": [
+    {
+     "name": "hGraphExec",
+     "type": "cudaGraphExec_t",
+     "kind": "handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": null
+    },
+    {
+     "name": "hNode",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "nodeParams",
+     "type": "const struct cudaExternalSemaphoreWaitNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaExternalSemaphoreWaitNodeParams",
+     "pointee": "struct cudaExternalSemaphoreWaitNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphExecGetFlags",
+   "params": [
+    {
+     "name": "graphExec",
+     "type": "cudaGraphExec_t",
+     "kind": "handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned long long *",
+     "kind": "out_scalar",
+     "detail": "unsigned long long",
+     "pointee": "unsigned long long"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphExecHostNodeSetParams",
+   "params": [
+    {
+     "name": "hGraphExec",
+     "type": "cudaGraphExec_t",
+     "kind": "handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": null
+    },
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "pNodeParams",
+     "type": "const struct cudaHostNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaHostNodeParams",
+     "pointee": "struct cudaHostNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphExecKernelNodeSetParams",
+   "params": [
+    {
+     "name": "hGraphExec",
+     "type": "cudaGraphExec_t",
+     "kind": "handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": null
+    },
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "pNodeParams",
+     "type": "const struct cudaKernelNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaKernelNodeParams",
+     "pointee": "struct cudaKernelNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphExecMemcpyNodeSetParams",
+   "params": [
+    {
+     "name": "hGraphExec",
+     "type": "cudaGraphExec_t",
+     "kind": "handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": null
+    },
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "pNodeParams",
+     "type": "const struct cudaMemcpy3DParms *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaMemcpy3DParms",
+     "pointee": "struct cudaMemcpy3DParms"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphExecMemcpyNodeSetParams1D",
+   "params": [
+    {
+     "name": "hGraphExec",
+     "type": "cudaGraphExec_t",
+     "kind": "handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": null
+    },
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "dst",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphExecMemcpyNodeSetParamsFromSymbol",
+   "params": [
+    {
+     "name": "hGraphExec",
+     "type": "cudaGraphExec_t",
+     "kind": "handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": null
+    },
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "dst",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "symbol",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "offset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphExecMemcpyNodeSetParamsToSymbol",
+   "params": [
+    {
+     "name": "hGraphExec",
+     "type": "cudaGraphExec_t",
+     "kind": "handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": null
+    },
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "symbol",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "offset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphExecMemsetNodeSetParams",
+   "params": [
+    {
+     "name": "hGraphExec",
+     "type": "cudaGraphExec_t",
+     "kind": "handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": null
+    },
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "pNodeParams",
+     "type": "const struct cudaMemsetParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaMemsetParams",
+     "pointee": "struct cudaMemsetParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphExecNodeSetParams",
+   "params": [
+    {
+     "name": "graphExec",
+     "type": "cudaGraphExec_t",
+     "kind": "handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": null
+    },
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "nodeParams",
+     "type": "struct cudaGraphNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaGraphNodeParams",
+     "pointee": "struct cudaGraphNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphExecUpdate",
+   "params": [
+    {
+     "name": "hGraphExec",
+     "type": "cudaGraphExec_t",
+     "kind": "handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": null
+    },
+    {
+     "name": "hGraph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "resultInfo",
+     "type": "cudaGraphExecUpdateResultInfo *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaGraphExecUpdateResultInfo_st",
+     "pointee": "cudaGraphExecUpdateResultInfo"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphExternalSemaphoresSignalNodeGetParams",
+   "params": [
+    {
+     "name": "hNode",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "params_out",
+     "type": "struct cudaExternalSemaphoreSignalNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaExternalSemaphoreSignalNodeParams",
+     "pointee": "struct cudaExternalSemaphoreSignalNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphExternalSemaphoresSignalNodeSetParams",
+   "params": [
+    {
+     "name": "hNode",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "nodeParams",
+     "type": "const struct cudaExternalSemaphoreSignalNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaExternalSemaphoreSignalNodeParams",
+     "pointee": "struct cudaExternalSemaphoreSignalNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphExternalSemaphoresWaitNodeGetParams",
+   "params": [
+    {
+     "name": "hNode",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "params_out",
+     "type": "struct cudaExternalSemaphoreWaitNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaExternalSemaphoreWaitNodeParams",
+     "pointee": "struct cudaExternalSemaphoreWaitNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphExternalSemaphoresWaitNodeSetParams",
+   "params": [
+    {
+     "name": "hNode",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "nodeParams",
+     "type": "const struct cudaExternalSemaphoreWaitNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaExternalSemaphoreWaitNodeParams",
+     "pointee": "struct cudaExternalSemaphoreWaitNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphGetEdges",
+   "params": [
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "from",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "to",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "numEdges",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphGetEdges_v2",
+   "params": [
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "from",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "to",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "edgeData",
+     "type": "cudaGraphEdgeData *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaGraphEdgeData_st",
+     "pointee": "cudaGraphEdgeData"
+    },
+    {
+     "name": "numEdges",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphGetNodes",
+   "params": [
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "nodes",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "numNodes",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphGetRootNodes",
+   "params": [
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "pRootNodes",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "pNumRootNodes",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphHostNodeGetParams",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "pNodeParams",
+     "type": "struct cudaHostNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaHostNodeParams",
+     "pointee": "struct cudaHostNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphHostNodeSetParams",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "pNodeParams",
+     "type": "const struct cudaHostNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaHostNodeParams",
+     "pointee": "struct cudaHostNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphInstantiate",
+   "params": [
+    {
+     "name": "pGraphExec",
+     "type": "cudaGraphExec_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": "cudaGraphExec_t"
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned long long",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphInstantiateWithFlags",
+   "params": [
+    {
+     "name": "pGraphExec",
+     "type": "cudaGraphExec_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": "cudaGraphExec_t"
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned long long",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphInstantiateWithParams",
+   "params": [
+    {
+     "name": "pGraphExec",
+     "type": "cudaGraphExec_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": "cudaGraphExec_t"
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "instantiateParams",
+     "type": "cudaGraphInstantiateParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaGraphInstantiateParams_st",
+     "pointee": "cudaGraphInstantiateParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphKernelNodeCopyAttributes",
+   "params": [
+    {
+     "name": "hSrc",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "hDst",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphKernelNodeGetAttribute",
+   "params": [
+    {
+     "name": "hNode",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "attr",
+     "type": "cudaLaunchAttributeID",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "value_out",
+     "type": "cudaLaunchAttributeValue *",
+     "kind": "unknown",
+     "detail": "struct-pointer:union cudaLaunchAttributeValue",
+     "pointee": "cudaLaunchAttributeValue"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphKernelNodeGetParams",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "pNodeParams",
+     "type": "struct cudaKernelNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaKernelNodeParams",
+     "pointee": "struct cudaKernelNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphKernelNodeSetAttribute",
+   "params": [
+    {
+     "name": "hNode",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "attr",
+     "type": "cudaLaunchAttributeID",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "value",
+     "type": "const cudaLaunchAttributeValue *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const union cudaLaunchAttributeValue",
+     "pointee": "cudaLaunchAttributeValue"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphKernelNodeSetParams",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "pNodeParams",
+     "type": "const struct cudaKernelNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaKernelNodeParams",
+     "pointee": "struct cudaKernelNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphLaunch",
+   "params": [
+    {
+     "name": "graphExec",
+     "type": "cudaGraphExec_t",
+     "kind": "handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphMemAllocNodeGetParams",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "params_out",
+     "type": "struct cudaMemAllocNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaMemAllocNodeParams",
+     "pointee": "struct cudaMemAllocNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphMemFreeNodeGetParams",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "dptr_out",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphMemcpyNodeGetParams",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "pNodeParams",
+     "type": "struct cudaMemcpy3DParms *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaMemcpy3DParms",
+     "pointee": "struct cudaMemcpy3DParms"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphMemcpyNodeSetParams",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "pNodeParams",
+     "type": "const struct cudaMemcpy3DParms *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaMemcpy3DParms",
+     "pointee": "struct cudaMemcpy3DParms"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphMemcpyNodeSetParams1D",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "dst",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphMemcpyNodeSetParamsFromSymbol",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "dst",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "symbol",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "offset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphMemcpyNodeSetParamsToSymbol",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "symbol",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "offset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphMemsetNodeGetParams",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "pNodeParams",
+     "type": "struct cudaMemsetParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaMemsetParams",
+     "pointee": "struct cudaMemsetParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphMemsetNodeSetParams",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "pNodeParams",
+     "type": "const struct cudaMemsetParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaMemsetParams",
+     "pointee": "struct cudaMemsetParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphNodeFindInClone",
+   "params": [
+    {
+     "name": "pNode",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "originalNode",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "clonedGraph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphNodeGetDependencies",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "pDependencies",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "pNumDependencies",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphNodeGetDependencies_v2",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "pDependencies",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "edgeData",
+     "type": "cudaGraphEdgeData *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaGraphEdgeData_st",
+     "pointee": "cudaGraphEdgeData"
+    },
+    {
+     "name": "pNumDependencies",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphNodeGetDependentNodes",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "pDependentNodes",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "pNumDependentNodes",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphNodeGetDependentNodes_v2",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "pDependentNodes",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "edgeData",
+     "type": "cudaGraphEdgeData *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaGraphEdgeData_st",
+     "pointee": "cudaGraphEdgeData"
+    },
+    {
+     "name": "pNumDependentNodes",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphNodeGetEnabled",
+   "params": [
+    {
+     "name": "hGraphExec",
+     "type": "cudaGraphExec_t",
+     "kind": "handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": null
+    },
+    {
+     "name": "hNode",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "isEnabled",
+     "type": "unsigned int *",
+     "kind": "out_scalar",
+     "detail": "unsigned int",
+     "pointee": "unsigned int"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphNodeGetType",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "pType",
+     "type": "enum cudaGraphNodeType *",
+     "kind": "out_scalar",
+     "detail": "enum cudaGraphNodeType",
+     "pointee": "enum cudaGraphNodeType"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphNodeSetEnabled",
+   "params": [
+    {
+     "name": "hGraphExec",
+     "type": "cudaGraphExec_t",
+     "kind": "handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": null
+    },
+    {
+     "name": "hNode",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "isEnabled",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphNodeSetParams",
+   "params": [
+    {
+     "name": "node",
+     "type": "cudaGraphNode_t",
+     "kind": "handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": null
+    },
+    {
+     "name": "nodeParams",
+     "type": "struct cudaGraphNodeParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaGraphNodeParams",
+     "pointee": "struct cudaGraphNodeParams"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphReleaseUserObject",
+   "params": [
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "object",
+     "type": "cudaUserObject_t",
+     "kind": "handle",
+     "detail": "struct CUuserObject_st",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphRemoveDependencies",
+   "params": [
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "from",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "to",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphRemoveDependencies_v2",
+   "params": [
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "from",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "to",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "edgeData",
+     "type": "const cudaGraphEdgeData *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaGraphEdgeData_st",
+     "pointee": "cudaGraphEdgeData"
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphRetainUserObject",
+   "params": [
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "object",
+     "type": "cudaUserObject_t",
+     "kind": "handle",
+     "detail": "struct CUuserObject_st",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphUpload",
+   "params": [
+    {
+     "name": "graphExec",
+     "type": "cudaGraphExec_t",
+     "kind": "handle",
+     "detail": "struct CUgraphExec_st",
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphicsMapResources",
+   "params": [
+    {
+     "name": "count",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "resources",
+     "type": "cudaGraphicsResource_t *",
+     "kind": "out_handle",
+     "detail": "struct cudaGraphicsResource",
+     "pointee": "cudaGraphicsResource_t"
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphicsResourceGetMappedMipmappedArray",
+   "params": [
+    {
+     "name": "mipmappedArray",
+     "type": "cudaMipmappedArray_t *",
+     "kind": "out_handle",
+     "detail": "struct cudaMipmappedArray",
+     "pointee": "cudaMipmappedArray_t"
+    },
+    {
+     "name": "resource",
+     "type": "cudaGraphicsResource_t",
+     "kind": "handle",
+     "detail": "struct cudaGraphicsResource",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphicsResourceGetMappedPointer",
+   "params": [
+    {
+     "name": "devPtr",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "size",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    },
+    {
+     "name": "resource",
+     "type": "cudaGraphicsResource_t",
+     "kind": "handle",
+     "detail": "struct cudaGraphicsResource",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaGraphicsResourceSetMapFlags",
+   "params": [
+    {
+     "name": "resource",
+     "type": "cudaGraphicsResource_t",
+     "kind": "handle",
+     "detail": "struct cudaGraphicsResource",
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphicsSubResourceGetMappedArray",
+   "params": [
+    {
+     "name": "array",
+     "type": "cudaArray_t *",
+     "kind": "out_handle",
+     "detail": "struct cudaArray",
+     "pointee": "cudaArray_t"
+    },
+    {
+     "name": "resource",
+     "type": "cudaGraphicsResource_t",
+     "kind": "handle",
+     "detail": "struct cudaGraphicsResource",
+     "pointee": null
+    },
+    {
+     "name": "arrayIndex",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "mipLevel",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphicsUnmapResources",
+   "params": [
+    {
+     "name": "count",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "resources",
+     "type": "cudaGraphicsResource_t *",
+     "kind": "out_handle",
+     "detail": "struct cudaGraphicsResource",
+     "pointee": "cudaGraphicsResource_t"
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaGraphicsUnregisterResource",
+   "params": [
+    {
+     "name": "resource",
+     "type": "cudaGraphicsResource_t",
+     "kind": "handle",
+     "detail": "struct cudaGraphicsResource",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaHostAlloc",
+   "params": [
+    {
+     "name": "pHost",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "size",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaHostGetDevicePointer",
+   "params": [
+    {
+     "name": "pDevice",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "pHost",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaHostGetFlags",
+   "params": [
+    {
+     "name": "pFlags",
+     "type": "unsigned int *",
+     "kind": "out_scalar",
+     "detail": "unsigned int",
+     "pointee": "unsigned int"
+    },
+    {
+     "name": "pHost",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaHostRegister",
+   "params": [
+    {
+     "name": "ptr",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "size",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaHostUnregister",
+   "params": [
+    {
+     "name": "ptr",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaImportExternalMemory",
+   "params": [
+    {
+     "name": "extMem_out",
+     "type": "cudaExternalMemory_t *",
+     "kind": "out_handle",
+     "detail": "struct CUexternalMemory_st",
+     "pointee": "cudaExternalMemory_t"
+    },
+    {
+     "name": "memHandleDesc",
+     "type": "const struct cudaExternalMemoryHandleDesc *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaExternalMemoryHandleDesc",
+     "pointee": "struct cudaExternalMemoryHandleDesc"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaImportExternalSemaphore",
+   "params": [
+    {
+     "name": "extSem_out",
+     "type": "cudaExternalSemaphore_t *",
+     "kind": "out_handle",
+     "detail": "struct CUexternalSemaphore_st",
+     "pointee": "cudaExternalSemaphore_t"
+    },
+    {
+     "name": "semHandleDesc",
+     "type": "const struct cudaExternalSemaphoreHandleDesc *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaExternalSemaphoreHandleDesc",
+     "pointee": "struct cudaExternalSemaphoreHandleDesc"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaInitDevice",
+   "params": [
+    {
+     "name": "device",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "deviceFlags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaIpcCloseMemHandle",
+   "params": [
+    {
+     "name": "devPtr",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaIpcGetEventHandle",
+   "params": [
+    {
+     "name": "handle",
+     "type": "cudaIpcEventHandle_t *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaIpcEventHandle_st",
+     "pointee": "cudaIpcEventHandle_t"
+    },
+    {
+     "name": "event",
+     "type": "cudaEvent_t",
+     "kind": "handle",
+     "detail": "struct CUevent_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaIpcGetMemHandle",
+   "params": [
+    {
+     "name": "handle",
+     "type": "cudaIpcMemHandle_t *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaIpcMemHandle_st",
+     "pointee": "cudaIpcMemHandle_t"
+    },
+    {
+     "name": "devPtr",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaIpcOpenEventHandle",
+   "params": [
+    {
+     "name": "event",
+     "type": "cudaEvent_t *",
+     "kind": "out_handle",
+     "detail": "struct CUevent_st",
+     "pointee": "cudaEvent_t"
+    },
+    {
+     "name": "handle",
+     "type": "cudaIpcEventHandle_t",
+     "kind": "unknown",
+     "detail": "RECORD",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaIpcOpenMemHandle",
+   "params": [
+    {
+     "name": "devPtr",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "handle",
+     "type": "cudaIpcMemHandle_t",
+     "kind": "unknown",
+     "detail": "RECORD",
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaKernelSetAttributeForDevice",
+   "params": [
+    {
+     "name": "kernel",
+     "type": "cudaKernel_t",
+     "kind": "handle",
+     "detail": "struct CUkern_st",
+     "pointee": null
+    },
+    {
+     "name": "attr",
+     "type": "enum cudaFuncAttribute",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "value",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "device",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaLaunchCooperativeKernel",
+   "params": [
+    {
+     "name": "func",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "gridDim",
+     "type": "dim3",
+     "kind": "unknown",
+     "detail": "RECORD",
+     "pointee": null
+    },
+    {
+     "name": "blockDim",
+     "type": "dim3",
+     "kind": "unknown",
+     "detail": "RECORD",
+     "pointee": null
+    },
+    {
+     "name": "args",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "sharedMem",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaLaunchCooperativeKernelMultiDevice",
+   "params": [
+    {
+     "name": "launchParamsList",
+     "type": "struct cudaLaunchParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaLaunchParams",
+     "pointee": "struct cudaLaunchParams"
+    },
+    {
+     "name": "numDevices",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaLaunchHostFunc",
+   "params": [
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    },
+    {
+     "name": "fn",
+     "type": "cudaHostFn_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:void (void *)",
+     "pointee": "void (void *)"
+    },
+    {
+     "name": "userData",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaLaunchKernel",
+   "params": [
+    {
+     "name": "func",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "gridDim",
+     "type": "dim3",
+     "kind": "unknown",
+     "detail": "RECORD",
+     "pointee": null
+    },
+    {
+     "name": "blockDim",
+     "type": "dim3",
+     "kind": "unknown",
+     "detail": "RECORD",
+     "pointee": null
+    },
+    {
+     "name": "args",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "sharedMem",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaLaunchKernelExC",
+   "params": [
+    {
+     "name": "config",
+     "type": "const cudaLaunchConfig_t *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaLaunchConfig_st",
+     "pointee": "cudaLaunchConfig_t"
+    },
+    {
+     "name": "func",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "args",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaLibraryEnumerateKernels",
+   "params": [
+    {
+     "name": "kernels",
+     "type": "cudaKernel_t *",
+     "kind": "out_handle",
+     "detail": "struct CUkern_st",
+     "pointee": "cudaKernel_t"
+    },
+    {
+     "name": "numKernels",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "lib",
+     "type": "cudaLibrary_t",
+     "kind": "handle",
+     "detail": "struct CUlib_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaLibraryGetGlobal",
+   "params": [
+    {
+     "name": "dptr",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "bytes",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    },
+    {
+     "name": "library",
+     "type": "cudaLibrary_t",
+     "kind": "handle",
+     "detail": "struct CUlib_st",
+     "pointee": null
+    },
+    {
+     "name": "name",
+     "type": "const char *",
+     "kind": "string",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaLibraryGetKernel",
+   "params": [
+    {
+     "name": "pKernel",
+     "type": "cudaKernel_t *",
+     "kind": "out_handle",
+     "detail": "struct CUkern_st",
+     "pointee": "cudaKernel_t"
+    },
+    {
+     "name": "library",
+     "type": "cudaLibrary_t",
+     "kind": "handle",
+     "detail": "struct CUlib_st",
+     "pointee": null
+    },
+    {
+     "name": "name",
+     "type": "const char *",
+     "kind": "string",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaLibraryGetKernelCount",
+   "params": [
+    {
+     "name": "count",
+     "type": "unsigned int *",
+     "kind": "out_scalar",
+     "detail": "unsigned int",
+     "pointee": "unsigned int"
+    },
+    {
+     "name": "lib",
+     "type": "cudaLibrary_t",
+     "kind": "handle",
+     "detail": "struct CUlib_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaLibraryGetManaged",
+   "params": [
+    {
+     "name": "dptr",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "bytes",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    },
+    {
+     "name": "library",
+     "type": "cudaLibrary_t",
+     "kind": "handle",
+     "detail": "struct CUlib_st",
+     "pointee": null
+    },
+    {
+     "name": "name",
+     "type": "const char *",
+     "kind": "string",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaLibraryGetUnifiedFunction",
+   "params": [
+    {
+     "name": "fptr",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "library",
+     "type": "cudaLibrary_t",
+     "kind": "handle",
+     "detail": "struct CUlib_st",
+     "pointee": null
+    },
+    {
+     "name": "symbol",
+     "type": "const char *",
+     "kind": "string",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaLibraryLoadData",
+   "params": [
+    {
+     "name": "library",
+     "type": "cudaLibrary_t *",
+     "kind": "out_handle",
+     "detail": "struct CUlib_st",
+     "pointee": "cudaLibrary_t"
+    },
+    {
+     "name": "code",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "jitOptions",
+     "type": "enum cudaJitOption *",
+     "kind": "out_scalar",
+     "detail": "enum cudaJitOption",
+     "pointee": "enum cudaJitOption"
+    },
+    {
+     "name": "jitOptionsValues",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numJitOptions",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "libraryOptions",
+     "type": "enum cudaLibraryOption *",
+     "kind": "out_scalar",
+     "detail": "enum cudaLibraryOption",
+     "pointee": "enum cudaLibraryOption"
+    },
+    {
+     "name": "libraryOptionValues",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numLibraryOptions",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaLibraryLoadFromFile",
+   "params": [
+    {
+     "name": "library",
+     "type": "cudaLibrary_t *",
+     "kind": "out_handle",
+     "detail": "struct CUlib_st",
+     "pointee": "cudaLibrary_t"
+    },
+    {
+     "name": "fileName",
+     "type": "const char *",
+     "kind": "string",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "jitOptions",
+     "type": "enum cudaJitOption *",
+     "kind": "out_scalar",
+     "detail": "enum cudaJitOption",
+     "pointee": "enum cudaJitOption"
+    },
+    {
+     "name": "jitOptionsValues",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numJitOptions",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "libraryOptions",
+     "type": "enum cudaLibraryOption *",
+     "kind": "out_scalar",
+     "detail": "enum cudaLibraryOption",
+     "pointee": "enum cudaLibraryOption"
+    },
+    {
+     "name": "libraryOptionValues",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numLibraryOptions",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaLibraryUnload",
+   "params": [
+    {
+     "name": "library",
+     "type": "cudaLibrary_t",
+     "kind": "handle",
+     "detail": "struct CUlib_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaMalloc",
+   "params": [
+    {
+     "name": "devPtr",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "size",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMalloc3D",
+   "params": [
+    {
+     "name": "pitchedDevPtr",
+     "type": "struct cudaPitchedPtr *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaPitchedPtr",
+     "pointee": "struct cudaPitchedPtr"
+    },
+    {
+     "name": "extent",
+     "type": "struct cudaExtent",
+     "kind": "unknown",
+     "detail": "RECORD",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMalloc3DArray",
+   "params": [
+    {
+     "name": "array",
+     "type": "cudaArray_t *",
+     "kind": "out_handle",
+     "detail": "struct cudaArray",
+     "pointee": "cudaArray_t"
+    },
+    {
+     "name": "desc",
+     "type": "const struct cudaChannelFormatDesc *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaChannelFormatDesc",
+     "pointee": "struct cudaChannelFormatDesc"
+    },
+    {
+     "name": "extent",
+     "type": "struct cudaExtent",
+     "kind": "unknown",
+     "detail": "RECORD",
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMallocArray",
+   "params": [
+    {
+     "name": "array",
+     "type": "cudaArray_t *",
+     "kind": "out_handle",
+     "detail": "struct cudaArray",
+     "pointee": "cudaArray_t"
+    },
+    {
+     "name": "desc",
+     "type": "const struct cudaChannelFormatDesc *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaChannelFormatDesc",
+     "pointee": "struct cudaChannelFormatDesc"
+    },
+    {
+     "name": "width",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "height",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMallocAsync",
+   "params": [
+    {
+     "name": "devPtr",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "size",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "hStream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMallocFromPoolAsync",
+   "params": [
+    {
+     "name": "ptr",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "size",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "memPool",
+     "type": "cudaMemPool_t",
+     "kind": "handle",
+     "detail": "struct CUmemPoolHandle_st",
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMallocHost",
+   "params": [
+    {
+     "name": "ptr",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "size",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMallocManaged",
+   "params": [
+    {
+     "name": "devPtr",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "size",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMallocMipmappedArray",
+   "params": [
+    {
+     "name": "mipmappedArray",
+     "type": "cudaMipmappedArray_t *",
+     "kind": "out_handle",
+     "detail": "struct cudaMipmappedArray",
+     "pointee": "cudaMipmappedArray_t"
+    },
+    {
+     "name": "desc",
+     "type": "const struct cudaChannelFormatDesc *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaChannelFormatDesc",
+     "pointee": "struct cudaChannelFormatDesc"
+    },
+    {
+     "name": "extent",
+     "type": "struct cudaExtent",
+     "kind": "unknown",
+     "detail": "RECORD",
+     "pointee": null
+    },
+    {
+     "name": "numLevels",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMallocPitch",
+   "params": [
+    {
+     "name": "devPtr",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "pitch",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    },
+    {
+     "name": "width",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "height",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemAdvise",
+   "params": [
+    {
+     "name": "devPtr",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "advice",
+     "type": "enum cudaMemoryAdvise",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "device",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemAdvise_v2",
+   "params": [
+    {
+     "name": "devPtr",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "advice",
+     "type": "enum cudaMemoryAdvise",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "location",
+     "type": "struct cudaMemLocation",
+     "kind": "unknown",
+     "detail": "RECORD",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemGetInfo",
+   "params": [
+    {
+     "name": "free",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    },
+    {
+     "name": "total",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaMemPoolCreate",
+   "params": [
+    {
+     "name": "memPool",
+     "type": "cudaMemPool_t *",
+     "kind": "out_handle",
+     "detail": "struct CUmemPoolHandle_st",
+     "pointee": "cudaMemPool_t"
+    },
+    {
+     "name": "poolProps",
+     "type": "const struct cudaMemPoolProps *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaMemPoolProps",
+     "pointee": "struct cudaMemPoolProps"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemPoolDestroy",
+   "params": [
+    {
+     "name": "memPool",
+     "type": "cudaMemPool_t",
+     "kind": "handle",
+     "detail": "struct CUmemPoolHandle_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaMemPoolExportPointer",
+   "params": [
+    {
+     "name": "exportData",
+     "type": "struct cudaMemPoolPtrExportData *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaMemPoolPtrExportData",
+     "pointee": "struct cudaMemPoolPtrExportData"
+    },
+    {
+     "name": "ptr",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemPoolExportToShareableHandle",
+   "params": [
+    {
+     "name": "shareableHandle",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "memPool",
+     "type": "cudaMemPool_t",
+     "kind": "handle",
+     "detail": "struct CUmemPoolHandle_st",
+     "pointee": null
+    },
+    {
+     "name": "handleType",
+     "type": "enum cudaMemAllocationHandleType",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemPoolGetAccess",
+   "params": [
+    {
+     "name": "flags",
+     "type": "enum cudaMemAccessFlags *",
+     "kind": "out_scalar",
+     "detail": "enum cudaMemAccessFlags",
+     "pointee": "enum cudaMemAccessFlags"
+    },
+    {
+     "name": "memPool",
+     "type": "cudaMemPool_t",
+     "kind": "handle",
+     "detail": "struct CUmemPoolHandle_st",
+     "pointee": null
+    },
+    {
+     "name": "location",
+     "type": "struct cudaMemLocation *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaMemLocation",
+     "pointee": "struct cudaMemLocation"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemPoolGetAttribute",
+   "params": [
+    {
+     "name": "memPool",
+     "type": "cudaMemPool_t",
+     "kind": "handle",
+     "detail": "struct CUmemPoolHandle_st",
+     "pointee": null
+    },
+    {
+     "name": "attr",
+     "type": "enum cudaMemPoolAttr",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "value",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemPoolImportFromShareableHandle",
+   "params": [
+    {
+     "name": "memPool",
+     "type": "cudaMemPool_t *",
+     "kind": "out_handle",
+     "detail": "struct CUmemPoolHandle_st",
+     "pointee": "cudaMemPool_t"
+    },
+    {
+     "name": "shareableHandle",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "handleType",
+     "type": "enum cudaMemAllocationHandleType",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemPoolImportPointer",
+   "params": [
+    {
+     "name": "ptr",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "memPool",
+     "type": "cudaMemPool_t",
+     "kind": "handle",
+     "detail": "struct CUmemPoolHandle_st",
+     "pointee": null
+    },
+    {
+     "name": "exportData",
+     "type": "struct cudaMemPoolPtrExportData *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaMemPoolPtrExportData",
+     "pointee": "struct cudaMemPoolPtrExportData"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemPoolSetAccess",
+   "params": [
+    {
+     "name": "memPool",
+     "type": "cudaMemPool_t",
+     "kind": "handle",
+     "detail": "struct CUmemPoolHandle_st",
+     "pointee": null
+    },
+    {
+     "name": "descList",
+     "type": "const struct cudaMemAccessDesc *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaMemAccessDesc",
+     "pointee": "struct cudaMemAccessDesc"
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemPoolSetAttribute",
+   "params": [
+    {
+     "name": "memPool",
+     "type": "cudaMemPool_t",
+     "kind": "handle",
+     "detail": "struct CUmemPoolHandle_st",
+     "pointee": null
+    },
+    {
+     "name": "attr",
+     "type": "enum cudaMemPoolAttr",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "value",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemPoolTrimTo",
+   "params": [
+    {
+     "name": "memPool",
+     "type": "cudaMemPool_t",
+     "kind": "handle",
+     "detail": "struct CUmemPoolHandle_st",
+     "pointee": null
+    },
+    {
+     "name": "minBytesToKeep",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaMemPrefetchAsync",
+   "params": [
+    {
+     "name": "devPtr",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "dstDevice",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemPrefetchAsync_v2",
+   "params": [
+    {
+     "name": "devPtr",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "location",
+     "type": "struct cudaMemLocation",
+     "kind": "unknown",
+     "detail": "RECORD",
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemRangeGetAttribute",
+   "params": [
+    {
+     "name": "data",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "dataSize",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "attribute",
+     "type": "enum cudaMemRangeAttribute",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "devPtr",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemRangeGetAttributes",
+   "params": [
+    {
+     "name": "data",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "dataSizes",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    },
+    {
+     "name": "attributes",
+     "type": "enum cudaMemRangeAttribute *",
+     "kind": "out_scalar",
+     "detail": "enum cudaMemRangeAttribute",
+     "pointee": "enum cudaMemRangeAttribute"
+    },
+    {
+     "name": "numAttributes",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "devPtr",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpy",
+   "params": [
+    {
+     "name": "dst",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpy2D",
+   "params": [
+    {
+     "name": "dst",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "dpitch",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "spitch",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "width",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "height",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpy2DArrayToArray",
+   "params": [
+    {
+     "name": "dst",
+     "type": "cudaArray_t",
+     "kind": "handle",
+     "detail": "struct cudaArray",
+     "pointee": null
+    },
+    {
+     "name": "wOffsetDst",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "hOffsetDst",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "cudaArray_const_t",
+     "kind": "handle",
+     "detail": "const struct cudaArray",
+     "pointee": null
+    },
+    {
+     "name": "wOffsetSrc",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "hOffsetSrc",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "width",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "height",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaMemcpy2DAsync",
+   "params": [
+    {
+     "name": "dst",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "dpitch",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "spitch",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "width",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "height",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpy2DFromArray",
+   "params": [
+    {
+     "name": "dst",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "dpitch",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "cudaArray_const_t",
+     "kind": "handle",
+     "detail": "const struct cudaArray",
+     "pointee": null
+    },
+    {
+     "name": "wOffset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "hOffset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "width",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "height",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpy2DFromArrayAsync",
+   "params": [
+    {
+     "name": "dst",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "dpitch",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "cudaArray_const_t",
+     "kind": "handle",
+     "detail": "const struct cudaArray",
+     "pointee": null
+    },
+    {
+     "name": "wOffset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "hOffset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "width",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "height",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpy2DToArray",
+   "params": [
+    {
+     "name": "dst",
+     "type": "cudaArray_t",
+     "kind": "handle",
+     "detail": "struct cudaArray",
+     "pointee": null
+    },
+    {
+     "name": "wOffset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "hOffset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "spitch",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "width",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "height",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpy2DToArrayAsync",
+   "params": [
+    {
+     "name": "dst",
+     "type": "cudaArray_t",
+     "kind": "handle",
+     "detail": "struct cudaArray",
+     "pointee": null
+    },
+    {
+     "name": "wOffset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "hOffset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "spitch",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "width",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "height",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpy3D",
+   "params": [
+    {
+     "name": "p",
+     "type": "const struct cudaMemcpy3DParms *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaMemcpy3DParms",
+     "pointee": "struct cudaMemcpy3DParms"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpy3DAsync",
+   "params": [
+    {
+     "name": "p",
+     "type": "const struct cudaMemcpy3DParms *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaMemcpy3DParms",
+     "pointee": "struct cudaMemcpy3DParms"
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpy3DBatchAsync",
+   "params": [
+    {
+     "name": "numOps",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "opList",
+     "type": "struct cudaMemcpy3DBatchOp *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaMemcpy3DBatchOp",
+     "pointee": "struct cudaMemcpy3DBatchOp"
+    },
+    {
+     "name": "failIdx",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    },
+    {
+     "name": "flags",
+     "type": "unsigned long long",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpy3DPeer",
+   "params": [
+    {
+     "name": "p",
+     "type": "const struct cudaMemcpy3DPeerParms *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaMemcpy3DPeerParms",
+     "pointee": "struct cudaMemcpy3DPeerParms"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpy3DPeerAsync",
+   "params": [
+    {
+     "name": "p",
+     "type": "const struct cudaMemcpy3DPeerParms *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaMemcpy3DPeerParms",
+     "pointee": "struct cudaMemcpy3DPeerParms"
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpyArrayToArray",
+   "params": [
+    {
+     "name": "dst",
+     "type": "cudaArray_t",
+     "kind": "handle",
+     "detail": "struct cudaArray",
+     "pointee": null
+    },
+    {
+     "name": "wOffsetDst",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "hOffsetDst",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "cudaArray_const_t",
+     "kind": "handle",
+     "detail": "const struct cudaArray",
+     "pointee": null
+    },
+    {
+     "name": "wOffsetSrc",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "hOffsetSrc",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaMemcpyAsync",
+   "params": [
+    {
+     "name": "dst",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpyBatchAsync",
+   "params": [
+    {
+     "name": "dsts",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "srcs",
+     "type": "void **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "sizes",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "attrs",
+     "type": "struct cudaMemcpyAttributes *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaMemcpyAttributes",
+     "pointee": "struct cudaMemcpyAttributes"
+    },
+    {
+     "name": "attrsIdxs",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    },
+    {
+     "name": "numAttrs",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "failIdx",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpyFromArray",
+   "params": [
+    {
+     "name": "dst",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "cudaArray_const_t",
+     "kind": "handle",
+     "detail": "const struct cudaArray",
+     "pointee": null
+    },
+    {
+     "name": "wOffset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "hOffset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpyFromArrayAsync",
+   "params": [
+    {
+     "name": "dst",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "cudaArray_const_t",
+     "kind": "handle",
+     "detail": "const struct cudaArray",
+     "pointee": null
+    },
+    {
+     "name": "wOffset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "hOffset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpyFromSymbol",
+   "params": [
+    {
+     "name": "dst",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "symbol",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "offset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpyFromSymbolAsync",
+   "params": [
+    {
+     "name": "dst",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "symbol",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "offset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpyPeer",
+   "params": [
+    {
+     "name": "dst",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "dstDevice",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "srcDevice",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpyPeerAsync",
+   "params": [
+    {
+     "name": "dst",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "dstDevice",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "srcDevice",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpyToArray",
+   "params": [
+    {
+     "name": "dst",
+     "type": "cudaArray_t",
+     "kind": "handle",
+     "detail": "struct cudaArray",
+     "pointee": null
+    },
+    {
+     "name": "wOffset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "hOffset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpyToArrayAsync",
+   "params": [
+    {
+     "name": "dst",
+     "type": "cudaArray_t",
+     "kind": "handle",
+     "detail": "struct cudaArray",
+     "pointee": null
+    },
+    {
+     "name": "wOffset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "hOffset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpyToSymbol",
+   "params": [
+    {
+     "name": "symbol",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "offset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemcpyToSymbolAsync",
+   "params": [
+    {
+     "name": "symbol",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "offset",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "kind",
+     "type": "enum cudaMemcpyKind",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemset",
+   "params": [
+    {
+     "name": "devPtr",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "value",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemset2D",
+   "params": [
+    {
+     "name": "devPtr",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "pitch",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "value",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "width",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "height",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemset2DAsync",
+   "params": [
+    {
+     "name": "devPtr",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "pitch",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "value",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "width",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "height",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemset3D",
+   "params": [
+    {
+     "name": "pitchedDevPtr",
+     "type": "struct cudaPitchedPtr",
+     "kind": "unknown",
+     "detail": "RECORD",
+     "pointee": null
+    },
+    {
+     "name": "value",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "extent",
+     "type": "struct cudaExtent",
+     "kind": "unknown",
+     "detail": "RECORD",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemset3DAsync",
+   "params": [
+    {
+     "name": "pitchedDevPtr",
+     "type": "struct cudaPitchedPtr",
+     "kind": "unknown",
+     "detail": "RECORD",
+     "pointee": null
+    },
+    {
+     "name": "value",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "extent",
+     "type": "struct cudaExtent",
+     "kind": "unknown",
+     "detail": "RECORD",
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMemsetAsync",
+   "params": [
+    {
+     "name": "devPtr",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "value",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMipmappedArrayGetMemoryRequirements",
+   "params": [
+    {
+     "name": "memoryRequirements",
+     "type": "struct cudaArrayMemoryRequirements *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaArrayMemoryRequirements",
+     "pointee": "struct cudaArrayMemoryRequirements"
+    },
+    {
+     "name": "mipmap",
+     "type": "cudaMipmappedArray_t",
+     "kind": "handle",
+     "detail": "struct cudaMipmappedArray",
+     "pointee": null
+    },
+    {
+     "name": "device",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaMipmappedArrayGetSparseProperties",
+   "params": [
+    {
+     "name": "sparseProperties",
+     "type": "struct cudaArraySparseProperties *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaArraySparseProperties",
+     "pointee": "struct cudaArraySparseProperties"
+    },
+    {
+     "name": "mipmap",
+     "type": "cudaMipmappedArray_t",
+     "kind": "handle",
+     "detail": "struct cudaMipmappedArray",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaOccupancyAvailableDynamicSMemPerBlock",
+   "params": [
+    {
+     "name": "dynamicSmemSize",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    },
+    {
+     "name": "func",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numBlocks",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "blockSize",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaOccupancyMaxActiveBlocksPerMultiprocessor",
+   "params": [
+    {
+     "name": "numBlocks",
+     "type": "int *",
+     "kind": "out_scalar",
+     "detail": "int",
+     "pointee": "int"
+    },
+    {
+     "name": "func",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "blockSize",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "dynamicSMemSize",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaOccupancyMaxActiveBlocksPerMultiprocessorWithFlags",
+   "params": [
+    {
+     "name": "numBlocks",
+     "type": "int *",
+     "kind": "out_scalar",
+     "detail": "int",
+     "pointee": "int"
+    },
+    {
+     "name": "func",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "blockSize",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "dynamicSMemSize",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaOccupancyMaxActiveClusters",
+   "params": [
+    {
+     "name": "numClusters",
+     "type": "int *",
+     "kind": "out_scalar",
+     "detail": "int",
+     "pointee": "int"
+    },
+    {
+     "name": "func",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "launchConfig",
+     "type": "const cudaLaunchConfig_t *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaLaunchConfig_st",
+     "pointee": "cudaLaunchConfig_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaOccupancyMaxPotentialClusterSize",
+   "params": [
+    {
+     "name": "clusterSize",
+     "type": "int *",
+     "kind": "out_scalar",
+     "detail": "int",
+     "pointee": "int"
+    },
+    {
+     "name": "func",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "launchConfig",
+     "type": "const cudaLaunchConfig_t *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaLaunchConfig_st",
+     "pointee": "cudaLaunchConfig_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaPeekAtLastError",
+   "params": [],
+   "auto": true
+  },
+  {
+   "name": "cudaPointerGetAttributes",
+   "params": [
+    {
+     "name": "attributes",
+     "type": "struct cudaPointerAttributes *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct cudaPointerAttributes",
+     "pointee": "struct cudaPointerAttributes"
+    },
+    {
+     "name": "ptr",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaRuntimeGetVersion",
+   "params": [
+    {
+     "name": "runtimeVersion",
+     "type": "int *",
+     "kind": "out_scalar",
+     "detail": "int",
+     "pointee": "int"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaSetDevice",
+   "params": [
+    {
+     "name": "device",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaSetDeviceFlags",
+   "params": [
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaSetDoubleForDevice",
+   "params": [
+    {
+     "name": "d",
+     "type": "double *",
+     "kind": "out_scalar",
+     "detail": "double",
+     "pointee": "double"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaSetDoubleForHost",
+   "params": [
+    {
+     "name": "d",
+     "type": "double *",
+     "kind": "out_scalar",
+     "detail": "double",
+     "pointee": "double"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaSetValidDevices",
+   "params": [
+    {
+     "name": "device_arr",
+     "type": "int *",
+     "kind": "out_scalar",
+     "detail": "int",
+     "pointee": "int"
+    },
+    {
+     "name": "len",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaSignalExternalSemaphoresAsync_v2",
+   "params": [
+    {
+     "name": "extSemArray",
+     "type": "const cudaExternalSemaphore_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "paramsArray",
+     "type": "const struct cudaExternalSemaphoreSignalParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaExternalSemaphoreSignalParams",
+     "pointee": "struct cudaExternalSemaphoreSignalParams"
+    },
+    {
+     "name": "numExtSems",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaStreamAddCallback",
+   "params": [
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    },
+    {
+     "name": "callback",
+     "type": "cudaStreamCallback_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:void (struct CUstream_st *, enum cudaError, void *)",
+     "pointee": "void (struct CUstream_st *, enum cudaError, void *)"
+    },
+    {
+     "name": "userData",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaStreamAttachMemAsync",
+   "params": [
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    },
+    {
+     "name": "devPtr",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "length",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaStreamBeginCapture",
+   "params": [
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    },
+    {
+     "name": "mode",
+     "type": "enum cudaStreamCaptureMode",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaStreamBeginCaptureToGraph",
+   "params": [
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    },
+    {
+     "name": "graph",
+     "type": "cudaGraph_t",
+     "kind": "handle",
+     "detail": "struct CUgraph_st",
+     "pointee": null
+    },
+    {
+     "name": "dependencies",
+     "type": "const cudaGraphNode_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "dependencyData",
+     "type": "const cudaGraphEdgeData *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaGraphEdgeData_st",
+     "pointee": "cudaGraphEdgeData"
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "mode",
+     "type": "enum cudaStreamCaptureMode",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaStreamCopyAttributes",
+   "params": [
+    {
+     "name": "dst",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    },
+    {
+     "name": "src",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaStreamCreate",
+   "params": [
+    {
+     "name": "pStream",
+     "type": "cudaStream_t *",
+     "kind": "out_handle",
+     "detail": "struct CUstream_st",
+     "pointee": "cudaStream_t"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaStreamCreateWithFlags",
+   "params": [
+    {
+     "name": "pStream",
+     "type": "cudaStream_t *",
+     "kind": "out_handle",
+     "detail": "struct CUstream_st",
+     "pointee": "cudaStream_t"
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaStreamCreateWithPriority",
+   "params": [
+    {
+     "name": "pStream",
+     "type": "cudaStream_t *",
+     "kind": "out_handle",
+     "detail": "struct CUstream_st",
+     "pointee": "cudaStream_t"
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "priority",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaStreamDestroy",
+   "params": [
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaStreamEndCapture",
+   "params": [
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    },
+    {
+     "name": "pGraph",
+     "type": "cudaGraph_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraph_st",
+     "pointee": "cudaGraph_t"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaStreamGetAttribute",
+   "params": [
+    {
+     "name": "hStream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    },
+    {
+     "name": "attr",
+     "type": "cudaLaunchAttributeID",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "value_out",
+     "type": "cudaLaunchAttributeValue *",
+     "kind": "unknown",
+     "detail": "struct-pointer:union cudaLaunchAttributeValue",
+     "pointee": "cudaLaunchAttributeValue"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaStreamGetCaptureInfo_v2",
+   "params": [
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    },
+    {
+     "name": "captureStatus_out",
+     "type": "enum cudaStreamCaptureStatus *",
+     "kind": "out_scalar",
+     "detail": "enum cudaStreamCaptureStatus",
+     "pointee": "enum cudaStreamCaptureStatus"
+    },
+    {
+     "name": "id_out",
+     "type": "unsigned long long *",
+     "kind": "out_scalar",
+     "detail": "unsigned long long",
+     "pointee": "unsigned long long"
+    },
+    {
+     "name": "graph_out",
+     "type": "cudaGraph_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraph_st",
+     "pointee": "cudaGraph_t"
+    },
+    {
+     "name": "dependencies_out",
+     "type": "const cudaGraphNode_t **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numDependencies_out",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaStreamGetCaptureInfo_v3",
+   "params": [
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    },
+    {
+     "name": "captureStatus_out",
+     "type": "enum cudaStreamCaptureStatus *",
+     "kind": "out_scalar",
+     "detail": "enum cudaStreamCaptureStatus",
+     "pointee": "enum cudaStreamCaptureStatus"
+    },
+    {
+     "name": "id_out",
+     "type": "unsigned long long *",
+     "kind": "out_scalar",
+     "detail": "unsigned long long",
+     "pointee": "unsigned long long"
+    },
+    {
+     "name": "graph_out",
+     "type": "cudaGraph_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraph_st",
+     "pointee": "cudaGraph_t"
+    },
+    {
+     "name": "dependencies_out",
+     "type": "const cudaGraphNode_t **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "edgeData_out",
+     "type": "const cudaGraphEdgeData **",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "numDependencies_out",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaStreamGetDevice",
+   "params": [
+    {
+     "name": "hStream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    },
+    {
+     "name": "device",
+     "type": "int *",
+     "kind": "out_scalar",
+     "detail": "int",
+     "pointee": "int"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaStreamGetFlags",
+   "params": [
+    {
+     "name": "hStream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int *",
+     "kind": "out_scalar",
+     "detail": "unsigned int",
+     "pointee": "unsigned int"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaStreamGetId",
+   "params": [
+    {
+     "name": "hStream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    },
+    {
+     "name": "streamId",
+     "type": "unsigned long long *",
+     "kind": "out_scalar",
+     "detail": "unsigned long long",
+     "pointee": "unsigned long long"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaStreamGetPriority",
+   "params": [
+    {
+     "name": "hStream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    },
+    {
+     "name": "priority",
+     "type": "int *",
+     "kind": "out_scalar",
+     "detail": "int",
+     "pointee": "int"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaStreamIsCapturing",
+   "params": [
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    },
+    {
+     "name": "pCaptureStatus",
+     "type": "enum cudaStreamCaptureStatus *",
+     "kind": "out_scalar",
+     "detail": "enum cudaStreamCaptureStatus",
+     "pointee": "enum cudaStreamCaptureStatus"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaStreamQuery",
+   "params": [
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaStreamSetAttribute",
+   "params": [
+    {
+     "name": "hStream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    },
+    {
+     "name": "attr",
+     "type": "cudaLaunchAttributeID",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "value",
+     "type": "const cudaLaunchAttributeValue *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const union cudaLaunchAttributeValue",
+     "pointee": "cudaLaunchAttributeValue"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaStreamSynchronize",
+   "params": [
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaStreamUpdateCaptureDependencies",
+   "params": [
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    },
+    {
+     "name": "dependencies",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaStreamUpdateCaptureDependencies_v2",
+   "params": [
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    },
+    {
+     "name": "dependencies",
+     "type": "cudaGraphNode_t *",
+     "kind": "out_handle",
+     "detail": "struct CUgraphNode_st",
+     "pointee": "cudaGraphNode_t"
+    },
+    {
+     "name": "dependencyData",
+     "type": "const cudaGraphEdgeData *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaGraphEdgeData_st",
+     "pointee": "cudaGraphEdgeData"
+    },
+    {
+     "name": "numDependencies",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaStreamWaitEvent",
+   "params": [
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    },
+    {
+     "name": "event",
+     "type": "cudaEvent_t",
+     "kind": "handle",
+     "detail": "struct CUevent_st",
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaThreadExchangeStreamCaptureMode",
+   "params": [
+    {
+     "name": "mode",
+     "type": "enum cudaStreamCaptureMode *",
+     "kind": "out_scalar",
+     "detail": "enum cudaStreamCaptureMode",
+     "pointee": "enum cudaStreamCaptureMode"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaThreadExit",
+   "params": [],
+   "auto": true
+  },
+  {
+   "name": "cudaThreadGetCacheConfig",
+   "params": [
+    {
+     "name": "pCacheConfig",
+     "type": "enum cudaFuncCache *",
+     "kind": "out_scalar",
+     "detail": "enum cudaFuncCache",
+     "pointee": "enum cudaFuncCache"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaThreadGetLimit",
+   "params": [
+    {
+     "name": "pValue",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    },
+    {
+     "name": "limit",
+     "type": "enum cudaLimit",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaThreadSetCacheConfig",
+   "params": [
+    {
+     "name": "cacheConfig",
+     "type": "enum cudaFuncCache",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaThreadSetLimit",
+   "params": [
+    {
+     "name": "limit",
+     "type": "enum cudaLimit",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "value",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaThreadSynchronize",
+   "params": [],
+   "auto": true
+  },
+  {
+   "name": "cudaUserObjectCreate",
+   "params": [
+    {
+     "name": "object_out",
+     "type": "cudaUserObject_t *",
+     "kind": "out_handle",
+     "detail": "struct CUuserObject_st",
+     "pointee": "cudaUserObject_t"
+    },
+    {
+     "name": "ptr",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "destroy",
+     "type": "cudaHostFn_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:void (void *)",
+     "pointee": "void (void *)"
+    },
+    {
+     "name": "initialRefcount",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "flags",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cudaUserObjectRelease",
+   "params": [
+    {
+     "name": "object",
+     "type": "cudaUserObject_t",
+     "kind": "handle",
+     "detail": "struct CUuserObject_st",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaUserObjectRetain",
+   "params": [
+    {
+     "name": "object",
+     "type": "cudaUserObject_t",
+     "kind": "handle",
+     "detail": "struct CUuserObject_st",
+     "pointee": null
+    },
+    {
+     "name": "count",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cudaWaitExternalSemaphoresAsync_v2",
+   "params": [
+    {
+     "name": "extSemArray",
+     "type": "const cudaExternalSemaphore_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "paramsArray",
+     "type": "const struct cudaExternalSemaphoreWaitParams *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const struct cudaExternalSemaphoreWaitParams",
+     "pointee": "struct cudaExternalSemaphoreWaitParams"
+    },
+    {
+     "name": "numExtSems",
+     "type": "unsigned int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  }
+ ],
+ "aliases": {
+  "cudaGetDeviceProperties": "cudaGetDeviceProperties_v2"
+ }
+}

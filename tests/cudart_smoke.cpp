@@ -1,12 +1,14 @@
-// The phase-2 test: a program using the stock CUDA runtime, not the driver
-// API, with our shim standing in for the driver underneath.
+// The phase-2 test: a program written against the CUDA runtime API rather
+// than the driver API. PyTorch sits on exactly this surface.
 //
-// This is the interaction that matters. Since CUDA 11.3 cudart resolves driver
-// entry points through cuGetProcAddress rather than dlsym, so exporting the
-// symbols is not enough on its own; if that path is wrong, nothing here works.
-// PyTorch sits on exactly this runtime.
+// Run it against our libcudart to test the whole stack:
+//   LD_LIBRARY_PATH=build ./cudart_smoke
 //
-//   LD_LIBRARY_PATH=build:third_party/cudart RGPU_SERVER=host:9713 ./cudart_smoke
+// Run it against the stock libcudart to demonstrate why we need our own. That
+// one calls cuGetExportTable right after cuInit and refuses to initialise
+// without a table of undocumented internal driver pointers, which cannot cross
+// a process boundary:
+//   LD_LIBRARY_PATH=third_party/cudart:build ./cudart_smoke
 
 #include <cstdio>
 #include <cstring>
@@ -80,6 +82,6 @@ int main() {
     std::printf("\nFAILED: %d check(s)\n", g_failures);
     return 1;
   }
-  std::printf("\nPASS: the stock CUDA runtime works over the shim\n");
+  std::printf("\nPASS: the CUDA runtime API works over the shim\n");
   return 0;
 }
