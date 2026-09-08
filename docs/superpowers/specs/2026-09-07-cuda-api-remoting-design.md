@@ -124,9 +124,9 @@ it is reproducible and adds no host dependencies.
   emulation; the client does only host-side work, so the cost is iteration speed.
 - **1. Skeleton.** Codegen, wire format, transport, ~30 functions. A hand-written
   driver-API vector-add runs remotely. No `libcudart` yet.
-- **2. Stock `libcudart`.** The `cuGetProcAddress` double-wrapper, primary contexts,
-  CUDA 12 lazy loading, parameter layouts, streams, events, pinned memory. An
-  `nvcc`-compiled program with `cudaMalloc` and a `<<<>>>` launch runs correctly.
+- **2. The runtime API.** Our own `libcudart.so.12`, translating to driver
+  calls: contexts, memory, streams, events, kernel registration and launch. A
+  program written against the runtime API runs correctly.
 - **3. PyTorch. Milestone 1.** Up the ladder filling gaps: `is_available`, tensor
   allocation, add, matmul via cuBLAS, convolution via cuDNN, plus a minimal NVML
   shim. Done when ResNet-18 inference matches a CPU reference within tolerance.
@@ -193,3 +193,45 @@ transport, the server framework, the fake-driver test harness, and the
 `libcuda.so.1` shim itself, which is still needed for direct driver API users
 and for the driver calls the math libraries make. The generator reads any
 header, so pointing it at `cuda_runtime_api.h` reuses the same machinery.
+
+## Revised architecture
+
+The runtime is replaced by a **translation** layer rather than a forwarding
+one. `libcudart.so.12` expresses the runtime API in driver API calls on the
+client; `libcuda.so.1` remotes those. Nothing about the server changes, and it
+stays purely driver-level.
+
+```
+client (no GPU, no driver)
+  python + torch → libtorch_cuda → libcublas / libcudnn      (stock)
+                        ↓ runtime API        ↓ runtime + driver API
+                  our libcudart.so.12  ──────┘
+                        ↓ driver API
+                  our libcuda.so.1
+                        ↓ TCP
+──────────────────────────────────────────────────────────────────
+  rgpu-server → real libcuda.so.1 → GPU                 (GPU host)
+```
+
+Translating locally rather than forwarding the runtime API keeps one wire
+protocol and one server, and means the math libraries still ride along for
+free: they sit on our runtime and our driver, both of which are ours.
+
+Three parts of the runtime have no driver-API equivalent and are implemented
+directly:
+
+- **Per-thread current device and lazy primary contexts.** The runtime binds a
+  primary context per device on first use; the driver does not.
+- **Last-error state**, which the runtime remembers per thread and clears on
+  read.
+- **Kernel registration.** `__cudaRegisterFatBinary` and
+  `__cudaRegisterFunction` are how a host function pointer comes to stand for a
+  kernel, which is what `cudaLaunchKernel` receives. We keep that registry on
+  the client, load each module on first launch rather than at registration
+  because PyTorch registers far more device code than a given process uses, and
+  pass launch arguments straight to the driver shim, which already recovers
+  their sizes from the server's parameter layout.
+
+`cudaMemcpyDefault` needs to know whether each pointer is host or device.
+Remotely we cannot probe a device pointer, since it is an address in the
+server's process, so the client remembers the ranges it handed out.

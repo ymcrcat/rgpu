@@ -1583,6 +1583,7 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
     uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuMemcpyDtoHAsync_v2(has_dstHost ? (void *)b_dstHost.data() : nullptr, v_srcDevice, v_ByteCount, v_hStream);
+    if (r_ == CUDA_SUCCESS) r_ = ::cuStreamSynchronize(v_hStream);
     if (has_dstHost) rsp->put_sized(b_dstHost.data(), b_dstHost.size());
     *out = r_; return true;
   }

@@ -177,8 +177,9 @@ def emit_client_unsupported(f, why):
 # server side
 # --------------------------------------------------------------------------
 
-def emit_server_case(f, plans):
+def emit_server_case(f, plans, meta=None):
     name = f["name"]
+    meta = meta or {}
     L = ["case rgpu::API_%s: {" % name]
     args = []
     post = []
@@ -233,6 +234,11 @@ def emit_server_case(f, plans):
             raise Unmarshalable(m)
 
     L.append("  CUresult r_ = ::%s(%s);" % (name, ", ".join(args)))
+    sync = meta.get("sync_stream")
+    if sync:
+        # The call only enqueued work; wait for it before reading outputs back.
+        L.append("  if (r_ == CUDA_SUCCESS) r_ = ::cuStreamSynchronize(v_%s);"
+                 % sync)
     # Outputs are only meaningful on success, but CUDA fills some of them even
     # on failure; sending them back unconditionally keeps client and server in
     # lockstep on the response layout.
@@ -287,7 +293,7 @@ def main():
         try:
             plans, meta = plan_function(f)
             stub = emit_client_stub(f, plans, meta)
-            case = emit_server_case(f, plans)
+            case = emit_server_case(f, plans, meta)
         except Unmarshalable as e:
             stubbed.append((name, str(e)))
             try:
@@ -295,6 +301,16 @@ def main():
             except Unmarshalable:
                 absent.append(name)  # no symbol exported for this one
             continue
+        # An output buffer plus a stream means the call may only enqueue work,
+        # in which case reading the buffer back straight away would send the
+        # caller whatever happened to be in it. Demand an explicit decision.
+        has_out_buf = any(pl["mode"] == "out_buffer" for pl in plans)
+        has_stream = any("Stream" in p["type"] for p in f["params"])
+        if has_out_buf and has_stream and not meta.get("sync_stream"):
+            print("warning: %s returns a buffer and takes a stream but has no "
+                  "sync_stream annotation; the reply may race the copy" % name,
+                  file=sys.stderr)
+
         generated.append(name)
         client_body += stub + [""]
         server_body += ["  " + l for l in case] + [""]

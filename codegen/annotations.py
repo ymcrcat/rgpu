@@ -18,6 +18,11 @@ Execution class, following LAPIS
              sent fire-and-forget once batching is enabled.
     "flush"  returns immediately but must first submit everything queued.
 
+`sync_stream` names a stream parameter the server must synchronize before it
+serializes any output buffer. An asynchronous device-to-host copy only enqueues
+work, so without this the server would read the destination buffer before the
+copy had run and send back whatever happened to be there.
+
 `record` marks a call that establishes durable server-side state. Replaying the
 recorded set reconstructs a session, which is what mrCUDA-style migration and
 reconnect-after-drop would need. Nothing consumes it yet; tagging is cheap and
@@ -86,9 +91,11 @@ ANNOTATIONS = {
     "cuMemcpyDtoH_v2": {"params": {"dstHost": "out_buffer(ByteCount)"}},
     "cuMemcpyHtoDAsync_v2": {"params": {"srcHost": "in_buffer(ByteCount)"},
                              "exec": "async"},
-    # Not async in our sense: the caller may read dstHost right after the next
-    # stream sync, and we must have the bytes by then, so we round trip.
-    "cuMemcpyDtoHAsync_v2": {"params": {"dstHost": "out_buffer(ByteCount)"}},
+    # Not async in our sense. The caller may read dstHost after any later
+    # synchronization, so the bytes have to travel with the reply, which means
+    # the server has to wait for the copy it just enqueued.
+    "cuMemcpyDtoHAsync_v2": {"params": {"dstHost": "out_buffer(ByteCount)"},
+                             "sync_stream": "hStream"},
 
     # The value size depends on which attribute is asked for, so the size
     # expression calls a helper rather than naming another parameter.
@@ -132,4 +139,5 @@ def for_function(name):
     a.setdefault("params", {})
     a.setdefault("exec", "sync")
     a.setdefault("record", False)
+    a.setdefault("sync_stream", None)
     return a
