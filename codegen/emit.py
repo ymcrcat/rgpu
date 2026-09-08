@@ -388,7 +388,10 @@ def fix_server_returns(lines):
         if l.strip() == "return r_;":
             indent = l[:len(l) - len(l.lstrip())]
             out.append(indent + "*out = r_; return true;")
-        elif l.strip().startswith("return CUDA_ERROR_INVALID_VALUE;"):
+        elif "return CUDA_ERROR_INVALID_VALUE;" in l:
+            # These guards sit mid-line after an `if (...)`, so match anywhere.
+            # Returning the CUresult directly would convert it to bool and
+            # leave *out unset, reporting the wrong error to the client.
             out.append(l.replace("return CUDA_ERROR_INVALID_VALUE;",
                                  "{ *out = CUDA_ERROR_INVALID_VALUE; return true; }"))
         else:

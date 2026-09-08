@@ -37,6 +37,30 @@ extern "C" __attribute__((weak)) CUresult cuArrayGetSparseProperties(CUDA_ARRAY_
   return CUDA_ERROR_NOT_SUPPORTED;
 }
 
+extern "C" __attribute__((weak)) CUresult cuCheckpointProcessCheckpoint(int pid, CUcheckpointCheckpointArgs *args) {
+  return CUDA_ERROR_NOT_SUPPORTED;
+}
+
+extern "C" __attribute__((weak)) CUresult cuCheckpointProcessGetRestoreThreadId(int pid, int *tid) {
+  return CUDA_ERROR_NOT_SUPPORTED;
+}
+
+extern "C" __attribute__((weak)) CUresult cuCheckpointProcessGetState(int pid, CUprocessState *state) {
+  return CUDA_ERROR_NOT_SUPPORTED;
+}
+
+extern "C" __attribute__((weak)) CUresult cuCheckpointProcessLock(int pid, CUcheckpointLockArgs *args) {
+  return CUDA_ERROR_NOT_SUPPORTED;
+}
+
+extern "C" __attribute__((weak)) CUresult cuCheckpointProcessRestore(int pid, CUcheckpointRestoreArgs *args) {
+  return CUDA_ERROR_NOT_SUPPORTED;
+}
+
+extern "C" __attribute__((weak)) CUresult cuCheckpointProcessUnlock(int pid, CUcheckpointUnlockArgs *args) {
+  return CUDA_ERROR_NOT_SUPPORTED;
+}
+
 extern "C" __attribute__((weak)) CUresult cuCoredumpGetAttribute(CUcoredumpSettings attrib, void *value, size_t *size) {
   return CUDA_ERROR_NOT_SUPPORTED;
 }
@@ -330,6 +354,10 @@ extern "C" __attribute__((weak)) CUresult cuEventDestroy_v2(CUevent hEvent) {
 }
 
 extern "C" __attribute__((weak)) CUresult cuEventElapsedTime(float *pMilliseconds, CUevent hStart, CUevent hEnd) {
+  return CUDA_ERROR_NOT_SUPPORTED;
+}
+
+extern "C" __attribute__((weak)) CUresult cuEventElapsedTime_v2(float *pMilliseconds, CUevent hStart, CUevent hEnd) {
   return CUDA_ERROR_NOT_SUPPORTED;
 }
 
@@ -993,6 +1021,10 @@ extern "C" __attribute__((weak)) CUresult cuMemAlloc_v2(CUdeviceptr *dptr, size_
   return CUDA_ERROR_NOT_SUPPORTED;
 }
 
+extern "C" __attribute__((weak)) CUresult cuMemBatchDecompressAsync(CUmemDecompressParams *paramsArray, size_t count, unsigned int flags, size_t *errorIndex, CUstream stream) {
+  return CUDA_ERROR_NOT_SUPPORTED;
+}
+
 extern "C" __attribute__((weak)) CUresult cuMemCreate(CUmemGenericAllocationHandle *handle, size_t size, const CUmemAllocationProp *prop, unsigned long long flags) {
   return CUDA_ERROR_NOT_SUPPORTED;
 }
@@ -1165,6 +1197,10 @@ extern "C" __attribute__((weak)) CUresult cuMemcpy3DAsync_v2(const CUDA_MEMCPY3D
   return CUDA_ERROR_NOT_SUPPORTED;
 }
 
+extern "C" __attribute__((weak)) CUresult cuMemcpy3DBatchAsync(size_t numOps, CUDA_MEMCPY3D_BATCH_OP *opList, size_t *failIdx, unsigned long long flags, CUstream hStream) {
+  return CUDA_ERROR_NOT_SUPPORTED;
+}
+
 extern "C" __attribute__((weak)) CUresult cuMemcpy3DPeer(const CUDA_MEMCPY3D_PEER *pCopy) {
   return CUDA_ERROR_NOT_SUPPORTED;
 }
@@ -1194,6 +1230,10 @@ extern "C" __attribute__((weak)) CUresult cuMemcpyAtoHAsync_v2(void *dstHost, CU
 }
 
 extern "C" __attribute__((weak)) CUresult cuMemcpyAtoH_v2(void *dstHost, CUarray srcArray, size_t srcOffset, size_t ByteCount) {
+  return CUDA_ERROR_NOT_SUPPORTED;
+}
+
+extern "C" __attribute__((weak)) CUresult cuMemcpyBatchAsync(CUdeviceptr *dsts, CUdeviceptr *srcs, size_t *sizes, size_t count, CUmemcpyAttributes *attrs, size_t *attrsIdxs, size_t numAttrs, size_t *failIdx, CUstream hStream) {
   return CUDA_ERROR_NOT_SUPPORTED;
 }
 
@@ -1505,6 +1545,10 @@ extern "C" __attribute__((weak)) CUresult cuStreamGetCtx_v2(CUstream hStream, CU
   return CUDA_ERROR_NOT_SUPPORTED;
 }
 
+extern "C" __attribute__((weak)) CUresult cuStreamGetDevice(CUstream hStream, CUdevice *device) {
+  return CUDA_ERROR_NOT_SUPPORTED;
+}
+
 extern "C" __attribute__((weak)) CUresult cuStreamGetFlags(CUstream hStream, unsigned int *flags) {
   return CUDA_ERROR_NOT_SUPPORTED;
 }
@@ -1586,6 +1630,10 @@ extern "C" __attribute__((weak)) CUresult cuSurfRefSetArray(CUsurfref hSurfRef, 
 }
 
 extern "C" __attribute__((weak)) CUresult cuTensorMapEncodeIm2col(CUtensorMap *tensorMap, CUtensorMapDataType tensorDataType, cuuint32_t tensorRank, void *globalAddress, const cuuint64_t *globalDim, const cuuint64_t *globalStrides, const int *pixelBoxLowerCorner, const int *pixelBoxUpperCorner, cuuint32_t channelsPerPixel, cuuint32_t pixelsPerColumn, const cuuint32_t *elementStrides, CUtensorMapInterleave interleave, CUtensorMapSwizzle swizzle, CUtensorMapL2promotion l2Promotion, CUtensorMapFloatOOBfill oobFill) {
+  return CUDA_ERROR_NOT_SUPPORTED;
+}
+
+extern "C" __attribute__((weak)) CUresult cuTensorMapEncodeIm2colWide(CUtensorMap *tensorMap, CUtensorMapDataType tensorDataType, cuuint32_t tensorRank, void *globalAddress, const cuuint64_t *globalDim, const cuuint64_t *globalStrides, int pixelBoxLowerCornerWidth, int pixelBoxUpperCornerWidth, cuuint32_t channelsPerPixel, cuuint32_t pixelsPerColumn, const cuuint32_t *elementStrides, CUtensorMapInterleave interleave, CUtensorMapIm2ColWideMode mode, CUtensorMapSwizzle swizzle, CUtensorMapL2promotion l2Promotion, CUtensorMapFloatOOBfill oobFill) {
   return CUDA_ERROR_NOT_SUPPORTED;
 }
 

@@ -16,75 +16,93 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
                         CUresult* out) {
   switch (id) {
   case rgpu::API_cuArrayDestroy: {
-    uint64_t u_hArray{}; if (!req.get(&u_hArray)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hArray{}; if (!req.get(&u_hArray)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUarray v_hArray = reinterpret_cast<CUarray>(u_hArray);
     CUresult r_ = ::cuArrayDestroy(v_hArray);
     *out = r_; return true;
   }
 
   case rgpu::API_cuArrayGetPlane: {
-    uint8_t has_pPlaneArray{}; if (!req.get(&has_pPlaneArray)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pPlaneArray{}; if (!req.get(&has_pPlaneArray)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUarray v_pPlaneArray{};
-    uint64_t u_hArray{}; if (!req.get(&u_hArray)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hArray{}; if (!req.get(&u_hArray)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUarray v_hArray = reinterpret_cast<CUarray>(u_hArray);
-    unsigned int v_planeIdx{}; if (!req.get(&v_planeIdx)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_planeIdx{}; if (!req.get(&v_planeIdx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuArrayGetPlane(has_pPlaneArray ? &v_pPlaneArray : nullptr, v_hArray, v_planeIdx);
     if (has_pPlaneArray) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_pPlaneArray));
     *out = r_; return true;
   }
 
+  case rgpu::API_cuCheckpointProcessGetRestoreThreadId: {
+    int v_pid{}; if (!req.get(&v_pid)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint8_t has_tid{}; if (!req.get(&has_tid)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    int v_tid{};
+    CUresult r_ = ::cuCheckpointProcessGetRestoreThreadId(v_pid, has_tid ? &v_tid : nullptr);
+    if (has_tid) rsp->put(v_tid);
+    *out = r_; return true;
+  }
+
+  case rgpu::API_cuCheckpointProcessGetState: {
+    int v_pid{}; if (!req.get(&v_pid)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint8_t has_state{}; if (!req.get(&has_state)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUprocessState v_state{};
+    CUresult r_ = ::cuCheckpointProcessGetState(v_pid, has_state ? &v_state : nullptr);
+    if (has_state) rsp->put(v_state);
+    *out = r_; return true;
+  }
+
   case rgpu::API_cuCtxAttach: {
-    uint8_t has_pctx{}; if (!req.get(&has_pctx)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pctx{}; if (!req.get(&has_pctx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_pctx{};
-    unsigned int v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuCtxAttach(has_pctx ? &v_pctx : nullptr, v_flags);
     if (has_pctx) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_pctx));
     *out = r_; return true;
   }
 
   case rgpu::API_cuCtxCreate_v2: {
-    uint8_t has_pctx{}; if (!req.get(&has_pctx)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pctx{}; if (!req.get(&has_pctx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_pctx{};
-    unsigned int v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuCtxCreate_v2(has_pctx ? &v_pctx : nullptr, v_flags, v_dev);
     if (has_pctx) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_pctx));
     *out = r_; return true;
   }
 
   case rgpu::API_cuCtxDestroy_v2: {
-    uint64_t u_ctx{}; if (!req.get(&u_ctx)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_ctx{}; if (!req.get(&u_ctx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_ctx = reinterpret_cast<CUcontext>(u_ctx);
     CUresult r_ = ::cuCtxDestroy_v2(v_ctx);
     *out = r_; return true;
   }
 
   case rgpu::API_cuCtxDetach: {
-    uint64_t u_ctx{}; if (!req.get(&u_ctx)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_ctx{}; if (!req.get(&u_ctx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_ctx = reinterpret_cast<CUcontext>(u_ctx);
     CUresult r_ = ::cuCtxDetach(v_ctx);
     *out = r_; return true;
   }
 
   case rgpu::API_cuCtxDisablePeerAccess: {
-    uint64_t u_peerContext{}; if (!req.get(&u_peerContext)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_peerContext{}; if (!req.get(&u_peerContext)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_peerContext = reinterpret_cast<CUcontext>(u_peerContext);
     CUresult r_ = ::cuCtxDisablePeerAccess(v_peerContext);
     *out = r_; return true;
   }
 
   case rgpu::API_cuCtxEnablePeerAccess: {
-    uint64_t u_peerContext{}; if (!req.get(&u_peerContext)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_peerContext{}; if (!req.get(&u_peerContext)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_peerContext = reinterpret_cast<CUcontext>(u_peerContext);
-    unsigned int v_Flags{}; if (!req.get(&v_Flags)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_Flags{}; if (!req.get(&v_Flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuCtxEnablePeerAccess(v_peerContext, v_Flags);
     *out = r_; return true;
   }
 
   case rgpu::API_cuCtxFromGreenCtx: {
-    uint8_t has_pContext{}; if (!req.get(&has_pContext)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pContext{}; if (!req.get(&has_pContext)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_pContext{};
-    uint64_t u_hCtx{}; if (!req.get(&u_hCtx)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hCtx{}; if (!req.get(&u_hCtx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgreenCtx v_hCtx = reinterpret_cast<CUgreenCtx>(u_hCtx);
     CUresult r_ = ::cuCtxFromGreenCtx(has_pContext ? &v_pContext : nullptr, v_hCtx);
     if (has_pContext) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_pContext));
@@ -92,9 +110,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuCtxGetApiVersion: {
-    uint64_t u_ctx{}; if (!req.get(&u_ctx)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_ctx{}; if (!req.get(&u_ctx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_ctx = reinterpret_cast<CUcontext>(u_ctx);
-    uint8_t has_version{}; if (!req.get(&has_version)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_version{}; if (!req.get(&has_version)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     unsigned int v_version{};
     CUresult r_ = ::cuCtxGetApiVersion(v_ctx, has_version ? &v_version : nullptr);
     if (has_version) rsp->put(v_version);
@@ -102,7 +120,7 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuCtxGetCacheConfig: {
-    uint8_t has_pconfig{}; if (!req.get(&has_pconfig)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pconfig{}; if (!req.get(&has_pconfig)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunc_cache v_pconfig{};
     CUresult r_ = ::cuCtxGetCacheConfig(has_pconfig ? &v_pconfig : nullptr);
     if (has_pconfig) rsp->put(v_pconfig);
@@ -110,7 +128,7 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuCtxGetCurrent: {
-    uint8_t has_pctx{}; if (!req.get(&has_pctx)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pctx{}; if (!req.get(&has_pctx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_pctx{};
     CUresult r_ = ::cuCtxGetCurrent(has_pctx ? &v_pctx : nullptr);
     if (has_pctx) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_pctx));
@@ -118,7 +136,7 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuCtxGetDevice: {
-    uint8_t has_device{}; if (!req.get(&has_device)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_device{}; if (!req.get(&has_device)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUdevice v_device{};
     CUresult r_ = ::cuCtxGetDevice(has_device ? &v_device : nullptr);
     if (has_device) rsp->put(v_device);
@@ -126,7 +144,7 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuCtxGetFlags: {
-    uint8_t has_flags{}; if (!req.get(&has_flags)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_flags{}; if (!req.get(&has_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     unsigned int v_flags{};
     CUresult r_ = ::cuCtxGetFlags(has_flags ? &v_flags : nullptr);
     if (has_flags) rsp->put(v_flags);
@@ -134,9 +152,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuCtxGetId: {
-    uint64_t u_ctx{}; if (!req.get(&u_ctx)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_ctx{}; if (!req.get(&u_ctx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_ctx = reinterpret_cast<CUcontext>(u_ctx);
-    uint8_t has_ctxId{}; if (!req.get(&has_ctxId)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_ctxId{}; if (!req.get(&has_ctxId)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     unsigned long long v_ctxId{};
     CUresult r_ = ::cuCtxGetId(v_ctx, has_ctxId ? &v_ctxId : nullptr);
     if (has_ctxId) rsp->put(v_ctxId);
@@ -144,16 +162,16 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuCtxGetLimit: {
-    uint8_t has_pvalue{}; if (!req.get(&has_pvalue)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pvalue{}; if (!req.get(&has_pvalue)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_pvalue{};
-    CUlimit v_limit{}; if (!req.get(&v_limit)) return CUDA_ERROR_INVALID_VALUE;
+    CUlimit v_limit{}; if (!req.get(&v_limit)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuCtxGetLimit(has_pvalue ? &v_pvalue : nullptr, v_limit);
     if (has_pvalue) rsp->put(v_pvalue);
     *out = r_; return true;
   }
 
   case rgpu::API_cuCtxGetSharedMemConfig: {
-    uint8_t has_pConfig{}; if (!req.get(&has_pConfig)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pConfig{}; if (!req.get(&has_pConfig)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUsharedconfig v_pConfig{};
     CUresult r_ = ::cuCtxGetSharedMemConfig(has_pConfig ? &v_pConfig : nullptr);
     if (has_pConfig) rsp->put(v_pConfig);
@@ -161,9 +179,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuCtxGetStreamPriorityRange: {
-    uint8_t has_leastPriority{}; if (!req.get(&has_leastPriority)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_leastPriority{}; if (!req.get(&has_leastPriority)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     int v_leastPriority{};
-    uint8_t has_greatestPriority{}; if (!req.get(&has_greatestPriority)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_greatestPriority{}; if (!req.get(&has_greatestPriority)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     int v_greatestPriority{};
     CUresult r_ = ::cuCtxGetStreamPriorityRange(has_leastPriority ? &v_leastPriority : nullptr, has_greatestPriority ? &v_greatestPriority : nullptr);
     if (has_leastPriority) rsp->put(v_leastPriority);
@@ -172,7 +190,7 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuCtxPopCurrent_v2: {
-    uint8_t has_pctx{}; if (!req.get(&has_pctx)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pctx{}; if (!req.get(&has_pctx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_pctx{};
     CUresult r_ = ::cuCtxPopCurrent_v2(has_pctx ? &v_pctx : nullptr);
     if (has_pctx) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_pctx));
@@ -180,16 +198,16 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuCtxPushCurrent_v2: {
-    uint64_t u_ctx{}; if (!req.get(&u_ctx)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_ctx{}; if (!req.get(&u_ctx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_ctx = reinterpret_cast<CUcontext>(u_ctx);
     CUresult r_ = ::cuCtxPushCurrent_v2(v_ctx);
     *out = r_; return true;
   }
 
   case rgpu::API_cuCtxRecordEvent: {
-    uint64_t u_hCtx{}; if (!req.get(&u_hCtx)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hCtx{}; if (!req.get(&u_hCtx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_hCtx = reinterpret_cast<CUcontext>(u_hCtx);
-    uint64_t u_hEvent{}; if (!req.get(&u_hEvent)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hEvent{}; if (!req.get(&u_hEvent)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUevent v_hEvent = reinterpret_cast<CUevent>(u_hEvent);
     CUresult r_ = ::cuCtxRecordEvent(v_hCtx, v_hEvent);
     *out = r_; return true;
@@ -201,33 +219,33 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuCtxSetCacheConfig: {
-    CUfunc_cache v_config{}; if (!req.get(&v_config)) return CUDA_ERROR_INVALID_VALUE;
+    CUfunc_cache v_config{}; if (!req.get(&v_config)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuCtxSetCacheConfig(v_config);
     *out = r_; return true;
   }
 
   case rgpu::API_cuCtxSetCurrent: {
-    uint64_t u_ctx{}; if (!req.get(&u_ctx)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_ctx{}; if (!req.get(&u_ctx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_ctx = reinterpret_cast<CUcontext>(u_ctx);
     CUresult r_ = ::cuCtxSetCurrent(v_ctx);
     *out = r_; return true;
   }
 
   case rgpu::API_cuCtxSetFlags: {
-    unsigned int v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuCtxSetFlags(v_flags);
     *out = r_; return true;
   }
 
   case rgpu::API_cuCtxSetLimit: {
-    CUlimit v_limit{}; if (!req.get(&v_limit)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_value{}; if (!req.get(&v_value)) return CUDA_ERROR_INVALID_VALUE;
+    CUlimit v_limit{}; if (!req.get(&v_limit)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_value{}; if (!req.get(&v_value)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuCtxSetLimit(v_limit, v_value);
     *out = r_; return true;
   }
 
   case rgpu::API_cuCtxSetSharedMemConfig: {
-    CUsharedconfig v_config{}; if (!req.get(&v_config)) return CUDA_ERROR_INVALID_VALUE;
+    CUsharedconfig v_config{}; if (!req.get(&v_config)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuCtxSetSharedMemConfig(v_config);
     *out = r_; return true;
   }
@@ -238,44 +256,44 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuCtxWaitEvent: {
-    uint64_t u_hCtx{}; if (!req.get(&u_hCtx)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hCtx{}; if (!req.get(&u_hCtx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_hCtx = reinterpret_cast<CUcontext>(u_hCtx);
-    uint64_t u_hEvent{}; if (!req.get(&u_hEvent)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hEvent{}; if (!req.get(&u_hEvent)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUevent v_hEvent = reinterpret_cast<CUevent>(u_hEvent);
     CUresult r_ = ::cuCtxWaitEvent(v_hCtx, v_hEvent);
     *out = r_; return true;
   }
 
   case rgpu::API_cuDestroyExternalMemory: {
-    uint64_t u_extMem{}; if (!req.get(&u_extMem)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_extMem{}; if (!req.get(&u_extMem)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUexternalMemory v_extMem = reinterpret_cast<CUexternalMemory>(u_extMem);
     CUresult r_ = ::cuDestroyExternalMemory(v_extMem);
     *out = r_; return true;
   }
 
   case rgpu::API_cuDestroyExternalSemaphore: {
-    uint64_t u_extSem{}; if (!req.get(&u_extSem)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_extSem{}; if (!req.get(&u_extSem)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUexternalSemaphore v_extSem = reinterpret_cast<CUexternalSemaphore>(u_extSem);
     CUresult r_ = ::cuDestroyExternalSemaphore(v_extSem);
     *out = r_; return true;
   }
 
   case rgpu::API_cuDeviceCanAccessPeer: {
-    uint8_t has_canAccessPeer{}; if (!req.get(&has_canAccessPeer)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_canAccessPeer{}; if (!req.get(&has_canAccessPeer)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     int v_canAccessPeer{};
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
-    CUdevice v_peerDev{}; if (!req.get(&v_peerDev)) return CUDA_ERROR_INVALID_VALUE;
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdevice v_peerDev{}; if (!req.get(&v_peerDev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuDeviceCanAccessPeer(has_canAccessPeer ? &v_canAccessPeer : nullptr, v_dev, v_peerDev);
     if (has_canAccessPeer) rsp->put(v_canAccessPeer);
     *out = r_; return true;
   }
 
   case rgpu::API_cuDeviceComputeCapability: {
-    uint8_t has_major{}; if (!req.get(&has_major)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_major{}; if (!req.get(&has_major)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     int v_major{};
-    uint8_t has_minor{}; if (!req.get(&has_minor)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_minor{}; if (!req.get(&has_minor)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     int v_minor{};
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuDeviceComputeCapability(has_major ? &v_major : nullptr, has_minor ? &v_minor : nullptr, v_dev);
     if (has_major) rsp->put(v_major);
     if (has_minor) rsp->put(v_minor);
@@ -283,36 +301,36 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuDeviceGet: {
-    uint8_t has_device{}; if (!req.get(&has_device)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_device{}; if (!req.get(&has_device)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUdevice v_device{};
-    int v_ordinal{}; if (!req.get(&v_ordinal)) return CUDA_ERROR_INVALID_VALUE;
+    int v_ordinal{}; if (!req.get(&v_ordinal)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuDeviceGet(has_device ? &v_device : nullptr, v_ordinal);
     if (has_device) rsp->put(v_device);
     *out = r_; return true;
   }
 
   case rgpu::API_cuDeviceGetAttribute: {
-    uint8_t has_pi{}; if (!req.get(&has_pi)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pi{}; if (!req.get(&has_pi)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     int v_pi{};
-    CUdevice_attribute v_attrib{}; if (!req.get(&v_attrib)) return CUDA_ERROR_INVALID_VALUE;
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
+    CUdevice_attribute v_attrib{}; if (!req.get(&v_attrib)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuDeviceGetAttribute(has_pi ? &v_pi : nullptr, v_attrib, v_dev);
     if (has_pi) rsp->put(v_pi);
     *out = r_; return true;
   }
 
   case rgpu::API_cuDeviceGetByPCIBusId: {
-    uint8_t has_dev{}; if (!req.get(&has_dev)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_dev{}; if (!req.get(&has_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUdevice v_dev{};
     std::string s_pciBusId; bool has_pciBusId=false;
-    if (!req.get_str(&s_pciBusId, &has_pciBusId)) return CUDA_ERROR_INVALID_VALUE;
+    if (!req.get_str(&s_pciBusId, &has_pciBusId)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuDeviceGetByPCIBusId(has_dev ? &v_dev : nullptr, has_pciBusId ? s_pciBusId.c_str() : nullptr);
     if (has_dev) rsp->put(v_dev);
     *out = r_; return true;
   }
 
   case rgpu::API_cuDeviceGetCount: {
-    uint8_t has_count{}; if (!req.get(&has_count)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_count{}; if (!req.get(&has_count)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     int v_count{};
     CUresult r_ = ::cuDeviceGetCount(has_count ? &v_count : nullptr);
     if (has_count) rsp->put(v_count);
@@ -320,19 +338,19 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuDeviceGetDefaultMemPool: {
-    uint8_t has_pool_out{}; if (!req.get(&has_pool_out)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pool_out{}; if (!req.get(&has_pool_out)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmemoryPool v_pool_out{};
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuDeviceGetDefaultMemPool(has_pool_out ? &v_pool_out : nullptr, v_dev);
     if (has_pool_out) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_pool_out));
     *out = r_; return true;
   }
 
   case rgpu::API_cuDeviceGetExecAffinitySupport: {
-    uint8_t has_pi{}; if (!req.get(&has_pi)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pi{}; if (!req.get(&has_pi)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     int v_pi{};
-    CUexecAffinityType v_type{}; if (!req.get(&v_type)) return CUDA_ERROR_INVALID_VALUE;
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
+    CUexecAffinityType v_type{}; if (!req.get(&v_type)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuDeviceGetExecAffinitySupport(has_pi ? &v_pi : nullptr, v_type, v_dev);
     if (has_pi) rsp->put(v_pi);
     *out = r_; return true;
@@ -340,11 +358,11 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
 
   case rgpu::API_cuDeviceGetLuid: {
     uint8_t has_luid{}; uint64_t n_luid{};
-    if (!req.get(&has_luid) || !req.get(&n_luid)) return CUDA_ERROR_INVALID_VALUE;
+    if (!req.get(&has_luid) || !req.get(&n_luid)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     std::vector<uint8_t> b_luid(has_luid ? n_luid : 0);
-    uint8_t has_deviceNodeMask{}; if (!req.get(&has_deviceNodeMask)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_deviceNodeMask{}; if (!req.get(&has_deviceNodeMask)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     unsigned int v_deviceNodeMask{};
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuDeviceGetLuid(has_luid ? (char *)b_luid.data() : nullptr, has_deviceNodeMask ? &v_deviceNodeMask : nullptr, v_dev);
     if (has_luid) rsp->put_sized(b_luid.data(), b_luid.size());
     if (has_deviceNodeMask) rsp->put(v_deviceNodeMask);
@@ -352,9 +370,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuDeviceGetMemPool: {
-    uint8_t has_pool{}; if (!req.get(&has_pool)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pool{}; if (!req.get(&has_pool)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmemoryPool v_pool{};
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuDeviceGetMemPool(has_pool ? &v_pool : nullptr, v_dev);
     if (has_pool) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_pool));
     *out = r_; return true;
@@ -362,76 +380,76 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
 
   case rgpu::API_cuDeviceGetName: {
     uint8_t has_name{}; uint64_t n_name{};
-    if (!req.get(&has_name) || !req.get(&n_name)) return CUDA_ERROR_INVALID_VALUE;
+    if (!req.get(&has_name) || !req.get(&n_name)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     std::vector<uint8_t> b_name(has_name ? n_name : 0);
-    int v_len{}; if (!req.get(&v_len)) return CUDA_ERROR_INVALID_VALUE;
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
+    int v_len{}; if (!req.get(&v_len)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuDeviceGetName(has_name ? (char *)b_name.data() : nullptr, v_len, v_dev);
     if (has_name) rsp->put_sized(b_name.data(), b_name.size());
     *out = r_; return true;
   }
 
   case rgpu::API_cuDeviceGetP2PAttribute: {
-    uint8_t has_value{}; if (!req.get(&has_value)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_value{}; if (!req.get(&has_value)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     int v_value{};
-    CUdevice_P2PAttribute v_attrib{}; if (!req.get(&v_attrib)) return CUDA_ERROR_INVALID_VALUE;
-    CUdevice v_srcDevice{}; if (!req.get(&v_srcDevice)) return CUDA_ERROR_INVALID_VALUE;
-    CUdevice v_dstDevice{}; if (!req.get(&v_dstDevice)) return CUDA_ERROR_INVALID_VALUE;
+    CUdevice_P2PAttribute v_attrib{}; if (!req.get(&v_attrib)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdevice v_srcDevice{}; if (!req.get(&v_srcDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdevice v_dstDevice{}; if (!req.get(&v_dstDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuDeviceGetP2PAttribute(has_value ? &v_value : nullptr, v_attrib, v_srcDevice, v_dstDevice);
     if (has_value) rsp->put(v_value);
     *out = r_; return true;
   }
 
   case rgpu::API_cuDeviceGetPCIBusId: {
-    uint8_t has_pciBusId{}; if (!req.get(&has_pciBusId)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pciBusId{}; if (!req.get(&has_pciBusId)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     char v_pciBusId{};
-    int v_len{}; if (!req.get(&v_len)) return CUDA_ERROR_INVALID_VALUE;
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
+    int v_len{}; if (!req.get(&v_len)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuDeviceGetPCIBusId(has_pciBusId ? &v_pciBusId : nullptr, v_len, v_dev);
     if (has_pciBusId) rsp->put(v_pciBusId);
     *out = r_; return true;
   }
 
   case rgpu::API_cuDeviceGetTexture1DLinearMaxWidth: {
-    uint8_t has_maxWidthInElements{}; if (!req.get(&has_maxWidthInElements)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_maxWidthInElements{}; if (!req.get(&has_maxWidthInElements)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_maxWidthInElements{};
-    CUarray_format v_format{}; if (!req.get(&v_format)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_numChannels{}; if (!req.get(&v_numChannels)) return CUDA_ERROR_INVALID_VALUE;
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
+    CUarray_format v_format{}; if (!req.get(&v_format)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_numChannels{}; if (!req.get(&v_numChannels)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuDeviceGetTexture1DLinearMaxWidth(has_maxWidthInElements ? &v_maxWidthInElements : nullptr, v_format, v_numChannels, v_dev);
     if (has_maxWidthInElements) rsp->put(v_maxWidthInElements);
     *out = r_; return true;
   }
 
   case rgpu::API_cuDeviceGetUuid: {
-    uint8_t has_uuid{}; if (!req.get(&has_uuid)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_uuid{}; if (!req.get(&has_uuid)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUuuid v_uuid{};
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuDeviceGetUuid(has_uuid ? &v_uuid : nullptr, v_dev);
     if (has_uuid) rsp->put_sized(&v_uuid, sizeof(v_uuid));
     *out = r_; return true;
   }
 
   case rgpu::API_cuDeviceGetUuid_v2: {
-    uint8_t has_uuid{}; if (!req.get(&has_uuid)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_uuid{}; if (!req.get(&has_uuid)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUuuid v_uuid{};
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuDeviceGetUuid_v2(has_uuid ? &v_uuid : nullptr, v_dev);
     if (has_uuid) rsp->put_sized(&v_uuid, sizeof(v_uuid));
     *out = r_; return true;
   }
 
   case rgpu::API_cuDeviceGraphMemTrim: {
-    CUdevice v_device{}; if (!req.get(&v_device)) return CUDA_ERROR_INVALID_VALUE;
+    CUdevice v_device{}; if (!req.get(&v_device)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuDeviceGraphMemTrim(v_device);
     *out = r_; return true;
   }
 
   case rgpu::API_cuDevicePrimaryCtxGetState: {
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
-    uint8_t has_flags{}; if (!req.get(&has_flags)) return CUDA_ERROR_INVALID_VALUE;
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint8_t has_flags{}; if (!req.get(&has_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     unsigned int v_flags{};
-    uint8_t has_active{}; if (!req.get(&has_active)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_active{}; if (!req.get(&has_active)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     int v_active{};
     CUresult r_ = ::cuDevicePrimaryCtxGetState(v_dev, has_flags ? &v_flags : nullptr, has_active ? &v_active : nullptr);
     if (has_flags) rsp->put(v_flags);
@@ -440,131 +458,143 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuDevicePrimaryCtxRelease_v2: {
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuDevicePrimaryCtxRelease_v2(v_dev);
     *out = r_; return true;
   }
 
   case rgpu::API_cuDevicePrimaryCtxReset_v2: {
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuDevicePrimaryCtxReset_v2(v_dev);
     *out = r_; return true;
   }
 
   case rgpu::API_cuDevicePrimaryCtxRetain: {
-    uint8_t has_pctx{}; if (!req.get(&has_pctx)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pctx{}; if (!req.get(&has_pctx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_pctx{};
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuDevicePrimaryCtxRetain(has_pctx ? &v_pctx : nullptr, v_dev);
     if (has_pctx) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_pctx));
     *out = r_; return true;
   }
 
   case rgpu::API_cuDevicePrimaryCtxSetFlags_v2: {
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuDevicePrimaryCtxSetFlags_v2(v_dev, v_flags);
     *out = r_; return true;
   }
 
   case rgpu::API_cuDeviceSetMemPool: {
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_pool{}; if (!req.get(&u_pool)) return CUDA_ERROR_INVALID_VALUE;
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_pool{}; if (!req.get(&u_pool)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmemoryPool v_pool = reinterpret_cast<CUmemoryPool>(u_pool);
     CUresult r_ = ::cuDeviceSetMemPool(v_dev, v_pool);
     *out = r_; return true;
   }
 
   case rgpu::API_cuDeviceTotalMem_v2: {
-    uint8_t has_bytes{}; if (!req.get(&has_bytes)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_bytes{}; if (!req.get(&has_bytes)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_bytes{};
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuDeviceTotalMem_v2(has_bytes ? &v_bytes : nullptr, v_dev);
     if (has_bytes) rsp->put(v_bytes);
     *out = r_; return true;
   }
 
   case rgpu::API_cuDeviceUnregisterAsyncNotification: {
-    CUdevice v_device{}; if (!req.get(&v_device)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_callback{}; if (!req.get(&u_callback)) return CUDA_ERROR_INVALID_VALUE;
+    CUdevice v_device{}; if (!req.get(&v_device)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_callback{}; if (!req.get(&u_callback)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUasyncCallbackHandle v_callback = reinterpret_cast<CUasyncCallbackHandle>(u_callback);
     CUresult r_ = ::cuDeviceUnregisterAsyncNotification(v_device, v_callback);
     *out = r_; return true;
   }
 
   case rgpu::API_cuEventCreate: {
-    uint8_t has_phEvent{}; if (!req.get(&has_phEvent)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_phEvent{}; if (!req.get(&has_phEvent)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUevent v_phEvent{};
-    unsigned int v_Flags{}; if (!req.get(&v_Flags)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_Flags{}; if (!req.get(&v_Flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuEventCreate(has_phEvent ? &v_phEvent : nullptr, v_Flags);
     if (has_phEvent) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_phEvent));
     *out = r_; return true;
   }
 
   case rgpu::API_cuEventDestroy_v2: {
-    uint64_t u_hEvent{}; if (!req.get(&u_hEvent)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hEvent{}; if (!req.get(&u_hEvent)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUevent v_hEvent = reinterpret_cast<CUevent>(u_hEvent);
     CUresult r_ = ::cuEventDestroy_v2(v_hEvent);
     *out = r_; return true;
   }
 
   case rgpu::API_cuEventElapsedTime: {
-    uint8_t has_pMilliseconds{}; if (!req.get(&has_pMilliseconds)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pMilliseconds{}; if (!req.get(&has_pMilliseconds)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     float v_pMilliseconds{};
-    uint64_t u_hStart{}; if (!req.get(&u_hStart)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStart{}; if (!req.get(&u_hStart)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUevent v_hStart = reinterpret_cast<CUevent>(u_hStart);
-    uint64_t u_hEnd{}; if (!req.get(&u_hEnd)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hEnd{}; if (!req.get(&u_hEnd)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUevent v_hEnd = reinterpret_cast<CUevent>(u_hEnd);
     CUresult r_ = ::cuEventElapsedTime(has_pMilliseconds ? &v_pMilliseconds : nullptr, v_hStart, v_hEnd);
     if (has_pMilliseconds) rsp->put(v_pMilliseconds);
     *out = r_; return true;
   }
 
+  case rgpu::API_cuEventElapsedTime_v2: {
+    uint8_t has_pMilliseconds{}; if (!req.get(&has_pMilliseconds)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    float v_pMilliseconds{};
+    uint64_t u_hStart{}; if (!req.get(&u_hStart)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUevent v_hStart = reinterpret_cast<CUevent>(u_hStart);
+    uint64_t u_hEnd{}; if (!req.get(&u_hEnd)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUevent v_hEnd = reinterpret_cast<CUevent>(u_hEnd);
+    CUresult r_ = ::cuEventElapsedTime_v2(has_pMilliseconds ? &v_pMilliseconds : nullptr, v_hStart, v_hEnd);
+    if (has_pMilliseconds) rsp->put(v_pMilliseconds);
+    *out = r_; return true;
+  }
+
   case rgpu::API_cuEventQuery: {
-    uint64_t u_hEvent{}; if (!req.get(&u_hEvent)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hEvent{}; if (!req.get(&u_hEvent)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUevent v_hEvent = reinterpret_cast<CUevent>(u_hEvent);
     CUresult r_ = ::cuEventQuery(v_hEvent);
     *out = r_; return true;
   }
 
   case rgpu::API_cuEventRecord: {
-    uint64_t u_hEvent{}; if (!req.get(&u_hEvent)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hEvent{}; if (!req.get(&u_hEvent)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUevent v_hEvent = reinterpret_cast<CUevent>(u_hEvent);
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuEventRecord(v_hEvent, v_hStream);
     *out = r_; return true;
   }
 
   case rgpu::API_cuEventRecordWithFlags: {
-    uint64_t u_hEvent{}; if (!req.get(&u_hEvent)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hEvent{}; if (!req.get(&u_hEvent)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUevent v_hEvent = reinterpret_cast<CUevent>(u_hEvent);
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
-    unsigned int v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuEventRecordWithFlags(v_hEvent, v_hStream, v_flags);
     *out = r_; return true;
   }
 
   case rgpu::API_cuEventSynchronize: {
-    uint64_t u_hEvent{}; if (!req.get(&u_hEvent)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hEvent{}; if (!req.get(&u_hEvent)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUevent v_hEvent = reinterpret_cast<CUevent>(u_hEvent);
     CUresult r_ = ::cuEventSynchronize(v_hEvent);
     *out = r_; return true;
   }
 
   case rgpu::API_cuFlushGPUDirectRDMAWrites: {
-    CUflushGPUDirectRDMAWritesTarget v_target{}; if (!req.get(&v_target)) return CUDA_ERROR_INVALID_VALUE;
-    CUflushGPUDirectRDMAWritesScope v_scope{}; if (!req.get(&v_scope)) return CUDA_ERROR_INVALID_VALUE;
+    CUflushGPUDirectRDMAWritesTarget v_target{}; if (!req.get(&v_target)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUflushGPUDirectRDMAWritesScope v_scope{}; if (!req.get(&v_scope)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuFlushGPUDirectRDMAWrites(v_target, v_scope);
     *out = r_; return true;
   }
 
   case rgpu::API_cuFuncGetAttribute: {
-    uint8_t has_pi{}; if (!req.get(&has_pi)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pi{}; if (!req.get(&has_pi)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     int v_pi{};
-    CUfunction_attribute v_attrib{}; if (!req.get(&v_attrib)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) return CUDA_ERROR_INVALID_VALUE;
+    CUfunction_attribute v_attrib{}; if (!req.get(&v_attrib)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_hfunc = reinterpret_cast<CUfunction>(u_hfunc);
     CUresult r_ = ::cuFuncGetAttribute(has_pi ? &v_pi : nullptr, v_attrib, v_hfunc);
     if (has_pi) rsp->put(v_pi);
@@ -572,9 +602,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuFuncGetModule: {
-    uint8_t has_hmod{}; if (!req.get(&has_hmod)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_hmod{}; if (!req.get(&has_hmod)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmodule v_hmod{};
-    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_hfunc = reinterpret_cast<CUfunction>(u_hfunc);
     CUresult r_ = ::cuFuncGetModule(has_hmod ? &v_hmod : nullptr, v_hfunc);
     if (has_hmod) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_hmod));
@@ -582,12 +612,12 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuFuncGetParamInfo: {
-    uint64_t u_func{}; if (!req.get(&u_func)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_func{}; if (!req.get(&u_func)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_func = reinterpret_cast<CUfunction>(u_func);
-    size_t v_paramIndex{}; if (!req.get(&v_paramIndex)) return CUDA_ERROR_INVALID_VALUE;
-    uint8_t has_paramOffset{}; if (!req.get(&has_paramOffset)) return CUDA_ERROR_INVALID_VALUE;
+    size_t v_paramIndex{}; if (!req.get(&v_paramIndex)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint8_t has_paramOffset{}; if (!req.get(&has_paramOffset)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_paramOffset{};
-    uint8_t has_paramSize{}; if (!req.get(&has_paramSize)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_paramSize{}; if (!req.get(&has_paramSize)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_paramSize{};
     CUresult r_ = ::cuFuncGetParamInfo(v_func, v_paramIndex, has_paramOffset ? &v_paramOffset : nullptr, has_paramSize ? &v_paramSize : nullptr);
     if (has_paramOffset) rsp->put(v_paramOffset);
@@ -596,9 +626,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuFuncIsLoaded: {
-    uint8_t has_state{}; if (!req.get(&has_state)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_state{}; if (!req.get(&has_state)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunctionLoadingState v_state{};
-    uint64_t u_function{}; if (!req.get(&u_function)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_function{}; if (!req.get(&u_function)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_function = reinterpret_cast<CUfunction>(u_function);
     CUresult r_ = ::cuFuncIsLoaded(has_state ? &v_state : nullptr, v_function);
     if (has_state) rsp->put(v_state);
@@ -606,59 +636,59 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuFuncLoad: {
-    uint64_t u_function{}; if (!req.get(&u_function)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_function{}; if (!req.get(&u_function)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_function = reinterpret_cast<CUfunction>(u_function);
     CUresult r_ = ::cuFuncLoad(v_function);
     *out = r_; return true;
   }
 
   case rgpu::API_cuFuncSetAttribute: {
-    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_hfunc = reinterpret_cast<CUfunction>(u_hfunc);
-    CUfunction_attribute v_attrib{}; if (!req.get(&v_attrib)) return CUDA_ERROR_INVALID_VALUE;
-    int v_value{}; if (!req.get(&v_value)) return CUDA_ERROR_INVALID_VALUE;
+    CUfunction_attribute v_attrib{}; if (!req.get(&v_attrib)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    int v_value{}; if (!req.get(&v_value)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuFuncSetAttribute(v_hfunc, v_attrib, v_value);
     *out = r_; return true;
   }
 
   case rgpu::API_cuFuncSetBlockShape: {
-    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_hfunc = reinterpret_cast<CUfunction>(u_hfunc);
-    int v_x{}; if (!req.get(&v_x)) return CUDA_ERROR_INVALID_VALUE;
-    int v_y{}; if (!req.get(&v_y)) return CUDA_ERROR_INVALID_VALUE;
-    int v_z{}; if (!req.get(&v_z)) return CUDA_ERROR_INVALID_VALUE;
+    int v_x{}; if (!req.get(&v_x)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    int v_y{}; if (!req.get(&v_y)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    int v_z{}; if (!req.get(&v_z)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuFuncSetBlockShape(v_hfunc, v_x, v_y, v_z);
     *out = r_; return true;
   }
 
   case rgpu::API_cuFuncSetCacheConfig: {
-    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_hfunc = reinterpret_cast<CUfunction>(u_hfunc);
-    CUfunc_cache v_config{}; if (!req.get(&v_config)) return CUDA_ERROR_INVALID_VALUE;
+    CUfunc_cache v_config{}; if (!req.get(&v_config)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuFuncSetCacheConfig(v_hfunc, v_config);
     *out = r_; return true;
   }
 
   case rgpu::API_cuFuncSetSharedMemConfig: {
-    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_hfunc = reinterpret_cast<CUfunction>(u_hfunc);
-    CUsharedconfig v_config{}; if (!req.get(&v_config)) return CUDA_ERROR_INVALID_VALUE;
+    CUsharedconfig v_config{}; if (!req.get(&v_config)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuFuncSetSharedMemConfig(v_hfunc, v_config);
     *out = r_; return true;
   }
 
   case rgpu::API_cuFuncSetSharedSize: {
-    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_hfunc = reinterpret_cast<CUfunction>(u_hfunc);
-    unsigned int v_bytes{}; if (!req.get(&v_bytes)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_bytes{}; if (!req.get(&v_bytes)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuFuncSetSharedSize(v_hfunc, v_bytes);
     *out = r_; return true;
   }
 
   case rgpu::API_cuGraphChildGraphNodeGetGraph: {
-    uint64_t u_hNode{}; if (!req.get(&u_hNode)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hNode{}; if (!req.get(&u_hNode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_hNode = reinterpret_cast<CUgraphNode>(u_hNode);
-    uint8_t has_phGraph{}; if (!req.get(&has_phGraph)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_phGraph{}; if (!req.get(&has_phGraph)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraph v_phGraph{};
     CUresult r_ = ::cuGraphChildGraphNodeGetGraph(v_hNode, has_phGraph ? &v_phGraph : nullptr);
     if (has_phGraph) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_phGraph));
@@ -666,9 +696,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuGraphClone: {
-    uint8_t has_phGraphClone{}; if (!req.get(&has_phGraphClone)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_phGraphClone{}; if (!req.get(&has_phGraphClone)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraph v_phGraphClone{};
-    uint64_t u_originalGraph{}; if (!req.get(&u_originalGraph)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_originalGraph{}; if (!req.get(&u_originalGraph)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraph v_originalGraph = reinterpret_cast<CUgraph>(u_originalGraph);
     CUresult r_ = ::cuGraphClone(has_phGraphClone ? &v_phGraphClone : nullptr, v_originalGraph);
     if (has_phGraphClone) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_phGraphClone));
@@ -676,56 +706,56 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuGraphConditionalHandleCreate: {
-    uint8_t has_pHandle_out{}; if (!req.get(&has_pHandle_out)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pHandle_out{}; if (!req.get(&has_pHandle_out)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphConditionalHandle v_pHandle_out{};
-    uint64_t u_hGraph{}; if (!req.get(&u_hGraph)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hGraph{}; if (!req.get(&u_hGraph)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraph v_hGraph = reinterpret_cast<CUgraph>(u_hGraph);
-    uint64_t u_ctx{}; if (!req.get(&u_ctx)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_ctx{}; if (!req.get(&u_ctx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_ctx = reinterpret_cast<CUcontext>(u_ctx);
-    unsigned int v_defaultLaunchValue{}; if (!req.get(&v_defaultLaunchValue)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_defaultLaunchValue{}; if (!req.get(&v_defaultLaunchValue)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuGraphConditionalHandleCreate(has_pHandle_out ? &v_pHandle_out : nullptr, v_hGraph, v_ctx, v_defaultLaunchValue, v_flags);
     if (has_pHandle_out) rsp->put(v_pHandle_out);
     *out = r_; return true;
   }
 
   case rgpu::API_cuGraphCreate: {
-    uint8_t has_phGraph{}; if (!req.get(&has_phGraph)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_phGraph{}; if (!req.get(&has_phGraph)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraph v_phGraph{};
-    unsigned int v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuGraphCreate(has_phGraph ? &v_phGraph : nullptr, v_flags);
     if (has_phGraph) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_phGraph));
     *out = r_; return true;
   }
 
   case rgpu::API_cuGraphDebugDotPrint: {
-    uint64_t u_hGraph{}; if (!req.get(&u_hGraph)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hGraph{}; if (!req.get(&u_hGraph)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraph v_hGraph = reinterpret_cast<CUgraph>(u_hGraph);
     std::string s_path; bool has_path=false;
-    if (!req.get_str(&s_path, &has_path)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    if (!req.get_str(&s_path, &has_path)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuGraphDebugDotPrint(v_hGraph, has_path ? s_path.c_str() : nullptr, v_flags);
     *out = r_; return true;
   }
 
   case rgpu::API_cuGraphDestroy: {
-    uint64_t u_hGraph{}; if (!req.get(&u_hGraph)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hGraph{}; if (!req.get(&u_hGraph)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraph v_hGraph = reinterpret_cast<CUgraph>(u_hGraph);
     CUresult r_ = ::cuGraphDestroy(v_hGraph);
     *out = r_; return true;
   }
 
   case rgpu::API_cuGraphDestroyNode: {
-    uint64_t u_hNode{}; if (!req.get(&u_hNode)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hNode{}; if (!req.get(&u_hNode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_hNode = reinterpret_cast<CUgraphNode>(u_hNode);
     CUresult r_ = ::cuGraphDestroyNode(v_hNode);
     *out = r_; return true;
   }
 
   case rgpu::API_cuGraphEventRecordNodeGetEvent: {
-    uint64_t u_hNode{}; if (!req.get(&u_hNode)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hNode{}; if (!req.get(&u_hNode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_hNode = reinterpret_cast<CUgraphNode>(u_hNode);
-    uint8_t has_event_out{}; if (!req.get(&has_event_out)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_event_out{}; if (!req.get(&has_event_out)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUevent v_event_out{};
     CUresult r_ = ::cuGraphEventRecordNodeGetEvent(v_hNode, has_event_out ? &v_event_out : nullptr);
     if (has_event_out) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_event_out));
@@ -733,18 +763,18 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuGraphEventRecordNodeSetEvent: {
-    uint64_t u_hNode{}; if (!req.get(&u_hNode)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hNode{}; if (!req.get(&u_hNode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_hNode = reinterpret_cast<CUgraphNode>(u_hNode);
-    uint64_t u_event{}; if (!req.get(&u_event)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_event{}; if (!req.get(&u_event)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUevent v_event = reinterpret_cast<CUevent>(u_event);
     CUresult r_ = ::cuGraphEventRecordNodeSetEvent(v_hNode, v_event);
     *out = r_; return true;
   }
 
   case rgpu::API_cuGraphEventWaitNodeGetEvent: {
-    uint64_t u_hNode{}; if (!req.get(&u_hNode)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hNode{}; if (!req.get(&u_hNode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_hNode = reinterpret_cast<CUgraphNode>(u_hNode);
-    uint8_t has_event_out{}; if (!req.get(&has_event_out)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_event_out{}; if (!req.get(&has_event_out)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUevent v_event_out{};
     CUresult r_ = ::cuGraphEventWaitNodeGetEvent(v_hNode, has_event_out ? &v_event_out : nullptr);
     if (has_event_out) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_event_out));
@@ -752,58 +782,58 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuGraphEventWaitNodeSetEvent: {
-    uint64_t u_hNode{}; if (!req.get(&u_hNode)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hNode{}; if (!req.get(&u_hNode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_hNode = reinterpret_cast<CUgraphNode>(u_hNode);
-    uint64_t u_event{}; if (!req.get(&u_event)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_event{}; if (!req.get(&u_event)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUevent v_event = reinterpret_cast<CUevent>(u_event);
     CUresult r_ = ::cuGraphEventWaitNodeSetEvent(v_hNode, v_event);
     *out = r_; return true;
   }
 
   case rgpu::API_cuGraphExecChildGraphNodeSetParams: {
-    uint64_t u_hGraphExec{}; if (!req.get(&u_hGraphExec)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hGraphExec{}; if (!req.get(&u_hGraphExec)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphExec v_hGraphExec = reinterpret_cast<CUgraphExec>(u_hGraphExec);
-    uint64_t u_hNode{}; if (!req.get(&u_hNode)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hNode{}; if (!req.get(&u_hNode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_hNode = reinterpret_cast<CUgraphNode>(u_hNode);
-    uint64_t u_childGraph{}; if (!req.get(&u_childGraph)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_childGraph{}; if (!req.get(&u_childGraph)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraph v_childGraph = reinterpret_cast<CUgraph>(u_childGraph);
     CUresult r_ = ::cuGraphExecChildGraphNodeSetParams(v_hGraphExec, v_hNode, v_childGraph);
     *out = r_; return true;
   }
 
   case rgpu::API_cuGraphExecDestroy: {
-    uint64_t u_hGraphExec{}; if (!req.get(&u_hGraphExec)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hGraphExec{}; if (!req.get(&u_hGraphExec)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphExec v_hGraphExec = reinterpret_cast<CUgraphExec>(u_hGraphExec);
     CUresult r_ = ::cuGraphExecDestroy(v_hGraphExec);
     *out = r_; return true;
   }
 
   case rgpu::API_cuGraphExecEventRecordNodeSetEvent: {
-    uint64_t u_hGraphExec{}; if (!req.get(&u_hGraphExec)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hGraphExec{}; if (!req.get(&u_hGraphExec)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphExec v_hGraphExec = reinterpret_cast<CUgraphExec>(u_hGraphExec);
-    uint64_t u_hNode{}; if (!req.get(&u_hNode)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hNode{}; if (!req.get(&u_hNode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_hNode = reinterpret_cast<CUgraphNode>(u_hNode);
-    uint64_t u_event{}; if (!req.get(&u_event)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_event{}; if (!req.get(&u_event)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUevent v_event = reinterpret_cast<CUevent>(u_event);
     CUresult r_ = ::cuGraphExecEventRecordNodeSetEvent(v_hGraphExec, v_hNode, v_event);
     *out = r_; return true;
   }
 
   case rgpu::API_cuGraphExecEventWaitNodeSetEvent: {
-    uint64_t u_hGraphExec{}; if (!req.get(&u_hGraphExec)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hGraphExec{}; if (!req.get(&u_hGraphExec)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphExec v_hGraphExec = reinterpret_cast<CUgraphExec>(u_hGraphExec);
-    uint64_t u_hNode{}; if (!req.get(&u_hNode)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hNode{}; if (!req.get(&u_hNode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_hNode = reinterpret_cast<CUgraphNode>(u_hNode);
-    uint64_t u_event{}; if (!req.get(&u_event)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_event{}; if (!req.get(&u_event)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUevent v_event = reinterpret_cast<CUevent>(u_event);
     CUresult r_ = ::cuGraphExecEventWaitNodeSetEvent(v_hGraphExec, v_hNode, v_event);
     *out = r_; return true;
   }
 
   case rgpu::API_cuGraphExecGetFlags: {
-    uint64_t u_hGraphExec{}; if (!req.get(&u_hGraphExec)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hGraphExec{}; if (!req.get(&u_hGraphExec)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphExec v_hGraphExec = reinterpret_cast<CUgraphExec>(u_hGraphExec);
-    uint8_t has_flags{}; if (!req.get(&has_flags)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_flags{}; if (!req.get(&has_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     cuuint64_t v_flags{};
     CUresult r_ = ::cuGraphExecGetFlags(v_hGraphExec, has_flags ? &v_flags : nullptr);
     if (has_flags) rsp->put(v_flags);
@@ -811,13 +841,13 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuGraphGetEdges: {
-    uint64_t u_hGraph{}; if (!req.get(&u_hGraph)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hGraph{}; if (!req.get(&u_hGraph)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraph v_hGraph = reinterpret_cast<CUgraph>(u_hGraph);
-    uint8_t has_from{}; if (!req.get(&has_from)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_from{}; if (!req.get(&has_from)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_from{};
-    uint8_t has_to{}; if (!req.get(&has_to)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_to{}; if (!req.get(&has_to)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_to{};
-    uint8_t has_numEdges{}; if (!req.get(&has_numEdges)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_numEdges{}; if (!req.get(&has_numEdges)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_numEdges{};
     CUresult r_ = ::cuGraphGetEdges(v_hGraph, has_from ? &v_from : nullptr, has_to ? &v_to : nullptr, has_numEdges ? &v_numEdges : nullptr);
     if (has_from) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_from));
@@ -827,11 +857,11 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuGraphGetNodes: {
-    uint64_t u_hGraph{}; if (!req.get(&u_hGraph)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hGraph{}; if (!req.get(&u_hGraph)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraph v_hGraph = reinterpret_cast<CUgraph>(u_hGraph);
-    uint8_t has_nodes{}; if (!req.get(&has_nodes)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_nodes{}; if (!req.get(&has_nodes)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_nodes{};
-    uint8_t has_numNodes{}; if (!req.get(&has_numNodes)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_numNodes{}; if (!req.get(&has_numNodes)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_numNodes{};
     CUresult r_ = ::cuGraphGetNodes(v_hGraph, has_nodes ? &v_nodes : nullptr, has_numNodes ? &v_numNodes : nullptr);
     if (has_nodes) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_nodes));
@@ -840,11 +870,11 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuGraphGetRootNodes: {
-    uint64_t u_hGraph{}; if (!req.get(&u_hGraph)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hGraph{}; if (!req.get(&u_hGraph)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraph v_hGraph = reinterpret_cast<CUgraph>(u_hGraph);
-    uint8_t has_rootNodes{}; if (!req.get(&has_rootNodes)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_rootNodes{}; if (!req.get(&has_rootNodes)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_rootNodes{};
-    uint8_t has_numRootNodes{}; if (!req.get(&has_numRootNodes)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_numRootNodes{}; if (!req.get(&has_numRootNodes)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_numRootNodes{};
     CUresult r_ = ::cuGraphGetRootNodes(v_hGraph, has_rootNodes ? &v_rootNodes : nullptr, has_numRootNodes ? &v_numRootNodes : nullptr);
     if (has_rootNodes) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_rootNodes));
@@ -853,38 +883,38 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuGraphInstantiateWithFlags: {
-    uint8_t has_phGraphExec{}; if (!req.get(&has_phGraphExec)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_phGraphExec{}; if (!req.get(&has_phGraphExec)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphExec v_phGraphExec{};
-    uint64_t u_hGraph{}; if (!req.get(&u_hGraph)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hGraph{}; if (!req.get(&u_hGraph)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraph v_hGraph = reinterpret_cast<CUgraph>(u_hGraph);
-    unsigned long long v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned long long v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuGraphInstantiateWithFlags(has_phGraphExec ? &v_phGraphExec : nullptr, v_hGraph, v_flags);
     if (has_phGraphExec) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_phGraphExec));
     *out = r_; return true;
   }
 
   case rgpu::API_cuGraphKernelNodeCopyAttributes: {
-    uint64_t u_dst{}; if (!req.get(&u_dst)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_dst{}; if (!req.get(&u_dst)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_dst = reinterpret_cast<CUgraphNode>(u_dst);
-    uint64_t u_src{}; if (!req.get(&u_src)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_src{}; if (!req.get(&u_src)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_src = reinterpret_cast<CUgraphNode>(u_src);
     CUresult r_ = ::cuGraphKernelNodeCopyAttributes(v_dst, v_src);
     *out = r_; return true;
   }
 
   case rgpu::API_cuGraphLaunch: {
-    uint64_t u_hGraphExec{}; if (!req.get(&u_hGraphExec)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hGraphExec{}; if (!req.get(&u_hGraphExec)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphExec v_hGraphExec = reinterpret_cast<CUgraphExec>(u_hGraphExec);
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuGraphLaunch(v_hGraphExec, v_hStream);
     *out = r_; return true;
   }
 
   case rgpu::API_cuGraphMemFreeNodeGetParams: {
-    uint64_t u_hNode{}; if (!req.get(&u_hNode)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hNode{}; if (!req.get(&u_hNode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_hNode = reinterpret_cast<CUgraphNode>(u_hNode);
-    uint8_t has_dptr_out{}; if (!req.get(&has_dptr_out)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_dptr_out{}; if (!req.get(&has_dptr_out)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUdeviceptr v_dptr_out{};
     CUresult r_ = ::cuGraphMemFreeNodeGetParams(v_hNode, has_dptr_out ? &v_dptr_out : nullptr);
     if (has_dptr_out) rsp->put(v_dptr_out);
@@ -892,11 +922,11 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuGraphNodeFindInClone: {
-    uint8_t has_phNode{}; if (!req.get(&has_phNode)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_phNode{}; if (!req.get(&has_phNode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_phNode{};
-    uint64_t u_hOriginalNode{}; if (!req.get(&u_hOriginalNode)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hOriginalNode{}; if (!req.get(&u_hOriginalNode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_hOriginalNode = reinterpret_cast<CUgraphNode>(u_hOriginalNode);
-    uint64_t u_hClonedGraph{}; if (!req.get(&u_hClonedGraph)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hClonedGraph{}; if (!req.get(&u_hClonedGraph)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraph v_hClonedGraph = reinterpret_cast<CUgraph>(u_hClonedGraph);
     CUresult r_ = ::cuGraphNodeFindInClone(has_phNode ? &v_phNode : nullptr, v_hOriginalNode, v_hClonedGraph);
     if (has_phNode) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_phNode));
@@ -904,11 +934,11 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuGraphNodeGetDependencies: {
-    uint64_t u_hNode{}; if (!req.get(&u_hNode)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hNode{}; if (!req.get(&u_hNode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_hNode = reinterpret_cast<CUgraphNode>(u_hNode);
-    uint8_t has_dependencies{}; if (!req.get(&has_dependencies)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_dependencies{}; if (!req.get(&has_dependencies)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_dependencies{};
-    uint8_t has_numDependencies{}; if (!req.get(&has_numDependencies)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_numDependencies{}; if (!req.get(&has_numDependencies)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_numDependencies{};
     CUresult r_ = ::cuGraphNodeGetDependencies(v_hNode, has_dependencies ? &v_dependencies : nullptr, has_numDependencies ? &v_numDependencies : nullptr);
     if (has_dependencies) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_dependencies));
@@ -917,11 +947,11 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuGraphNodeGetDependentNodes: {
-    uint64_t u_hNode{}; if (!req.get(&u_hNode)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hNode{}; if (!req.get(&u_hNode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_hNode = reinterpret_cast<CUgraphNode>(u_hNode);
-    uint8_t has_dependentNodes{}; if (!req.get(&has_dependentNodes)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_dependentNodes{}; if (!req.get(&has_dependentNodes)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_dependentNodes{};
-    uint8_t has_numDependentNodes{}; if (!req.get(&has_numDependentNodes)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_numDependentNodes{}; if (!req.get(&has_numDependentNodes)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_numDependentNodes{};
     CUresult r_ = ::cuGraphNodeGetDependentNodes(v_hNode, has_dependentNodes ? &v_dependentNodes : nullptr, has_numDependentNodes ? &v_numDependentNodes : nullptr);
     if (has_dependentNodes) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_dependentNodes));
@@ -930,11 +960,11 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuGraphNodeGetEnabled: {
-    uint64_t u_hGraphExec{}; if (!req.get(&u_hGraphExec)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hGraphExec{}; if (!req.get(&u_hGraphExec)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphExec v_hGraphExec = reinterpret_cast<CUgraphExec>(u_hGraphExec);
-    uint64_t u_hNode{}; if (!req.get(&u_hNode)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hNode{}; if (!req.get(&u_hNode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_hNode = reinterpret_cast<CUgraphNode>(u_hNode);
-    uint8_t has_isEnabled{}; if (!req.get(&has_isEnabled)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_isEnabled{}; if (!req.get(&has_isEnabled)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     unsigned int v_isEnabled{};
     CUresult r_ = ::cuGraphNodeGetEnabled(v_hGraphExec, v_hNode, has_isEnabled ? &v_isEnabled : nullptr);
     if (has_isEnabled) rsp->put(v_isEnabled);
@@ -942,9 +972,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuGraphNodeGetType: {
-    uint64_t u_hNode{}; if (!req.get(&u_hNode)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hNode{}; if (!req.get(&u_hNode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_hNode = reinterpret_cast<CUgraphNode>(u_hNode);
-    uint8_t has_type{}; if (!req.get(&has_type)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_type{}; if (!req.get(&has_type)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNodeType v_type{};
     CUresult r_ = ::cuGraphNodeGetType(v_hNode, has_type ? &v_type : nullptr);
     if (has_type) rsp->put(v_type);
@@ -952,50 +982,50 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuGraphNodeSetEnabled: {
-    uint64_t u_hGraphExec{}; if (!req.get(&u_hGraphExec)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hGraphExec{}; if (!req.get(&u_hGraphExec)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphExec v_hGraphExec = reinterpret_cast<CUgraphExec>(u_hGraphExec);
-    uint64_t u_hNode{}; if (!req.get(&u_hNode)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hNode{}; if (!req.get(&u_hNode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_hNode = reinterpret_cast<CUgraphNode>(u_hNode);
-    unsigned int v_isEnabled{}; if (!req.get(&v_isEnabled)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_isEnabled{}; if (!req.get(&v_isEnabled)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuGraphNodeSetEnabled(v_hGraphExec, v_hNode, v_isEnabled);
     *out = r_; return true;
   }
 
   case rgpu::API_cuGraphReleaseUserObject: {
-    uint64_t u_graph{}; if (!req.get(&u_graph)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_graph{}; if (!req.get(&u_graph)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraph v_graph = reinterpret_cast<CUgraph>(u_graph);
-    uint64_t u_object{}; if (!req.get(&u_object)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_object{}; if (!req.get(&u_object)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUuserObject v_object = reinterpret_cast<CUuserObject>(u_object);
-    unsigned int v_count{}; if (!req.get(&v_count)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_count{}; if (!req.get(&v_count)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuGraphReleaseUserObject(v_graph, v_object, v_count);
     *out = r_; return true;
   }
 
   case rgpu::API_cuGraphRetainUserObject: {
-    uint64_t u_graph{}; if (!req.get(&u_graph)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_graph{}; if (!req.get(&u_graph)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraph v_graph = reinterpret_cast<CUgraph>(u_graph);
-    uint64_t u_object{}; if (!req.get(&u_object)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_object{}; if (!req.get(&u_object)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUuserObject v_object = reinterpret_cast<CUuserObject>(u_object);
-    unsigned int v_count{}; if (!req.get(&v_count)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_count{}; if (!req.get(&v_count)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuGraphRetainUserObject(v_graph, v_object, v_count, v_flags);
     *out = r_; return true;
   }
 
   case rgpu::API_cuGraphUpload: {
-    uint64_t u_hGraphExec{}; if (!req.get(&u_hGraphExec)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hGraphExec{}; if (!req.get(&u_hGraphExec)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphExec v_hGraphExec = reinterpret_cast<CUgraphExec>(u_hGraphExec);
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuGraphUpload(v_hGraphExec, v_hStream);
     *out = r_; return true;
   }
 
   case rgpu::API_cuGraphicsMapResources: {
-    unsigned int v_count{}; if (!req.get(&v_count)) return CUDA_ERROR_INVALID_VALUE;
-    uint8_t has_resources{}; if (!req.get(&has_resources)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_count{}; if (!req.get(&v_count)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint8_t has_resources{}; if (!req.get(&has_resources)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphicsResource v_resources{};
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuGraphicsMapResources(v_count, has_resources ? &v_resources : nullptr, v_hStream);
     if (has_resources) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_resources));
@@ -1003,9 +1033,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuGraphicsResourceGetMappedMipmappedArray: {
-    uint8_t has_pMipmappedArray{}; if (!req.get(&has_pMipmappedArray)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pMipmappedArray{}; if (!req.get(&has_pMipmappedArray)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmipmappedArray v_pMipmappedArray{};
-    uint64_t u_resource{}; if (!req.get(&u_resource)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_resource{}; if (!req.get(&u_resource)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphicsResource v_resource = reinterpret_cast<CUgraphicsResource>(u_resource);
     CUresult r_ = ::cuGraphicsResourceGetMappedMipmappedArray(has_pMipmappedArray ? &v_pMipmappedArray : nullptr, v_resource);
     if (has_pMipmappedArray) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_pMipmappedArray));
@@ -1013,11 +1043,11 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuGraphicsResourceGetMappedPointer_v2: {
-    uint8_t has_pDevPtr{}; if (!req.get(&has_pDevPtr)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pDevPtr{}; if (!req.get(&has_pDevPtr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUdeviceptr v_pDevPtr{};
-    uint8_t has_pSize{}; if (!req.get(&has_pSize)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pSize{}; if (!req.get(&has_pSize)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_pSize{};
-    uint64_t u_resource{}; if (!req.get(&u_resource)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_resource{}; if (!req.get(&u_resource)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphicsResource v_resource = reinterpret_cast<CUgraphicsResource>(u_resource);
     CUresult r_ = ::cuGraphicsResourceGetMappedPointer_v2(has_pDevPtr ? &v_pDevPtr : nullptr, has_pSize ? &v_pSize : nullptr, v_resource);
     if (has_pDevPtr) rsp->put(v_pDevPtr);
@@ -1026,30 +1056,30 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuGraphicsResourceSetMapFlags_v2: {
-    uint64_t u_resource{}; if (!req.get(&u_resource)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_resource{}; if (!req.get(&u_resource)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphicsResource v_resource = reinterpret_cast<CUgraphicsResource>(u_resource);
-    unsigned int v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuGraphicsResourceSetMapFlags_v2(v_resource, v_flags);
     *out = r_; return true;
   }
 
   case rgpu::API_cuGraphicsSubResourceGetMappedArray: {
-    uint8_t has_pArray{}; if (!req.get(&has_pArray)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pArray{}; if (!req.get(&has_pArray)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUarray v_pArray{};
-    uint64_t u_resource{}; if (!req.get(&u_resource)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_resource{}; if (!req.get(&u_resource)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphicsResource v_resource = reinterpret_cast<CUgraphicsResource>(u_resource);
-    unsigned int v_arrayIndex{}; if (!req.get(&v_arrayIndex)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_mipLevel{}; if (!req.get(&v_mipLevel)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_arrayIndex{}; if (!req.get(&v_arrayIndex)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_mipLevel{}; if (!req.get(&v_mipLevel)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuGraphicsSubResourceGetMappedArray(has_pArray ? &v_pArray : nullptr, v_resource, v_arrayIndex, v_mipLevel);
     if (has_pArray) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_pArray));
     *out = r_; return true;
   }
 
   case rgpu::API_cuGraphicsUnmapResources: {
-    unsigned int v_count{}; if (!req.get(&v_count)) return CUDA_ERROR_INVALID_VALUE;
-    uint8_t has_resources{}; if (!req.get(&has_resources)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_count{}; if (!req.get(&v_count)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint8_t has_resources{}; if (!req.get(&has_resources)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphicsResource v_resources{};
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuGraphicsUnmapResources(v_count, has_resources ? &v_resources : nullptr, v_hStream);
     if (has_resources) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_resources));
@@ -1057,89 +1087,89 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuGraphicsUnregisterResource: {
-    uint64_t u_resource{}; if (!req.get(&u_resource)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_resource{}; if (!req.get(&u_resource)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphicsResource v_resource = reinterpret_cast<CUgraphicsResource>(u_resource);
     CUresult r_ = ::cuGraphicsUnregisterResource(v_resource);
     *out = r_; return true;
   }
 
   case rgpu::API_cuGreenCtxCreate: {
-    uint8_t has_phCtx{}; if (!req.get(&has_phCtx)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_phCtx{}; if (!req.get(&has_phCtx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgreenCtx v_phCtx{};
-    uint64_t u_desc{}; if (!req.get(&u_desc)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_desc{}; if (!req.get(&u_desc)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUdevResourceDesc v_desc = reinterpret_cast<CUdevResourceDesc>(u_desc);
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuGreenCtxCreate(has_phCtx ? &v_phCtx : nullptr, v_desc, v_dev, v_flags);
     if (has_phCtx) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_phCtx));
     *out = r_; return true;
   }
 
   case rgpu::API_cuGreenCtxDestroy: {
-    uint64_t u_hCtx{}; if (!req.get(&u_hCtx)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hCtx{}; if (!req.get(&u_hCtx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgreenCtx v_hCtx = reinterpret_cast<CUgreenCtx>(u_hCtx);
     CUresult r_ = ::cuGreenCtxDestroy(v_hCtx);
     *out = r_; return true;
   }
 
   case rgpu::API_cuGreenCtxRecordEvent: {
-    uint64_t u_hCtx{}; if (!req.get(&u_hCtx)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hCtx{}; if (!req.get(&u_hCtx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgreenCtx v_hCtx = reinterpret_cast<CUgreenCtx>(u_hCtx);
-    uint64_t u_hEvent{}; if (!req.get(&u_hEvent)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hEvent{}; if (!req.get(&u_hEvent)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUevent v_hEvent = reinterpret_cast<CUevent>(u_hEvent);
     CUresult r_ = ::cuGreenCtxRecordEvent(v_hCtx, v_hEvent);
     *out = r_; return true;
   }
 
   case rgpu::API_cuGreenCtxStreamCreate: {
-    uint8_t has_phStream{}; if (!req.get(&has_phStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_phStream{}; if (!req.get(&has_phStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_phStream{};
-    uint64_t u_greenCtx{}; if (!req.get(&u_greenCtx)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_greenCtx{}; if (!req.get(&u_greenCtx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgreenCtx v_greenCtx = reinterpret_cast<CUgreenCtx>(u_greenCtx);
-    unsigned int v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
-    int v_priority{}; if (!req.get(&v_priority)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    int v_priority{}; if (!req.get(&v_priority)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuGreenCtxStreamCreate(has_phStream ? &v_phStream : nullptr, v_greenCtx, v_flags, v_priority);
     if (has_phStream) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_phStream));
     *out = r_; return true;
   }
 
   case rgpu::API_cuGreenCtxWaitEvent: {
-    uint64_t u_hCtx{}; if (!req.get(&u_hCtx)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hCtx{}; if (!req.get(&u_hCtx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgreenCtx v_hCtx = reinterpret_cast<CUgreenCtx>(u_hCtx);
-    uint64_t u_hEvent{}; if (!req.get(&u_hEvent)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hEvent{}; if (!req.get(&u_hEvent)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUevent v_hEvent = reinterpret_cast<CUevent>(u_hEvent);
     CUresult r_ = ::cuGreenCtxWaitEvent(v_hCtx, v_hEvent);
     *out = r_; return true;
   }
 
   case rgpu::API_cuInit: {
-    unsigned int v_Flags{}; if (!req.get(&v_Flags)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_Flags{}; if (!req.get(&v_Flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuInit(v_Flags);
     *out = r_; return true;
   }
 
   case rgpu::API_cuIpcCloseMemHandle: {
-    CUdeviceptr v_dptr{}; if (!req.get(&v_dptr)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dptr{}; if (!req.get(&v_dptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuIpcCloseMemHandle(v_dptr);
     *out = r_; return true;
   }
 
   case rgpu::API_cuKernelGetAttribute: {
-    uint8_t has_pi{}; if (!req.get(&has_pi)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pi{}; if (!req.get(&has_pi)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     int v_pi{};
-    CUfunction_attribute v_attrib{}; if (!req.get(&v_attrib)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_kernel{}; if (!req.get(&u_kernel)) return CUDA_ERROR_INVALID_VALUE;
+    CUfunction_attribute v_attrib{}; if (!req.get(&v_attrib)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_kernel{}; if (!req.get(&u_kernel)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUkernel v_kernel = reinterpret_cast<CUkernel>(u_kernel);
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuKernelGetAttribute(has_pi ? &v_pi : nullptr, v_attrib, v_kernel, v_dev);
     if (has_pi) rsp->put(v_pi);
     *out = r_; return true;
   }
 
   case rgpu::API_cuKernelGetFunction: {
-    uint8_t has_pFunc{}; if (!req.get(&has_pFunc)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pFunc{}; if (!req.get(&has_pFunc)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_pFunc{};
-    uint64_t u_kernel{}; if (!req.get(&u_kernel)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_kernel{}; if (!req.get(&u_kernel)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUkernel v_kernel = reinterpret_cast<CUkernel>(u_kernel);
     CUresult r_ = ::cuKernelGetFunction(has_pFunc ? &v_pFunc : nullptr, v_kernel);
     if (has_pFunc) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_pFunc));
@@ -1147,9 +1177,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuKernelGetLibrary: {
-    uint8_t has_pLib{}; if (!req.get(&has_pLib)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pLib{}; if (!req.get(&has_pLib)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUlibrary v_pLib{};
-    uint64_t u_kernel{}; if (!req.get(&u_kernel)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_kernel{}; if (!req.get(&u_kernel)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUkernel v_kernel = reinterpret_cast<CUkernel>(u_kernel);
     CUresult r_ = ::cuKernelGetLibrary(has_pLib ? &v_pLib : nullptr, v_kernel);
     if (has_pLib) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_pLib));
@@ -1157,12 +1187,12 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuKernelGetParamInfo: {
-    uint64_t u_kernel{}; if (!req.get(&u_kernel)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_kernel{}; if (!req.get(&u_kernel)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUkernel v_kernel = reinterpret_cast<CUkernel>(u_kernel);
-    size_t v_paramIndex{}; if (!req.get(&v_paramIndex)) return CUDA_ERROR_INVALID_VALUE;
-    uint8_t has_paramOffset{}; if (!req.get(&has_paramOffset)) return CUDA_ERROR_INVALID_VALUE;
+    size_t v_paramIndex{}; if (!req.get(&v_paramIndex)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint8_t has_paramOffset{}; if (!req.get(&has_paramOffset)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_paramOffset{};
-    uint8_t has_paramSize{}; if (!req.get(&has_paramSize)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_paramSize{}; if (!req.get(&has_paramSize)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_paramSize{};
     CUresult r_ = ::cuKernelGetParamInfo(v_kernel, v_paramIndex, has_paramOffset ? &v_paramOffset : nullptr, has_paramSize ? &v_paramSize : nullptr);
     if (has_paramOffset) rsp->put(v_paramOffset);
@@ -1171,56 +1201,56 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuKernelSetAttribute: {
-    CUfunction_attribute v_attrib{}; if (!req.get(&v_attrib)) return CUDA_ERROR_INVALID_VALUE;
-    int v_val{}; if (!req.get(&v_val)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_kernel{}; if (!req.get(&u_kernel)) return CUDA_ERROR_INVALID_VALUE;
+    CUfunction_attribute v_attrib{}; if (!req.get(&v_attrib)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    int v_val{}; if (!req.get(&v_val)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_kernel{}; if (!req.get(&u_kernel)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUkernel v_kernel = reinterpret_cast<CUkernel>(u_kernel);
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuKernelSetAttribute(v_attrib, v_val, v_kernel, v_dev);
     *out = r_; return true;
   }
 
   case rgpu::API_cuKernelSetCacheConfig: {
-    uint64_t u_kernel{}; if (!req.get(&u_kernel)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_kernel{}; if (!req.get(&u_kernel)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUkernel v_kernel = reinterpret_cast<CUkernel>(u_kernel);
-    CUfunc_cache v_config{}; if (!req.get(&v_config)) return CUDA_ERROR_INVALID_VALUE;
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
+    CUfunc_cache v_config{}; if (!req.get(&v_config)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuKernelSetCacheConfig(v_kernel, v_config, v_dev);
     *out = r_; return true;
   }
 
   case rgpu::API_cuLaunch: {
-    uint64_t u_f{}; if (!req.get(&u_f)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_f{}; if (!req.get(&u_f)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_f = reinterpret_cast<CUfunction>(u_f);
     CUresult r_ = ::cuLaunch(v_f);
     *out = r_; return true;
   }
 
   case rgpu::API_cuLaunchGrid: {
-    uint64_t u_f{}; if (!req.get(&u_f)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_f{}; if (!req.get(&u_f)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_f = reinterpret_cast<CUfunction>(u_f);
-    int v_grid_width{}; if (!req.get(&v_grid_width)) return CUDA_ERROR_INVALID_VALUE;
-    int v_grid_height{}; if (!req.get(&v_grid_height)) return CUDA_ERROR_INVALID_VALUE;
+    int v_grid_width{}; if (!req.get(&v_grid_width)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    int v_grid_height{}; if (!req.get(&v_grid_height)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuLaunchGrid(v_f, v_grid_width, v_grid_height);
     *out = r_; return true;
   }
 
   case rgpu::API_cuLaunchGridAsync: {
-    uint64_t u_f{}; if (!req.get(&u_f)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_f{}; if (!req.get(&u_f)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_f = reinterpret_cast<CUfunction>(u_f);
-    int v_grid_width{}; if (!req.get(&v_grid_width)) return CUDA_ERROR_INVALID_VALUE;
-    int v_grid_height{}; if (!req.get(&v_grid_height)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    int v_grid_width{}; if (!req.get(&v_grid_width)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    int v_grid_height{}; if (!req.get(&v_grid_height)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuLaunchGridAsync(v_f, v_grid_width, v_grid_height, v_hStream);
     *out = r_; return true;
   }
 
   case rgpu::API_cuLibraryEnumerateKernels: {
-    uint8_t has_kernels{}; if (!req.get(&has_kernels)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_kernels{}; if (!req.get(&has_kernels)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUkernel v_kernels{};
-    unsigned int v_numKernels{}; if (!req.get(&v_numKernels)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_lib{}; if (!req.get(&u_lib)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_numKernels{}; if (!req.get(&v_numKernels)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_lib{}; if (!req.get(&u_lib)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUlibrary v_lib = reinterpret_cast<CUlibrary>(u_lib);
     CUresult r_ = ::cuLibraryEnumerateKernels(has_kernels ? &v_kernels : nullptr, v_numKernels, v_lib);
     if (has_kernels) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_kernels));
@@ -1228,14 +1258,14 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuLibraryGetGlobal: {
-    uint8_t has_dptr{}; if (!req.get(&has_dptr)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_dptr{}; if (!req.get(&has_dptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUdeviceptr v_dptr{};
-    uint8_t has_bytes{}; if (!req.get(&has_bytes)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_bytes{}; if (!req.get(&has_bytes)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_bytes{};
-    uint64_t u_library{}; if (!req.get(&u_library)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_library{}; if (!req.get(&u_library)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUlibrary v_library = reinterpret_cast<CUlibrary>(u_library);
     std::string s_name; bool has_name=false;
-    if (!req.get_str(&s_name, &has_name)) return CUDA_ERROR_INVALID_VALUE;
+    if (!req.get_str(&s_name, &has_name)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuLibraryGetGlobal(has_dptr ? &v_dptr : nullptr, has_bytes ? &v_bytes : nullptr, v_library, has_name ? s_name.c_str() : nullptr);
     if (has_dptr) rsp->put(v_dptr);
     if (has_bytes) rsp->put(v_bytes);
@@ -1243,21 +1273,21 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuLibraryGetKernel: {
-    uint8_t has_pKernel{}; if (!req.get(&has_pKernel)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pKernel{}; if (!req.get(&has_pKernel)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUkernel v_pKernel{};
-    uint64_t u_library{}; if (!req.get(&u_library)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_library{}; if (!req.get(&u_library)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUlibrary v_library = reinterpret_cast<CUlibrary>(u_library);
     std::string s_name; bool has_name=false;
-    if (!req.get_str(&s_name, &has_name)) return CUDA_ERROR_INVALID_VALUE;
+    if (!req.get_str(&s_name, &has_name)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuLibraryGetKernel(has_pKernel ? &v_pKernel : nullptr, v_library, has_name ? s_name.c_str() : nullptr);
     if (has_pKernel) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_pKernel));
     *out = r_; return true;
   }
 
   case rgpu::API_cuLibraryGetKernelCount: {
-    uint8_t has_count{}; if (!req.get(&has_count)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_count{}; if (!req.get(&has_count)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     unsigned int v_count{};
-    uint64_t u_lib{}; if (!req.get(&u_lib)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_lib{}; if (!req.get(&u_lib)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUlibrary v_lib = reinterpret_cast<CUlibrary>(u_lib);
     CUresult r_ = ::cuLibraryGetKernelCount(has_count ? &v_count : nullptr, v_lib);
     if (has_count) rsp->put(v_count);
@@ -1265,14 +1295,14 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuLibraryGetManaged: {
-    uint8_t has_dptr{}; if (!req.get(&has_dptr)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_dptr{}; if (!req.get(&has_dptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUdeviceptr v_dptr{};
-    uint8_t has_bytes{}; if (!req.get(&has_bytes)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_bytes{}; if (!req.get(&has_bytes)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_bytes{};
-    uint64_t u_library{}; if (!req.get(&u_library)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_library{}; if (!req.get(&u_library)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUlibrary v_library = reinterpret_cast<CUlibrary>(u_library);
     std::string s_name; bool has_name=false;
-    if (!req.get_str(&s_name, &has_name)) return CUDA_ERROR_INVALID_VALUE;
+    if (!req.get_str(&s_name, &has_name)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuLibraryGetManaged(has_dptr ? &v_dptr : nullptr, has_bytes ? &v_bytes : nullptr, v_library, has_name ? s_name.c_str() : nullptr);
     if (has_dptr) rsp->put(v_dptr);
     if (has_bytes) rsp->put(v_bytes);
@@ -1280,9 +1310,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuLibraryGetModule: {
-    uint8_t has_pMod{}; if (!req.get(&has_pMod)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pMod{}; if (!req.get(&has_pMod)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmodule v_pMod{};
-    uint64_t u_library{}; if (!req.get(&u_library)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_library{}; if (!req.get(&u_library)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUlibrary v_library = reinterpret_cast<CUlibrary>(u_library);
     CUresult r_ = ::cuLibraryGetModule(has_pMod ? &v_pMod : nullptr, v_library);
     if (has_pMod) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_pMod));
@@ -1290,65 +1320,65 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuLibraryLoadData: {
-    uint8_t has_library{}; if (!req.get(&has_library)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_library{}; if (!req.get(&has_library)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUlibrary v_library{};
-    uint8_t has_code{}; if (!req.get(&has_code)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_code{}; if (!req.get(&has_code)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     const uint8_t* b_code = nullptr; size_t n_code = 0;
-    if (has_code && !req.get_sized(&b_code, &n_code)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_numJitOptions{}; if (!req.get(&v_numJitOptions)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_numLibraryOptions{}; if (!req.get(&v_numLibraryOptions)) return CUDA_ERROR_INVALID_VALUE;
+    if (has_code && !req.get_sized(&b_code, &n_code)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_numJitOptions{}; if (!req.get(&v_numJitOptions)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_numLibraryOptions{}; if (!req.get(&v_numLibraryOptions)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuLibraryLoadData(has_library ? &v_library : nullptr, has_code ? (const void *)b_code : nullptr, nullptr, nullptr, v_numJitOptions, nullptr, nullptr, v_numLibraryOptions);
     if (has_library) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_library));
     *out = r_; return true;
   }
 
   case rgpu::API_cuLibraryUnload: {
-    uint64_t u_library{}; if (!req.get(&u_library)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_library{}; if (!req.get(&u_library)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUlibrary v_library = reinterpret_cast<CUlibrary>(u_library);
     CUresult r_ = ::cuLibraryUnload(v_library);
     *out = r_; return true;
   }
 
   case rgpu::API_cuLinkDestroy: {
-    uint64_t u_state{}; if (!req.get(&u_state)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_state{}; if (!req.get(&u_state)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUlinkState v_state = reinterpret_cast<CUlinkState>(u_state);
     CUresult r_ = ::cuLinkDestroy(v_state);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemAddressFree: {
-    CUdeviceptr v_ptr{}; if (!req.get(&v_ptr)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_size{}; if (!req.get(&v_size)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_ptr{}; if (!req.get(&v_ptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_size{}; if (!req.get(&v_size)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemAddressFree(v_ptr, v_size);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemAddressReserve: {
-    uint8_t has_ptr{}; if (!req.get(&has_ptr)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_ptr{}; if (!req.get(&has_ptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUdeviceptr v_ptr{};
-    size_t v_size{}; if (!req.get(&v_size)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_alignment{}; if (!req.get(&v_alignment)) return CUDA_ERROR_INVALID_VALUE;
-    CUdeviceptr v_addr{}; if (!req.get(&v_addr)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned long long v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    size_t v_size{}; if (!req.get(&v_size)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_alignment{}; if (!req.get(&v_alignment)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdeviceptr v_addr{}; if (!req.get(&v_addr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned long long v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemAddressReserve(has_ptr ? &v_ptr : nullptr, v_size, v_alignment, v_addr, v_flags);
     if (has_ptr) rsp->put(v_ptr);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemAdvise: {
-    CUdeviceptr v_devPtr{}; if (!req.get(&v_devPtr)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_count{}; if (!req.get(&v_count)) return CUDA_ERROR_INVALID_VALUE;
-    CUmem_advise v_advice{}; if (!req.get(&v_advice)) return CUDA_ERROR_INVALID_VALUE;
-    CUdevice v_device{}; if (!req.get(&v_device)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_devPtr{}; if (!req.get(&v_devPtr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_count{}; if (!req.get(&v_count)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUmem_advise v_advice{}; if (!req.get(&v_advice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdevice v_device{}; if (!req.get(&v_device)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemAdvise(v_devPtr, v_count, v_advice, v_device);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemAllocAsync: {
-    uint8_t has_dptr{}; if (!req.get(&has_dptr)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_dptr{}; if (!req.get(&has_dptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUdeviceptr v_dptr{};
-    size_t v_bytesize{}; if (!req.get(&v_bytesize)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    size_t v_bytesize{}; if (!req.get(&v_bytesize)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuMemAllocAsync(has_dptr ? &v_dptr : nullptr, v_bytesize, v_hStream);
     if (has_dptr) rsp->put(v_dptr);
@@ -1356,12 +1386,12 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuMemAllocFromPoolAsync: {
-    uint8_t has_dptr{}; if (!req.get(&has_dptr)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_dptr{}; if (!req.get(&has_dptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUdeviceptr v_dptr{};
-    size_t v_bytesize{}; if (!req.get(&v_bytesize)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_pool{}; if (!req.get(&u_pool)) return CUDA_ERROR_INVALID_VALUE;
+    size_t v_bytesize{}; if (!req.get(&v_bytesize)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_pool{}; if (!req.get(&u_pool)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmemoryPool v_pool = reinterpret_cast<CUmemoryPool>(u_pool);
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuMemAllocFromPoolAsync(has_dptr ? &v_dptr : nullptr, v_bytesize, v_pool, v_hStream);
     if (has_dptr) rsp->put(v_dptr);
@@ -1369,13 +1399,13 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuMemAllocPitch_v2: {
-    uint8_t has_dptr{}; if (!req.get(&has_dptr)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_dptr{}; if (!req.get(&has_dptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUdeviceptr v_dptr{};
-    uint8_t has_pPitch{}; if (!req.get(&has_pPitch)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pPitch{}; if (!req.get(&has_pPitch)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_pPitch{};
-    size_t v_WidthInBytes{}; if (!req.get(&v_WidthInBytes)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_Height{}; if (!req.get(&v_Height)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_ElementSizeBytes{}; if (!req.get(&v_ElementSizeBytes)) return CUDA_ERROR_INVALID_VALUE;
+    size_t v_WidthInBytes{}; if (!req.get(&v_WidthInBytes)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_Height{}; if (!req.get(&v_Height)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_ElementSizeBytes{}; if (!req.get(&v_ElementSizeBytes)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemAllocPitch_v2(has_dptr ? &v_dptr : nullptr, has_pPitch ? &v_pPitch : nullptr, v_WidthInBytes, v_Height, v_ElementSizeBytes);
     if (has_dptr) rsp->put(v_dptr);
     if (has_pPitch) rsp->put(v_pPitch);
@@ -1383,34 +1413,34 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuMemAlloc_v2: {
-    uint8_t has_dptr{}; if (!req.get(&has_dptr)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_dptr{}; if (!req.get(&has_dptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUdeviceptr v_dptr{};
-    size_t v_bytesize{}; if (!req.get(&v_bytesize)) return CUDA_ERROR_INVALID_VALUE;
+    size_t v_bytesize{}; if (!req.get(&v_bytesize)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemAlloc_v2(has_dptr ? &v_dptr : nullptr, v_bytesize);
     if (has_dptr) rsp->put(v_dptr);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemFreeAsync: {
-    CUdeviceptr v_dptr{}; if (!req.get(&v_dptr)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dptr{}; if (!req.get(&v_dptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuMemFreeAsync(v_dptr, v_hStream);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemFree_v2: {
-    CUdeviceptr v_dptr{}; if (!req.get(&v_dptr)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dptr{}; if (!req.get(&v_dptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemFree_v2(v_dptr);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemGetAddressRange_v2: {
-    uint8_t has_pbase{}; if (!req.get(&has_pbase)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pbase{}; if (!req.get(&has_pbase)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUdeviceptr v_pbase{};
-    uint8_t has_psize{}; if (!req.get(&has_psize)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_psize{}; if (!req.get(&has_psize)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_psize{};
-    CUdeviceptr v_dptr{}; if (!req.get(&v_dptr)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dptr{}; if (!req.get(&v_dptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemGetAddressRange_v2(has_pbase ? &v_pbase : nullptr, has_psize ? &v_psize : nullptr, v_dptr);
     if (has_pbase) rsp->put(v_pbase);
     if (has_psize) rsp->put(v_psize);
@@ -1418,9 +1448,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuMemGetInfo_v2: {
-    uint8_t has_free{}; if (!req.get(&has_free)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_free{}; if (!req.get(&has_free)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_free{};
-    uint8_t has_total{}; if (!req.get(&has_total)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_total{}; if (!req.get(&has_total)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_total{};
     CUresult r_ = ::cuMemGetInfo_v2(has_free ? &v_free : nullptr, has_total ? &v_total : nullptr);
     if (has_free) rsp->put(v_free);
@@ -1429,128 +1459,128 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuMemMap: {
-    CUdeviceptr v_ptr{}; if (!req.get(&v_ptr)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_size{}; if (!req.get(&v_size)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_offset{}; if (!req.get(&v_offset)) return CUDA_ERROR_INVALID_VALUE;
-    CUmemGenericAllocationHandle v_handle{}; if (!req.get(&v_handle)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned long long v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_ptr{}; if (!req.get(&v_ptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_size{}; if (!req.get(&v_size)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_offset{}; if (!req.get(&v_offset)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUmemGenericAllocationHandle v_handle{}; if (!req.get(&v_handle)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned long long v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemMap(v_ptr, v_size, v_offset, v_handle, v_flags);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemPoolDestroy: {
-    uint64_t u_pool{}; if (!req.get(&u_pool)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_pool{}; if (!req.get(&u_pool)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmemoryPool v_pool = reinterpret_cast<CUmemoryPool>(u_pool);
     CUresult r_ = ::cuMemPoolDestroy(v_pool);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemPoolTrimTo: {
-    uint64_t u_pool{}; if (!req.get(&u_pool)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_pool{}; if (!req.get(&u_pool)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmemoryPool v_pool = reinterpret_cast<CUmemoryPool>(u_pool);
-    size_t v_minBytesToKeep{}; if (!req.get(&v_minBytesToKeep)) return CUDA_ERROR_INVALID_VALUE;
+    size_t v_minBytesToKeep{}; if (!req.get(&v_minBytesToKeep)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemPoolTrimTo(v_pool, v_minBytesToKeep);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemPrefetchAsync: {
-    CUdeviceptr v_devPtr{}; if (!req.get(&v_devPtr)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_count{}; if (!req.get(&v_count)) return CUDA_ERROR_INVALID_VALUE;
-    CUdevice v_dstDevice{}; if (!req.get(&v_dstDevice)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_devPtr{}; if (!req.get(&v_devPtr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_count{}; if (!req.get(&v_count)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdevice v_dstDevice{}; if (!req.get(&v_dstDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuMemPrefetchAsync(v_devPtr, v_count, v_dstDevice, v_hStream);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemRelease: {
-    CUmemGenericAllocationHandle v_handle{}; if (!req.get(&v_handle)) return CUDA_ERROR_INVALID_VALUE;
+    CUmemGenericAllocationHandle v_handle{}; if (!req.get(&v_handle)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemRelease(v_handle);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemUnmap: {
-    CUdeviceptr v_ptr{}; if (!req.get(&v_ptr)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_size{}; if (!req.get(&v_size)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_ptr{}; if (!req.get(&v_ptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_size{}; if (!req.get(&v_size)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemUnmap(v_ptr, v_size);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemcpy: {
-    CUdeviceptr v_dst{}; if (!req.get(&v_dst)) return CUDA_ERROR_INVALID_VALUE;
-    CUdeviceptr v_src{}; if (!req.get(&v_src)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dst{}; if (!req.get(&v_dst)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdeviceptr v_src{}; if (!req.get(&v_src)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemcpy(v_dst, v_src, v_ByteCount);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemcpyAsync: {
-    CUdeviceptr v_dst{}; if (!req.get(&v_dst)) return CUDA_ERROR_INVALID_VALUE;
-    CUdeviceptr v_src{}; if (!req.get(&v_src)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dst{}; if (!req.get(&v_dst)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdeviceptr v_src{}; if (!req.get(&v_src)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuMemcpyAsync(v_dst, v_src, v_ByteCount, v_hStream);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemcpyAtoA_v2: {
-    uint64_t u_dstArray{}; if (!req.get(&u_dstArray)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_dstArray{}; if (!req.get(&u_dstArray)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUarray v_dstArray = reinterpret_cast<CUarray>(u_dstArray);
-    size_t v_dstOffset{}; if (!req.get(&v_dstOffset)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_srcArray{}; if (!req.get(&u_srcArray)) return CUDA_ERROR_INVALID_VALUE;
+    size_t v_dstOffset{}; if (!req.get(&v_dstOffset)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_srcArray{}; if (!req.get(&u_srcArray)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUarray v_srcArray = reinterpret_cast<CUarray>(u_srcArray);
-    size_t v_srcOffset{}; if (!req.get(&v_srcOffset)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) return CUDA_ERROR_INVALID_VALUE;
+    size_t v_srcOffset{}; if (!req.get(&v_srcOffset)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemcpyAtoA_v2(v_dstArray, v_dstOffset, v_srcArray, v_srcOffset, v_ByteCount);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemcpyAtoD_v2: {
-    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_srcArray{}; if (!req.get(&u_srcArray)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_srcArray{}; if (!req.get(&u_srcArray)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUarray v_srcArray = reinterpret_cast<CUarray>(u_srcArray);
-    size_t v_srcOffset{}; if (!req.get(&v_srcOffset)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) return CUDA_ERROR_INVALID_VALUE;
+    size_t v_srcOffset{}; if (!req.get(&v_srcOffset)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemcpyAtoD_v2(v_dstDevice, v_srcArray, v_srcOffset, v_ByteCount);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemcpyDtoA_v2: {
-    uint64_t u_dstArray{}; if (!req.get(&u_dstArray)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_dstArray{}; if (!req.get(&u_dstArray)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUarray v_dstArray = reinterpret_cast<CUarray>(u_dstArray);
-    size_t v_dstOffset{}; if (!req.get(&v_dstOffset)) return CUDA_ERROR_INVALID_VALUE;
-    CUdeviceptr v_srcDevice{}; if (!req.get(&v_srcDevice)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) return CUDA_ERROR_INVALID_VALUE;
+    size_t v_dstOffset{}; if (!req.get(&v_dstOffset)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdeviceptr v_srcDevice{}; if (!req.get(&v_srcDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemcpyDtoA_v2(v_dstArray, v_dstOffset, v_srcDevice, v_ByteCount);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemcpyDtoDAsync_v2: {
-    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) return CUDA_ERROR_INVALID_VALUE;
-    CUdeviceptr v_srcDevice{}; if (!req.get(&v_srcDevice)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdeviceptr v_srcDevice{}; if (!req.get(&v_srcDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuMemcpyDtoDAsync_v2(v_dstDevice, v_srcDevice, v_ByteCount, v_hStream);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemcpyDtoD_v2: {
-    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) return CUDA_ERROR_INVALID_VALUE;
-    CUdeviceptr v_srcDevice{}; if (!req.get(&v_srcDevice)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdeviceptr v_srcDevice{}; if (!req.get(&v_srcDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemcpyDtoD_v2(v_dstDevice, v_srcDevice, v_ByteCount);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemcpyDtoHAsync_v2: {
     uint8_t has_dstHost{}; uint64_t n_dstHost{};
-    if (!req.get(&has_dstHost) || !req.get(&n_dstHost)) return CUDA_ERROR_INVALID_VALUE;
+    if (!req.get(&has_dstHost) || !req.get(&n_dstHost)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     std::vector<uint8_t> b_dstHost(has_dstHost ? n_dstHost : 0);
-    CUdeviceptr v_srcDevice{}; if (!req.get(&v_srcDevice)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_srcDevice{}; if (!req.get(&v_srcDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuMemcpyDtoHAsync_v2(has_dstHost ? (void *)b_dstHost.data() : nullptr, v_srcDevice, v_ByteCount, v_hStream);
     if (has_dstHost) rsp->put_sized(b_dstHost.data(), b_dstHost.size());
@@ -1559,206 +1589,206 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
 
   case rgpu::API_cuMemcpyDtoH_v2: {
     uint8_t has_dstHost{}; uint64_t n_dstHost{};
-    if (!req.get(&has_dstHost) || !req.get(&n_dstHost)) return CUDA_ERROR_INVALID_VALUE;
+    if (!req.get(&has_dstHost) || !req.get(&n_dstHost)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     std::vector<uint8_t> b_dstHost(has_dstHost ? n_dstHost : 0);
-    CUdeviceptr v_srcDevice{}; if (!req.get(&v_srcDevice)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_srcDevice{}; if (!req.get(&v_srcDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemcpyDtoH_v2(has_dstHost ? (void *)b_dstHost.data() : nullptr, v_srcDevice, v_ByteCount);
     if (has_dstHost) rsp->put_sized(b_dstHost.data(), b_dstHost.size());
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemcpyHtoDAsync_v2: {
-    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) return CUDA_ERROR_INVALID_VALUE;
-    uint8_t has_srcHost{}; if (!req.get(&has_srcHost)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint8_t has_srcHost{}; if (!req.get(&has_srcHost)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     const uint8_t* b_srcHost = nullptr; size_t n_srcHost = 0;
-    if (has_srcHost && !req.get_sized(&b_srcHost, &n_srcHost)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    if (has_srcHost && !req.get_sized(&b_srcHost, &n_srcHost)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuMemcpyHtoDAsync_v2(v_dstDevice, has_srcHost ? (const void *)b_srcHost : nullptr, v_ByteCount, v_hStream);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemcpyHtoD_v2: {
-    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) return CUDA_ERROR_INVALID_VALUE;
-    uint8_t has_srcHost{}; if (!req.get(&has_srcHost)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint8_t has_srcHost{}; if (!req.get(&has_srcHost)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     const uint8_t* b_srcHost = nullptr; size_t n_srcHost = 0;
-    if (has_srcHost && !req.get_sized(&b_srcHost, &n_srcHost)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) return CUDA_ERROR_INVALID_VALUE;
+    if (has_srcHost && !req.get_sized(&b_srcHost, &n_srcHost)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemcpyHtoD_v2(v_dstDevice, has_srcHost ? (const void *)b_srcHost : nullptr, v_ByteCount);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemcpyPeer: {
-    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_dstContext{}; if (!req.get(&u_dstContext)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_dstContext{}; if (!req.get(&u_dstContext)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_dstContext = reinterpret_cast<CUcontext>(u_dstContext);
-    CUdeviceptr v_srcDevice{}; if (!req.get(&v_srcDevice)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_srcContext{}; if (!req.get(&u_srcContext)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_srcDevice{}; if (!req.get(&v_srcDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_srcContext{}; if (!req.get(&u_srcContext)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_srcContext = reinterpret_cast<CUcontext>(u_srcContext);
-    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) return CUDA_ERROR_INVALID_VALUE;
+    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemcpyPeer(v_dstDevice, v_dstContext, v_srcDevice, v_srcContext, v_ByteCount);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemcpyPeerAsync: {
-    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_dstContext{}; if (!req.get(&u_dstContext)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_dstContext{}; if (!req.get(&u_dstContext)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_dstContext = reinterpret_cast<CUcontext>(u_dstContext);
-    CUdeviceptr v_srcDevice{}; if (!req.get(&v_srcDevice)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_srcContext{}; if (!req.get(&u_srcContext)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_srcDevice{}; if (!req.get(&v_srcDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_srcContext{}; if (!req.get(&u_srcContext)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_srcContext = reinterpret_cast<CUcontext>(u_srcContext);
-    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuMemcpyPeerAsync(v_dstDevice, v_dstContext, v_srcDevice, v_srcContext, v_ByteCount, v_hStream);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemsetD16Async: {
-    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned short v_us{}; if (!req.get(&v_us)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_N{}; if (!req.get(&v_N)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned short v_us{}; if (!req.get(&v_us)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_N{}; if (!req.get(&v_N)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuMemsetD16Async(v_dstDevice, v_us, v_N, v_hStream);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemsetD16_v2: {
-    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned short v_us{}; if (!req.get(&v_us)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_N{}; if (!req.get(&v_N)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned short v_us{}; if (!req.get(&v_us)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_N{}; if (!req.get(&v_N)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemsetD16_v2(v_dstDevice, v_us, v_N);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemsetD2D16Async: {
-    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_dstPitch{}; if (!req.get(&v_dstPitch)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned short v_us{}; if (!req.get(&v_us)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_Width{}; if (!req.get(&v_Width)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_Height{}; if (!req.get(&v_Height)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_dstPitch{}; if (!req.get(&v_dstPitch)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned short v_us{}; if (!req.get(&v_us)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_Width{}; if (!req.get(&v_Width)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_Height{}; if (!req.get(&v_Height)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuMemsetD2D16Async(v_dstDevice, v_dstPitch, v_us, v_Width, v_Height, v_hStream);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemsetD2D16_v2: {
-    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_dstPitch{}; if (!req.get(&v_dstPitch)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned short v_us{}; if (!req.get(&v_us)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_Width{}; if (!req.get(&v_Width)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_Height{}; if (!req.get(&v_Height)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_dstPitch{}; if (!req.get(&v_dstPitch)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned short v_us{}; if (!req.get(&v_us)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_Width{}; if (!req.get(&v_Width)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_Height{}; if (!req.get(&v_Height)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemsetD2D16_v2(v_dstDevice, v_dstPitch, v_us, v_Width, v_Height);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemsetD2D32Async: {
-    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_dstPitch{}; if (!req.get(&v_dstPitch)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_ui{}; if (!req.get(&v_ui)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_Width{}; if (!req.get(&v_Width)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_Height{}; if (!req.get(&v_Height)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_dstPitch{}; if (!req.get(&v_dstPitch)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_ui{}; if (!req.get(&v_ui)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_Width{}; if (!req.get(&v_Width)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_Height{}; if (!req.get(&v_Height)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuMemsetD2D32Async(v_dstDevice, v_dstPitch, v_ui, v_Width, v_Height, v_hStream);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemsetD2D32_v2: {
-    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_dstPitch{}; if (!req.get(&v_dstPitch)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_ui{}; if (!req.get(&v_ui)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_Width{}; if (!req.get(&v_Width)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_Height{}; if (!req.get(&v_Height)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_dstPitch{}; if (!req.get(&v_dstPitch)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_ui{}; if (!req.get(&v_ui)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_Width{}; if (!req.get(&v_Width)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_Height{}; if (!req.get(&v_Height)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemsetD2D32_v2(v_dstDevice, v_dstPitch, v_ui, v_Width, v_Height);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemsetD2D8Async: {
-    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_dstPitch{}; if (!req.get(&v_dstPitch)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned char v_uc{}; if (!req.get(&v_uc)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_Width{}; if (!req.get(&v_Width)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_Height{}; if (!req.get(&v_Height)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_dstPitch{}; if (!req.get(&v_dstPitch)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned char v_uc{}; if (!req.get(&v_uc)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_Width{}; if (!req.get(&v_Width)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_Height{}; if (!req.get(&v_Height)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuMemsetD2D8Async(v_dstDevice, v_dstPitch, v_uc, v_Width, v_Height, v_hStream);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemsetD2D8_v2: {
-    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_dstPitch{}; if (!req.get(&v_dstPitch)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned char v_uc{}; if (!req.get(&v_uc)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_Width{}; if (!req.get(&v_Width)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_Height{}; if (!req.get(&v_Height)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_dstPitch{}; if (!req.get(&v_dstPitch)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned char v_uc{}; if (!req.get(&v_uc)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_Width{}; if (!req.get(&v_Width)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_Height{}; if (!req.get(&v_Height)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemsetD2D8_v2(v_dstDevice, v_dstPitch, v_uc, v_Width, v_Height);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemsetD32Async: {
-    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_ui{}; if (!req.get(&v_ui)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_N{}; if (!req.get(&v_N)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_ui{}; if (!req.get(&v_ui)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_N{}; if (!req.get(&v_N)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuMemsetD32Async(v_dstDevice, v_ui, v_N, v_hStream);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemsetD32_v2: {
-    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_ui{}; if (!req.get(&v_ui)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_N{}; if (!req.get(&v_N)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_ui{}; if (!req.get(&v_ui)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_N{}; if (!req.get(&v_N)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemsetD32_v2(v_dstDevice, v_ui, v_N);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemsetD8Async: {
-    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned char v_uc{}; if (!req.get(&v_uc)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_N{}; if (!req.get(&v_N)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned char v_uc{}; if (!req.get(&v_uc)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_N{}; if (!req.get(&v_N)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuMemsetD8Async(v_dstDevice, v_uc, v_N, v_hStream);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMemsetD8_v2: {
-    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned char v_uc{}; if (!req.get(&v_uc)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_N{}; if (!req.get(&v_N)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dstDevice{}; if (!req.get(&v_dstDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned char v_uc{}; if (!req.get(&v_uc)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_N{}; if (!req.get(&v_N)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMemsetD8_v2(v_dstDevice, v_uc, v_N);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMipmappedArrayDestroy: {
-    uint64_t u_hMipmappedArray{}; if (!req.get(&u_hMipmappedArray)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hMipmappedArray{}; if (!req.get(&u_hMipmappedArray)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmipmappedArray v_hMipmappedArray = reinterpret_cast<CUmipmappedArray>(u_hMipmappedArray);
     CUresult r_ = ::cuMipmappedArrayDestroy(v_hMipmappedArray);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMipmappedArrayGetLevel: {
-    uint8_t has_pLevelArray{}; if (!req.get(&has_pLevelArray)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pLevelArray{}; if (!req.get(&has_pLevelArray)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUarray v_pLevelArray{};
-    uint64_t u_hMipmappedArray{}; if (!req.get(&u_hMipmappedArray)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hMipmappedArray{}; if (!req.get(&u_hMipmappedArray)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmipmappedArray v_hMipmappedArray = reinterpret_cast<CUmipmappedArray>(u_hMipmappedArray);
-    unsigned int v_level{}; if (!req.get(&v_level)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_level{}; if (!req.get(&v_level)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMipmappedArrayGetLevel(has_pLevelArray ? &v_pLevelArray : nullptr, v_hMipmappedArray, v_level);
     if (has_pLevelArray) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_pLevelArray));
     *out = r_; return true;
   }
 
   case rgpu::API_cuModuleEnumerateFunctions: {
-    uint8_t has_functions{}; if (!req.get(&has_functions)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_functions{}; if (!req.get(&has_functions)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_functions{};
-    unsigned int v_numFunctions{}; if (!req.get(&v_numFunctions)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_mod{}; if (!req.get(&u_mod)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_numFunctions{}; if (!req.get(&v_numFunctions)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_mod{}; if (!req.get(&u_mod)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmodule v_mod = reinterpret_cast<CUmodule>(u_mod);
     CUresult r_ = ::cuModuleEnumerateFunctions(has_functions ? &v_functions : nullptr, v_numFunctions, v_mod);
     if (has_functions) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_functions));
@@ -1766,21 +1796,21 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuModuleGetFunction: {
-    uint8_t has_hfunc{}; if (!req.get(&has_hfunc)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_hfunc{}; if (!req.get(&has_hfunc)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_hfunc{};
-    uint64_t u_hmod{}; if (!req.get(&u_hmod)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hmod{}; if (!req.get(&u_hmod)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmodule v_hmod = reinterpret_cast<CUmodule>(u_hmod);
     std::string s_name; bool has_name=false;
-    if (!req.get_str(&s_name, &has_name)) return CUDA_ERROR_INVALID_VALUE;
+    if (!req.get_str(&s_name, &has_name)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuModuleGetFunction(has_hfunc ? &v_hfunc : nullptr, v_hmod, has_name ? s_name.c_str() : nullptr);
     if (has_hfunc) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_hfunc));
     *out = r_; return true;
   }
 
   case rgpu::API_cuModuleGetFunctionCount: {
-    uint8_t has_count{}; if (!req.get(&has_count)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_count{}; if (!req.get(&has_count)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     unsigned int v_count{};
-    uint64_t u_mod{}; if (!req.get(&u_mod)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_mod{}; if (!req.get(&u_mod)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmodule v_mod = reinterpret_cast<CUmodule>(u_mod);
     CUresult r_ = ::cuModuleGetFunctionCount(has_count ? &v_count : nullptr, v_mod);
     if (has_count) rsp->put(v_count);
@@ -1788,14 +1818,14 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuModuleGetGlobal_v2: {
-    uint8_t has_dptr{}; if (!req.get(&has_dptr)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_dptr{}; if (!req.get(&has_dptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUdeviceptr v_dptr{};
-    uint8_t has_bytes{}; if (!req.get(&has_bytes)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_bytes{}; if (!req.get(&has_bytes)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_bytes{};
-    uint64_t u_hmod{}; if (!req.get(&u_hmod)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hmod{}; if (!req.get(&u_hmod)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmodule v_hmod = reinterpret_cast<CUmodule>(u_hmod);
     std::string s_name; bool has_name=false;
-    if (!req.get_str(&s_name, &has_name)) return CUDA_ERROR_INVALID_VALUE;
+    if (!req.get_str(&s_name, &has_name)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuModuleGetGlobal_v2(has_dptr ? &v_dptr : nullptr, has_bytes ? &v_bytes : nullptr, v_hmod, has_name ? s_name.c_str() : nullptr);
     if (has_dptr) rsp->put(v_dptr);
     if (has_bytes) rsp->put(v_bytes);
@@ -1803,7 +1833,7 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuModuleGetLoadingMode: {
-    uint8_t has_mode{}; if (!req.get(&has_mode)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_mode{}; if (!req.get(&has_mode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmoduleLoadingMode v_mode{};
     CUresult r_ = ::cuModuleGetLoadingMode(has_mode ? &v_mode : nullptr);
     if (has_mode) rsp->put(v_mode);
@@ -1811,235 +1841,235 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuModuleGetSurfRef: {
-    uint8_t has_pSurfRef{}; if (!req.get(&has_pSurfRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pSurfRef{}; if (!req.get(&has_pSurfRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUsurfref v_pSurfRef{};
-    uint64_t u_hmod{}; if (!req.get(&u_hmod)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hmod{}; if (!req.get(&u_hmod)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmodule v_hmod = reinterpret_cast<CUmodule>(u_hmod);
     std::string s_name; bool has_name=false;
-    if (!req.get_str(&s_name, &has_name)) return CUDA_ERROR_INVALID_VALUE;
+    if (!req.get_str(&s_name, &has_name)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuModuleGetSurfRef(has_pSurfRef ? &v_pSurfRef : nullptr, v_hmod, has_name ? s_name.c_str() : nullptr);
     if (has_pSurfRef) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_pSurfRef));
     *out = r_; return true;
   }
 
   case rgpu::API_cuModuleGetTexRef: {
-    uint8_t has_pTexRef{}; if (!req.get(&has_pTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pTexRef{}; if (!req.get(&has_pTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_pTexRef{};
-    uint64_t u_hmod{}; if (!req.get(&u_hmod)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hmod{}; if (!req.get(&u_hmod)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmodule v_hmod = reinterpret_cast<CUmodule>(u_hmod);
     std::string s_name; bool has_name=false;
-    if (!req.get_str(&s_name, &has_name)) return CUDA_ERROR_INVALID_VALUE;
+    if (!req.get_str(&s_name, &has_name)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuModuleGetTexRef(has_pTexRef ? &v_pTexRef : nullptr, v_hmod, has_name ? s_name.c_str() : nullptr);
     if (has_pTexRef) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_pTexRef));
     *out = r_; return true;
   }
 
   case rgpu::API_cuModuleLoad: {
-    uint8_t has_module{}; if (!req.get(&has_module)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_module{}; if (!req.get(&has_module)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmodule v_module{};
     std::string s_fname; bool has_fname=false;
-    if (!req.get_str(&s_fname, &has_fname)) return CUDA_ERROR_INVALID_VALUE;
+    if (!req.get_str(&s_fname, &has_fname)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuModuleLoad(has_module ? &v_module : nullptr, has_fname ? s_fname.c_str() : nullptr);
     if (has_module) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_module));
     *out = r_; return true;
   }
 
   case rgpu::API_cuModuleLoadData: {
-    uint8_t has_module{}; if (!req.get(&has_module)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_module{}; if (!req.get(&has_module)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmodule v_module{};
-    uint8_t has_image{}; if (!req.get(&has_image)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_image{}; if (!req.get(&has_image)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     const uint8_t* b_image = nullptr; size_t n_image = 0;
-    if (has_image && !req.get_sized(&b_image, &n_image)) return CUDA_ERROR_INVALID_VALUE;
+    if (has_image && !req.get_sized(&b_image, &n_image)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuModuleLoadData(has_module ? &v_module : nullptr, has_image ? (const void *)b_image : nullptr);
     if (has_module) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_module));
     *out = r_; return true;
   }
 
   case rgpu::API_cuModuleLoadFatBinary: {
-    uint8_t has_module{}; if (!req.get(&has_module)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_module{}; if (!req.get(&has_module)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmodule v_module{};
-    uint8_t has_fatCubin{}; if (!req.get(&has_fatCubin)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_fatCubin{}; if (!req.get(&has_fatCubin)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     const uint8_t* b_fatCubin = nullptr; size_t n_fatCubin = 0;
-    if (has_fatCubin && !req.get_sized(&b_fatCubin, &n_fatCubin)) return CUDA_ERROR_INVALID_VALUE;
+    if (has_fatCubin && !req.get_sized(&b_fatCubin, &n_fatCubin)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuModuleLoadFatBinary(has_module ? &v_module : nullptr, has_fatCubin ? (const void *)b_fatCubin : nullptr);
     if (has_module) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_module));
     *out = r_; return true;
   }
 
   case rgpu::API_cuModuleUnload: {
-    uint64_t u_hmod{}; if (!req.get(&u_hmod)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hmod{}; if (!req.get(&u_hmod)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmodule v_hmod = reinterpret_cast<CUmodule>(u_hmod);
     CUresult r_ = ::cuModuleUnload(v_hmod);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMulticastAddDevice: {
-    CUmemGenericAllocationHandle v_mcHandle{}; if (!req.get(&v_mcHandle)) return CUDA_ERROR_INVALID_VALUE;
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
+    CUmemGenericAllocationHandle v_mcHandle{}; if (!req.get(&v_mcHandle)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMulticastAddDevice(v_mcHandle, v_dev);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMulticastBindAddr: {
-    CUmemGenericAllocationHandle v_mcHandle{}; if (!req.get(&v_mcHandle)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_mcOffset{}; if (!req.get(&v_mcOffset)) return CUDA_ERROR_INVALID_VALUE;
-    CUdeviceptr v_memptr{}; if (!req.get(&v_memptr)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_size{}; if (!req.get(&v_size)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned long long v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    CUmemGenericAllocationHandle v_mcHandle{}; if (!req.get(&v_mcHandle)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_mcOffset{}; if (!req.get(&v_mcOffset)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdeviceptr v_memptr{}; if (!req.get(&v_memptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_size{}; if (!req.get(&v_size)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned long long v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMulticastBindAddr(v_mcHandle, v_mcOffset, v_memptr, v_size, v_flags);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMulticastBindMem: {
-    CUmemGenericAllocationHandle v_mcHandle{}; if (!req.get(&v_mcHandle)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_mcOffset{}; if (!req.get(&v_mcOffset)) return CUDA_ERROR_INVALID_VALUE;
-    CUmemGenericAllocationHandle v_memHandle{}; if (!req.get(&v_memHandle)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_memOffset{}; if (!req.get(&v_memOffset)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_size{}; if (!req.get(&v_size)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned long long v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    CUmemGenericAllocationHandle v_mcHandle{}; if (!req.get(&v_mcHandle)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_mcOffset{}; if (!req.get(&v_mcOffset)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUmemGenericAllocationHandle v_memHandle{}; if (!req.get(&v_memHandle)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_memOffset{}; if (!req.get(&v_memOffset)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_size{}; if (!req.get(&v_size)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned long long v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMulticastBindMem(v_mcHandle, v_mcOffset, v_memHandle, v_memOffset, v_size, v_flags);
     *out = r_; return true;
   }
 
   case rgpu::API_cuMulticastUnbind: {
-    CUmemGenericAllocationHandle v_mcHandle{}; if (!req.get(&v_mcHandle)) return CUDA_ERROR_INVALID_VALUE;
-    CUdevice v_dev{}; if (!req.get(&v_dev)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_mcOffset{}; if (!req.get(&v_mcOffset)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_size{}; if (!req.get(&v_size)) return CUDA_ERROR_INVALID_VALUE;
+    CUmemGenericAllocationHandle v_mcHandle{}; if (!req.get(&v_mcHandle)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_mcOffset{}; if (!req.get(&v_mcOffset)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_size{}; if (!req.get(&v_size)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuMulticastUnbind(v_mcHandle, v_dev, v_mcOffset, v_size);
     *out = r_; return true;
   }
 
   case rgpu::API_cuOccupancyAvailableDynamicSMemPerBlock: {
-    uint8_t has_dynamicSmemSize{}; if (!req.get(&has_dynamicSmemSize)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_dynamicSmemSize{}; if (!req.get(&has_dynamicSmemSize)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_dynamicSmemSize{};
-    uint64_t u_func{}; if (!req.get(&u_func)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_func{}; if (!req.get(&u_func)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_func = reinterpret_cast<CUfunction>(u_func);
-    int v_numBlocks{}; if (!req.get(&v_numBlocks)) return CUDA_ERROR_INVALID_VALUE;
-    int v_blockSize{}; if (!req.get(&v_blockSize)) return CUDA_ERROR_INVALID_VALUE;
+    int v_numBlocks{}; if (!req.get(&v_numBlocks)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    int v_blockSize{}; if (!req.get(&v_blockSize)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuOccupancyAvailableDynamicSMemPerBlock(has_dynamicSmemSize ? &v_dynamicSmemSize : nullptr, v_func, v_numBlocks, v_blockSize);
     if (has_dynamicSmemSize) rsp->put(v_dynamicSmemSize);
     *out = r_; return true;
   }
 
   case rgpu::API_cuOccupancyMaxActiveBlocksPerMultiprocessor: {
-    uint8_t has_numBlocks{}; if (!req.get(&has_numBlocks)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_numBlocks{}; if (!req.get(&has_numBlocks)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     int v_numBlocks{};
-    uint64_t u_func{}; if (!req.get(&u_func)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_func{}; if (!req.get(&u_func)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_func = reinterpret_cast<CUfunction>(u_func);
-    int v_blockSize{}; if (!req.get(&v_blockSize)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_dynamicSMemSize{}; if (!req.get(&v_dynamicSMemSize)) return CUDA_ERROR_INVALID_VALUE;
+    int v_blockSize{}; if (!req.get(&v_blockSize)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_dynamicSMemSize{}; if (!req.get(&v_dynamicSMemSize)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuOccupancyMaxActiveBlocksPerMultiprocessor(has_numBlocks ? &v_numBlocks : nullptr, v_func, v_blockSize, v_dynamicSMemSize);
     if (has_numBlocks) rsp->put(v_numBlocks);
     *out = r_; return true;
   }
 
   case rgpu::API_cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags: {
-    uint8_t has_numBlocks{}; if (!req.get(&has_numBlocks)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_numBlocks{}; if (!req.get(&has_numBlocks)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     int v_numBlocks{};
-    uint64_t u_func{}; if (!req.get(&u_func)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_func{}; if (!req.get(&u_func)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_func = reinterpret_cast<CUfunction>(u_func);
-    int v_blockSize{}; if (!req.get(&v_blockSize)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_dynamicSMemSize{}; if (!req.get(&v_dynamicSMemSize)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    int v_blockSize{}; if (!req.get(&v_blockSize)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_dynamicSMemSize{}; if (!req.get(&v_dynamicSMemSize)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(has_numBlocks ? &v_numBlocks : nullptr, v_func, v_blockSize, v_dynamicSMemSize, v_flags);
     if (has_numBlocks) rsp->put(v_numBlocks);
     *out = r_; return true;
   }
 
   case rgpu::API_cuParamSetSize: {
-    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_hfunc = reinterpret_cast<CUfunction>(u_hfunc);
-    unsigned int v_numbytes{}; if (!req.get(&v_numbytes)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_numbytes{}; if (!req.get(&v_numbytes)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuParamSetSize(v_hfunc, v_numbytes);
     *out = r_; return true;
   }
 
   case rgpu::API_cuParamSetTexRef: {
-    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_hfunc = reinterpret_cast<CUfunction>(u_hfunc);
-    int v_texunit{}; if (!req.get(&v_texunit)) return CUDA_ERROR_INVALID_VALUE;
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    int v_texunit{}; if (!req.get(&v_texunit)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
     CUresult r_ = ::cuParamSetTexRef(v_hfunc, v_texunit, v_hTexRef);
     *out = r_; return true;
   }
 
   case rgpu::API_cuParamSetf: {
-    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_hfunc = reinterpret_cast<CUfunction>(u_hfunc);
-    int v_offset{}; if (!req.get(&v_offset)) return CUDA_ERROR_INVALID_VALUE;
-    float v_value{}; if (!req.get(&v_value)) return CUDA_ERROR_INVALID_VALUE;
+    int v_offset{}; if (!req.get(&v_offset)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    float v_value{}; if (!req.get(&v_value)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuParamSetf(v_hfunc, v_offset, v_value);
     *out = r_; return true;
   }
 
   case rgpu::API_cuParamSeti: {
-    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hfunc{}; if (!req.get(&u_hfunc)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_hfunc = reinterpret_cast<CUfunction>(u_hfunc);
-    int v_offset{}; if (!req.get(&v_offset)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_value{}; if (!req.get(&v_value)) return CUDA_ERROR_INVALID_VALUE;
+    int v_offset{}; if (!req.get(&v_offset)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_value{}; if (!req.get(&v_value)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuParamSeti(v_hfunc, v_offset, v_value);
     *out = r_; return true;
   }
 
   case rgpu::API_cuStreamAttachMemAsync: {
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
-    CUdeviceptr v_dptr{}; if (!req.get(&v_dptr)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_length{}; if (!req.get(&v_length)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dptr{}; if (!req.get(&v_dptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_length{}; if (!req.get(&v_length)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuStreamAttachMemAsync(v_hStream, v_dptr, v_length, v_flags);
     *out = r_; return true;
   }
 
   case rgpu::API_cuStreamBeginCapture_v2: {
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
-    CUstreamCaptureMode v_mode{}; if (!req.get(&v_mode)) return CUDA_ERROR_INVALID_VALUE;
+    CUstreamCaptureMode v_mode{}; if (!req.get(&v_mode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuStreamBeginCapture_v2(v_hStream, v_mode);
     *out = r_; return true;
   }
 
   case rgpu::API_cuStreamCopyAttributes: {
-    uint64_t u_dst{}; if (!req.get(&u_dst)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_dst{}; if (!req.get(&u_dst)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_dst = reinterpret_cast<CUstream>(u_dst);
-    uint64_t u_src{}; if (!req.get(&u_src)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_src{}; if (!req.get(&u_src)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_src = reinterpret_cast<CUstream>(u_src);
     CUresult r_ = ::cuStreamCopyAttributes(v_dst, v_src);
     *out = r_; return true;
   }
 
   case rgpu::API_cuStreamCreate: {
-    uint8_t has_phStream{}; if (!req.get(&has_phStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_phStream{}; if (!req.get(&has_phStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_phStream{};
-    unsigned int v_Flags{}; if (!req.get(&v_Flags)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_Flags{}; if (!req.get(&v_Flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuStreamCreate(has_phStream ? &v_phStream : nullptr, v_Flags);
     if (has_phStream) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_phStream));
     *out = r_; return true;
   }
 
   case rgpu::API_cuStreamCreateWithPriority: {
-    uint8_t has_phStream{}; if (!req.get(&has_phStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_phStream{}; if (!req.get(&has_phStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_phStream{};
-    unsigned int v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
-    int v_priority{}; if (!req.get(&v_priority)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    int v_priority{}; if (!req.get(&v_priority)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuStreamCreateWithPriority(has_phStream ? &v_phStream : nullptr, v_flags, v_priority);
     if (has_phStream) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_phStream));
     *out = r_; return true;
   }
 
   case rgpu::API_cuStreamDestroy_v2: {
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuStreamDestroy_v2(v_hStream);
     *out = r_; return true;
   }
 
   case rgpu::API_cuStreamEndCapture: {
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
-    uint8_t has_phGraph{}; if (!req.get(&has_phGraph)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_phGraph{}; if (!req.get(&has_phGraph)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraph v_phGraph{};
     CUresult r_ = ::cuStreamEndCapture(v_hStream, has_phGraph ? &v_phGraph : nullptr);
     if (has_phGraph) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_phGraph));
@@ -2047,9 +2077,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuStreamGetCtx: {
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
-    uint8_t has_pctx{}; if (!req.get(&has_pctx)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pctx{}; if (!req.get(&has_pctx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_pctx{};
     CUresult r_ = ::cuStreamGetCtx(v_hStream, has_pctx ? &v_pctx : nullptr);
     if (has_pctx) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_pctx));
@@ -2057,11 +2087,11 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuStreamGetCtx_v2: {
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
-    uint8_t has_pCtx{}; if (!req.get(&has_pCtx)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pCtx{}; if (!req.get(&has_pCtx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUcontext v_pCtx{};
-    uint8_t has_pGreenCtx{}; if (!req.get(&has_pGreenCtx)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pGreenCtx{}; if (!req.get(&has_pGreenCtx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgreenCtx v_pGreenCtx{};
     CUresult r_ = ::cuStreamGetCtx_v2(v_hStream, has_pCtx ? &v_pCtx : nullptr, has_pGreenCtx ? &v_pGreenCtx : nullptr);
     if (has_pCtx) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_pCtx));
@@ -2069,10 +2099,20 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
     *out = r_; return true;
   }
 
-  case rgpu::API_cuStreamGetFlags: {
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+  case rgpu::API_cuStreamGetDevice: {
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
-    uint8_t has_flags{}; if (!req.get(&has_flags)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_device{}; if (!req.get(&has_device)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUdevice v_device{};
+    CUresult r_ = ::cuStreamGetDevice(v_hStream, has_device ? &v_device : nullptr);
+    if (has_device) rsp->put(v_device);
+    *out = r_; return true;
+  }
+
+  case rgpu::API_cuStreamGetFlags: {
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
+    uint8_t has_flags{}; if (!req.get(&has_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     unsigned int v_flags{};
     CUresult r_ = ::cuStreamGetFlags(v_hStream, has_flags ? &v_flags : nullptr);
     if (has_flags) rsp->put(v_flags);
@@ -2080,9 +2120,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuStreamGetGreenCtx: {
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
-    uint8_t has_phCtx{}; if (!req.get(&has_phCtx)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_phCtx{}; if (!req.get(&has_phCtx)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgreenCtx v_phCtx{};
     CUresult r_ = ::cuStreamGetGreenCtx(v_hStream, has_phCtx ? &v_phCtx : nullptr);
     if (has_phCtx) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_phCtx));
@@ -2090,9 +2130,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuStreamGetId: {
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
-    uint8_t has_streamId{}; if (!req.get(&has_streamId)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_streamId{}; if (!req.get(&has_streamId)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     unsigned long long v_streamId{};
     CUresult r_ = ::cuStreamGetId(v_hStream, has_streamId ? &v_streamId : nullptr);
     if (has_streamId) rsp->put(v_streamId);
@@ -2100,9 +2140,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuStreamGetPriority: {
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
-    uint8_t has_priority{}; if (!req.get(&has_priority)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_priority{}; if (!req.get(&has_priority)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     int v_priority{};
     CUresult r_ = ::cuStreamGetPriority(v_hStream, has_priority ? &v_priority : nullptr);
     if (has_priority) rsp->put(v_priority);
@@ -2110,9 +2150,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuStreamIsCapturing: {
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
-    uint8_t has_captureStatus{}; if (!req.get(&has_captureStatus)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_captureStatus{}; if (!req.get(&has_captureStatus)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstreamCaptureStatus v_captureStatus{};
     CUresult r_ = ::cuStreamIsCapturing(v_hStream, has_captureStatus ? &v_captureStatus : nullptr);
     if (has_captureStatus) rsp->put(v_captureStatus);
@@ -2120,91 +2160,91 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuStreamQuery: {
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuStreamQuery(v_hStream);
     *out = r_; return true;
   }
 
   case rgpu::API_cuStreamSynchronize: {
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
     CUresult r_ = ::cuStreamSynchronize(v_hStream);
     *out = r_; return true;
   }
 
   case rgpu::API_cuStreamUpdateCaptureDependencies: {
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
-    uint8_t has_dependencies{}; if (!req.get(&has_dependencies)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_dependencies{}; if (!req.get(&has_dependencies)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphNode v_dependencies{};
-    size_t v_numDependencies{}; if (!req.get(&v_numDependencies)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    size_t v_numDependencies{}; if (!req.get(&v_numDependencies)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuStreamUpdateCaptureDependencies(v_hStream, has_dependencies ? &v_dependencies : nullptr, v_numDependencies, v_flags);
     if (has_dependencies) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_dependencies));
     *out = r_; return true;
   }
 
   case rgpu::API_cuStreamWaitEvent: {
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
-    uint64_t u_hEvent{}; if (!req.get(&u_hEvent)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hEvent{}; if (!req.get(&u_hEvent)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUevent v_hEvent = reinterpret_cast<CUevent>(u_hEvent);
-    unsigned int v_Flags{}; if (!req.get(&v_Flags)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_Flags{}; if (!req.get(&v_Flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuStreamWaitEvent(v_hStream, v_hEvent, v_Flags);
     *out = r_; return true;
   }
 
   case rgpu::API_cuStreamWaitValue32_v2: {
-    uint64_t u_stream{}; if (!req.get(&u_stream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_stream{}; if (!req.get(&u_stream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_stream = reinterpret_cast<CUstream>(u_stream);
-    CUdeviceptr v_addr{}; if (!req.get(&v_addr)) return CUDA_ERROR_INVALID_VALUE;
-    cuuint32_t v_value{}; if (!req.get(&v_value)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_addr{}; if (!req.get(&v_addr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    cuuint32_t v_value{}; if (!req.get(&v_value)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuStreamWaitValue32_v2(v_stream, v_addr, v_value, v_flags);
     *out = r_; return true;
   }
 
   case rgpu::API_cuStreamWaitValue64_v2: {
-    uint64_t u_stream{}; if (!req.get(&u_stream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_stream{}; if (!req.get(&u_stream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_stream = reinterpret_cast<CUstream>(u_stream);
-    CUdeviceptr v_addr{}; if (!req.get(&v_addr)) return CUDA_ERROR_INVALID_VALUE;
-    cuuint64_t v_value{}; if (!req.get(&v_value)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_addr{}; if (!req.get(&v_addr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    cuuint64_t v_value{}; if (!req.get(&v_value)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuStreamWaitValue64_v2(v_stream, v_addr, v_value, v_flags);
     *out = r_; return true;
   }
 
   case rgpu::API_cuStreamWriteValue32_v2: {
-    uint64_t u_stream{}; if (!req.get(&u_stream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_stream{}; if (!req.get(&u_stream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_stream = reinterpret_cast<CUstream>(u_stream);
-    CUdeviceptr v_addr{}; if (!req.get(&v_addr)) return CUDA_ERROR_INVALID_VALUE;
-    cuuint32_t v_value{}; if (!req.get(&v_value)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_addr{}; if (!req.get(&v_addr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    cuuint32_t v_value{}; if (!req.get(&v_value)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuStreamWriteValue32_v2(v_stream, v_addr, v_value, v_flags);
     *out = r_; return true;
   }
 
   case rgpu::API_cuStreamWriteValue64_v2: {
-    uint64_t u_stream{}; if (!req.get(&u_stream)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_stream{}; if (!req.get(&u_stream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_stream = reinterpret_cast<CUstream>(u_stream);
-    CUdeviceptr v_addr{}; if (!req.get(&v_addr)) return CUDA_ERROR_INVALID_VALUE;
-    cuuint64_t v_value{}; if (!req.get(&v_value)) return CUDA_ERROR_INVALID_VALUE;
-    unsigned int v_flags{}; if (!req.get(&v_flags)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_addr{}; if (!req.get(&v_addr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    cuuint64_t v_value{}; if (!req.get(&v_value)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned int v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuStreamWriteValue64_v2(v_stream, v_addr, v_value, v_flags);
     *out = r_; return true;
   }
 
   case rgpu::API_cuSurfObjectDestroy: {
-    CUsurfObject v_surfObject{}; if (!req.get(&v_surfObject)) return CUDA_ERROR_INVALID_VALUE;
+    CUsurfObject v_surfObject{}; if (!req.get(&v_surfObject)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuSurfObjectDestroy(v_surfObject);
     *out = r_; return true;
   }
 
   case rgpu::API_cuSurfRefGetArray: {
-    uint8_t has_phArray{}; if (!req.get(&has_phArray)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_phArray{}; if (!req.get(&has_phArray)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUarray v_phArray{};
-    uint64_t u_hSurfRef{}; if (!req.get(&u_hSurfRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hSurfRef{}; if (!req.get(&u_hSurfRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUsurfref v_hSurfRef = reinterpret_cast<CUsurfref>(u_hSurfRef);
     CUresult r_ = ::cuSurfRefGetArray(has_phArray ? &v_phArray : nullptr, v_hSurfRef);
     if (has_phArray) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_phArray));
@@ -2212,23 +2252,23 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuSurfRefSetArray: {
-    uint64_t u_hSurfRef{}; if (!req.get(&u_hSurfRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hSurfRef{}; if (!req.get(&u_hSurfRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUsurfref v_hSurfRef = reinterpret_cast<CUsurfref>(u_hSurfRef);
-    uint64_t u_hArray{}; if (!req.get(&u_hArray)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hArray{}; if (!req.get(&u_hArray)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUarray v_hArray = reinterpret_cast<CUarray>(u_hArray);
-    unsigned int v_Flags{}; if (!req.get(&v_Flags)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_Flags{}; if (!req.get(&v_Flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuSurfRefSetArray(v_hSurfRef, v_hArray, v_Flags);
     *out = r_; return true;
   }
 
   case rgpu::API_cuTexObjectDestroy: {
-    CUtexObject v_texObject{}; if (!req.get(&v_texObject)) return CUDA_ERROR_INVALID_VALUE;
+    CUtexObject v_texObject{}; if (!req.get(&v_texObject)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuTexObjectDestroy(v_texObject);
     *out = r_; return true;
   }
 
   case rgpu::API_cuTexRefCreate: {
-    uint8_t has_pTexRef{}; if (!req.get(&has_pTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pTexRef{}; if (!req.get(&has_pTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_pTexRef{};
     CUresult r_ = ::cuTexRefCreate(has_pTexRef ? &v_pTexRef : nullptr);
     if (has_pTexRef) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_pTexRef));
@@ -2236,27 +2276,27 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuTexRefDestroy: {
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
     CUresult r_ = ::cuTexRefDestroy(v_hTexRef);
     *out = r_; return true;
   }
 
   case rgpu::API_cuTexRefGetAddressMode: {
-    uint8_t has_pam{}; if (!req.get(&has_pam)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pam{}; if (!req.get(&has_pam)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUaddress_mode v_pam{};
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
-    int v_dim{}; if (!req.get(&v_dim)) return CUDA_ERROR_INVALID_VALUE;
+    int v_dim{}; if (!req.get(&v_dim)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuTexRefGetAddressMode(has_pam ? &v_pam : nullptr, v_hTexRef, v_dim);
     if (has_pam) rsp->put(v_pam);
     *out = r_; return true;
   }
 
   case rgpu::API_cuTexRefGetAddress_v2: {
-    uint8_t has_pdptr{}; if (!req.get(&has_pdptr)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pdptr{}; if (!req.get(&has_pdptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUdeviceptr v_pdptr{};
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
     CUresult r_ = ::cuTexRefGetAddress_v2(has_pdptr ? &v_pdptr : nullptr, v_hTexRef);
     if (has_pdptr) rsp->put(v_pdptr);
@@ -2264,9 +2304,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuTexRefGetArray: {
-    uint8_t has_phArray{}; if (!req.get(&has_phArray)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_phArray{}; if (!req.get(&has_phArray)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUarray v_phArray{};
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
     CUresult r_ = ::cuTexRefGetArray(has_phArray ? &v_phArray : nullptr, v_hTexRef);
     if (has_phArray) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_phArray));
@@ -2274,9 +2314,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuTexRefGetBorderColor: {
-    uint8_t has_pBorderColor{}; if (!req.get(&has_pBorderColor)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pBorderColor{}; if (!req.get(&has_pBorderColor)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     float v_pBorderColor{};
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
     CUresult r_ = ::cuTexRefGetBorderColor(has_pBorderColor ? &v_pBorderColor : nullptr, v_hTexRef);
     if (has_pBorderColor) rsp->put(v_pBorderColor);
@@ -2284,9 +2324,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuTexRefGetFilterMode: {
-    uint8_t has_pfm{}; if (!req.get(&has_pfm)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pfm{}; if (!req.get(&has_pfm)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfilter_mode v_pfm{};
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
     CUresult r_ = ::cuTexRefGetFilterMode(has_pfm ? &v_pfm : nullptr, v_hTexRef);
     if (has_pfm) rsp->put(v_pfm);
@@ -2294,9 +2334,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuTexRefGetFlags: {
-    uint8_t has_pFlags{}; if (!req.get(&has_pFlags)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pFlags{}; if (!req.get(&has_pFlags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     unsigned int v_pFlags{};
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
     CUresult r_ = ::cuTexRefGetFlags(has_pFlags ? &v_pFlags : nullptr, v_hTexRef);
     if (has_pFlags) rsp->put(v_pFlags);
@@ -2304,11 +2344,11 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuTexRefGetFormat: {
-    uint8_t has_pFormat{}; if (!req.get(&has_pFormat)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pFormat{}; if (!req.get(&has_pFormat)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUarray_format v_pFormat{};
-    uint8_t has_pNumChannels{}; if (!req.get(&has_pNumChannels)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pNumChannels{}; if (!req.get(&has_pNumChannels)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     int v_pNumChannels{};
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
     CUresult r_ = ::cuTexRefGetFormat(has_pFormat ? &v_pFormat : nullptr, has_pNumChannels ? &v_pNumChannels : nullptr, v_hTexRef);
     if (has_pFormat) rsp->put(v_pFormat);
@@ -2317,9 +2357,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuTexRefGetMaxAnisotropy: {
-    uint8_t has_pmaxAniso{}; if (!req.get(&has_pmaxAniso)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pmaxAniso{}; if (!req.get(&has_pmaxAniso)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     int v_pmaxAniso{};
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
     CUresult r_ = ::cuTexRefGetMaxAnisotropy(has_pmaxAniso ? &v_pmaxAniso : nullptr, v_hTexRef);
     if (has_pmaxAniso) rsp->put(v_pmaxAniso);
@@ -2327,9 +2367,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuTexRefGetMipmapFilterMode: {
-    uint8_t has_pfm{}; if (!req.get(&has_pfm)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pfm{}; if (!req.get(&has_pfm)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfilter_mode v_pfm{};
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
     CUresult r_ = ::cuTexRefGetMipmapFilterMode(has_pfm ? &v_pfm : nullptr, v_hTexRef);
     if (has_pfm) rsp->put(v_pfm);
@@ -2337,9 +2377,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuTexRefGetMipmapLevelBias: {
-    uint8_t has_pbias{}; if (!req.get(&has_pbias)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pbias{}; if (!req.get(&has_pbias)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     float v_pbias{};
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
     CUresult r_ = ::cuTexRefGetMipmapLevelBias(has_pbias ? &v_pbias : nullptr, v_hTexRef);
     if (has_pbias) rsp->put(v_pbias);
@@ -2347,11 +2387,11 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuTexRefGetMipmapLevelClamp: {
-    uint8_t has_pminMipmapLevelClamp{}; if (!req.get(&has_pminMipmapLevelClamp)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pminMipmapLevelClamp{}; if (!req.get(&has_pminMipmapLevelClamp)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     float v_pminMipmapLevelClamp{};
-    uint8_t has_pmaxMipmapLevelClamp{}; if (!req.get(&has_pmaxMipmapLevelClamp)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pmaxMipmapLevelClamp{}; if (!req.get(&has_pmaxMipmapLevelClamp)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     float v_pmaxMipmapLevelClamp{};
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
     CUresult r_ = ::cuTexRefGetMipmapLevelClamp(has_pminMipmapLevelClamp ? &v_pminMipmapLevelClamp : nullptr, has_pmaxMipmapLevelClamp ? &v_pmaxMipmapLevelClamp : nullptr, v_hTexRef);
     if (has_pminMipmapLevelClamp) rsp->put(v_pminMipmapLevelClamp);
@@ -2360,9 +2400,9 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuTexRefGetMipmappedArray: {
-    uint8_t has_phMipmappedArray{}; if (!req.get(&has_phMipmappedArray)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_phMipmappedArray{}; if (!req.get(&has_phMipmappedArray)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmipmappedArray v_phMipmappedArray{};
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
     CUresult r_ = ::cuTexRefGetMipmappedArray(has_phMipmappedArray ? &v_phMipmappedArray : nullptr, v_hTexRef);
     if (has_phMipmappedArray) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_phMipmappedArray));
@@ -2370,40 +2410,40 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuTexRefSetAddressMode: {
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
-    int v_dim{}; if (!req.get(&v_dim)) return CUDA_ERROR_INVALID_VALUE;
-    CUaddress_mode v_am{}; if (!req.get(&v_am)) return CUDA_ERROR_INVALID_VALUE;
+    int v_dim{}; if (!req.get(&v_dim)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUaddress_mode v_am{}; if (!req.get(&v_am)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuTexRefSetAddressMode(v_hTexRef, v_dim, v_am);
     *out = r_; return true;
   }
 
   case rgpu::API_cuTexRefSetAddress_v2: {
-    uint8_t has_ByteOffset{}; if (!req.get(&has_ByteOffset)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_ByteOffset{}; if (!req.get(&has_ByteOffset)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_ByteOffset{};
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
-    CUdeviceptr v_dptr{}; if (!req.get(&v_dptr)) return CUDA_ERROR_INVALID_VALUE;
-    size_t v_bytes{}; if (!req.get(&v_bytes)) return CUDA_ERROR_INVALID_VALUE;
+    CUdeviceptr v_dptr{}; if (!req.get(&v_dptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_bytes{}; if (!req.get(&v_bytes)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuTexRefSetAddress_v2(has_ByteOffset ? &v_ByteOffset : nullptr, v_hTexRef, v_dptr, v_bytes);
     if (has_ByteOffset) rsp->put(v_ByteOffset);
     *out = r_; return true;
   }
 
   case rgpu::API_cuTexRefSetArray: {
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
-    uint64_t u_hArray{}; if (!req.get(&u_hArray)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hArray{}; if (!req.get(&u_hArray)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUarray v_hArray = reinterpret_cast<CUarray>(u_hArray);
-    unsigned int v_Flags{}; if (!req.get(&v_Flags)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_Flags{}; if (!req.get(&v_Flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuTexRefSetArray(v_hTexRef, v_hArray, v_Flags);
     *out = r_; return true;
   }
 
   case rgpu::API_cuTexRefSetBorderColor: {
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
-    uint8_t has_pBorderColor{}; if (!req.get(&has_pBorderColor)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_pBorderColor{}; if (!req.get(&has_pBorderColor)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     float v_pBorderColor{};
     CUresult r_ = ::cuTexRefSetBorderColor(v_hTexRef, has_pBorderColor ? &v_pBorderColor : nullptr);
     if (has_pBorderColor) rsp->put(v_pBorderColor);
@@ -2411,75 +2451,75 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuTexRefSetFilterMode: {
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
-    CUfilter_mode v_fm{}; if (!req.get(&v_fm)) return CUDA_ERROR_INVALID_VALUE;
+    CUfilter_mode v_fm{}; if (!req.get(&v_fm)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuTexRefSetFilterMode(v_hTexRef, v_fm);
     *out = r_; return true;
   }
 
   case rgpu::API_cuTexRefSetFlags: {
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
-    unsigned int v_Flags{}; if (!req.get(&v_Flags)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_Flags{}; if (!req.get(&v_Flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuTexRefSetFlags(v_hTexRef, v_Flags);
     *out = r_; return true;
   }
 
   case rgpu::API_cuTexRefSetFormat: {
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
-    CUarray_format v_fmt{}; if (!req.get(&v_fmt)) return CUDA_ERROR_INVALID_VALUE;
-    int v_NumPackedComponents{}; if (!req.get(&v_NumPackedComponents)) return CUDA_ERROR_INVALID_VALUE;
+    CUarray_format v_fmt{}; if (!req.get(&v_fmt)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    int v_NumPackedComponents{}; if (!req.get(&v_NumPackedComponents)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuTexRefSetFormat(v_hTexRef, v_fmt, v_NumPackedComponents);
     *out = r_; return true;
   }
 
   case rgpu::API_cuTexRefSetMaxAnisotropy: {
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
-    unsigned int v_maxAniso{}; if (!req.get(&v_maxAniso)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_maxAniso{}; if (!req.get(&v_maxAniso)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuTexRefSetMaxAnisotropy(v_hTexRef, v_maxAniso);
     *out = r_; return true;
   }
 
   case rgpu::API_cuTexRefSetMipmapFilterMode: {
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
-    CUfilter_mode v_fm{}; if (!req.get(&v_fm)) return CUDA_ERROR_INVALID_VALUE;
+    CUfilter_mode v_fm{}; if (!req.get(&v_fm)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuTexRefSetMipmapFilterMode(v_hTexRef, v_fm);
     *out = r_; return true;
   }
 
   case rgpu::API_cuTexRefSetMipmapLevelBias: {
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
-    float v_bias{}; if (!req.get(&v_bias)) return CUDA_ERROR_INVALID_VALUE;
+    float v_bias{}; if (!req.get(&v_bias)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuTexRefSetMipmapLevelBias(v_hTexRef, v_bias);
     *out = r_; return true;
   }
 
   case rgpu::API_cuTexRefSetMipmapLevelClamp: {
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
-    float v_minMipmapLevelClamp{}; if (!req.get(&v_minMipmapLevelClamp)) return CUDA_ERROR_INVALID_VALUE;
-    float v_maxMipmapLevelClamp{}; if (!req.get(&v_maxMipmapLevelClamp)) return CUDA_ERROR_INVALID_VALUE;
+    float v_minMipmapLevelClamp{}; if (!req.get(&v_minMipmapLevelClamp)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    float v_maxMipmapLevelClamp{}; if (!req.get(&v_maxMipmapLevelClamp)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuTexRefSetMipmapLevelClamp(v_hTexRef, v_minMipmapLevelClamp, v_maxMipmapLevelClamp);
     *out = r_; return true;
   }
 
   case rgpu::API_cuTexRefSetMipmappedArray: {
-    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hTexRef{}; if (!req.get(&u_hTexRef)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUtexref v_hTexRef = reinterpret_cast<CUtexref>(u_hTexRef);
-    uint64_t u_hMipmappedArray{}; if (!req.get(&u_hMipmappedArray)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_hMipmappedArray{}; if (!req.get(&u_hMipmappedArray)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUmipmappedArray v_hMipmappedArray = reinterpret_cast<CUmipmappedArray>(u_hMipmappedArray);
-    unsigned int v_Flags{}; if (!req.get(&v_Flags)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_Flags{}; if (!req.get(&v_Flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuTexRefSetMipmappedArray(v_hTexRef, v_hMipmappedArray, v_Flags);
     *out = r_; return true;
   }
 
   case rgpu::API_cuThreadExchangeStreamCaptureMode: {
-    uint8_t has_mode{}; if (!req.get(&has_mode)) return CUDA_ERROR_INVALID_VALUE;
+    uint8_t has_mode{}; if (!req.get(&has_mode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstreamCaptureMode v_mode{};
     CUresult r_ = ::cuThreadExchangeStreamCaptureMode(has_mode ? &v_mode : nullptr);
     if (has_mode) rsp->put(v_mode);
@@ -2487,17 +2527,17 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   }
 
   case rgpu::API_cuUserObjectRelease: {
-    uint64_t u_object{}; if (!req.get(&u_object)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_object{}; if (!req.get(&u_object)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUuserObject v_object = reinterpret_cast<CUuserObject>(u_object);
-    unsigned int v_count{}; if (!req.get(&v_count)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_count{}; if (!req.get(&v_count)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuUserObjectRelease(v_object, v_count);
     *out = r_; return true;
   }
 
   case rgpu::API_cuUserObjectRetain: {
-    uint64_t u_object{}; if (!req.get(&u_object)) return CUDA_ERROR_INVALID_VALUE;
+    uint64_t u_object{}; if (!req.get(&u_object)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUuserObject v_object = reinterpret_cast<CUuserObject>(u_object);
-    unsigned int v_count{}; if (!req.get(&v_count)) return CUDA_ERROR_INVALID_VALUE;
+    unsigned int v_count{}; if (!req.get(&v_count)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUresult r_ = ::cuUserObjectRetain(v_object, v_count);
     *out = r_; return true;
   }

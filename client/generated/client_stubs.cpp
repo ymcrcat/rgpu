@@ -53,6 +53,44 @@ extern "C" CUresult cuArrayGetSparseProperties(CUDA_ARRAY_SPARSE_PROPERTIES *spa
   return rgpu::unimplemented("cuArrayGetSparseProperties", "struct-pointer:struct CUDA_ARRAY_SPARSE_PROPERTIES_st");
 }
 
+extern "C" CUresult cuCheckpointProcessCheckpoint(int pid, CUcheckpointCheckpointArgs *args) {
+  return rgpu::unimplemented("cuCheckpointProcessCheckpoint", "struct-pointer:struct CUcheckpointCheckpointArgs_st");
+}
+
+extern "C" CUresult cuCheckpointProcessGetRestoreThreadId(int pid, int *tid) {
+  rgpu::Buffer req;
+  req.put<int>(pid);
+  req.put<uint8_t>(tid ? 1 : 0);
+  rgpu::Buffer rsp;
+  CUresult r_ = rgpu::call(rgpu::API_cuCheckpointProcessGetRestoreThreadId, req, &rsp);
+  if (r_ != CUDA_SUCCESS) return r_;
+  if (tid && !rsp.get(tid)) return CUDA_ERROR_UNKNOWN;
+  return r_;
+}
+
+extern "C" CUresult cuCheckpointProcessGetState(int pid, CUprocessState *state) {
+  rgpu::Buffer req;
+  req.put<int>(pid);
+  req.put<uint8_t>(state ? 1 : 0);
+  rgpu::Buffer rsp;
+  CUresult r_ = rgpu::call(rgpu::API_cuCheckpointProcessGetState, req, &rsp);
+  if (r_ != CUDA_SUCCESS) return r_;
+  if (state && !rsp.get(state)) return CUDA_ERROR_UNKNOWN;
+  return r_;
+}
+
+extern "C" CUresult cuCheckpointProcessLock(int pid, CUcheckpointLockArgs *args) {
+  return rgpu::unimplemented("cuCheckpointProcessLock", "struct-pointer:struct CUcheckpointLockArgs_st");
+}
+
+extern "C" CUresult cuCheckpointProcessRestore(int pid, CUcheckpointRestoreArgs *args) {
+  return rgpu::unimplemented("cuCheckpointProcessRestore", "struct-pointer:struct CUcheckpointRestoreArgs_st");
+}
+
+extern "C" CUresult cuCheckpointProcessUnlock(int pid, CUcheckpointUnlockArgs *args) {
+  return rgpu::unimplemented("cuCheckpointProcessUnlock", "struct-pointer:struct CUcheckpointUnlockArgs_st");
+}
+
 extern "C" CUresult cuCoredumpGetAttribute(CUcoredumpSettings attrib, void *value, size_t *size) {
   return rgpu::unimplemented("cuCoredumpGetAttribute", "void-pointer");
 }
@@ -728,6 +766,18 @@ extern "C" CUresult cuEventElapsedTime(float *pMilliseconds, CUevent hStart, CUe
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hEnd));
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuEventElapsedTime, req, &rsp);
+  if (r_ != CUDA_SUCCESS) return r_;
+  if (pMilliseconds && !rsp.get(pMilliseconds)) return CUDA_ERROR_UNKNOWN;
+  return r_;
+}
+
+extern "C" CUresult cuEventElapsedTime_v2(float *pMilliseconds, CUevent hStart, CUevent hEnd) {
+  rgpu::Buffer req;
+  req.put<uint8_t>(pMilliseconds ? 1 : 0);
+  req.put<uint64_t>(reinterpret_cast<uint64_t>(hStart));
+  req.put<uint64_t>(reinterpret_cast<uint64_t>(hEnd));
+  rgpu::Buffer rsp;
+  CUresult r_ = rgpu::call(rgpu::API_cuEventElapsedTime_v2, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
   if (pMilliseconds && !rsp.get(pMilliseconds)) return CUDA_ERROR_UNKNOWN;
   return r_;
@@ -2020,6 +2070,10 @@ extern "C" CUresult cuMemAlloc_v2(CUdeviceptr *dptr, size_t bytesize) {
   return r_;
 }
 
+extern "C" CUresult cuMemBatchDecompressAsync(CUmemDecompressParams *paramsArray, size_t count, unsigned int flags, size_t *errorIndex, CUstream stream) {
+  return rgpu::unimplemented("cuMemBatchDecompressAsync", "struct-pointer:struct CUmemDecompressParams_st");
+}
+
 extern "C" CUresult cuMemCreate(CUmemGenericAllocationHandle *handle, size_t size, const CUmemAllocationProp *prop, unsigned long long flags) {
   return rgpu::unimplemented("cuMemCreate", "struct-pointer:const struct CUmemAllocationProp_st");
 }
@@ -2250,6 +2304,10 @@ extern "C" CUresult cuMemcpy3DAsync_v2(const CUDA_MEMCPY3D *pCopy, CUstream hStr
   return rgpu::unimplemented("cuMemcpy3DAsync_v2", "struct-pointer:const struct CUDA_MEMCPY3D_st");
 }
 
+extern "C" CUresult cuMemcpy3DBatchAsync(size_t numOps, CUDA_MEMCPY3D_BATCH_OP *opList, size_t *failIdx, unsigned long long flags, CUstream hStream) {
+  return rgpu::unimplemented("cuMemcpy3DBatchAsync", "struct-pointer:struct CUDA_MEMCPY3D_BATCH_OP_st");
+}
+
 extern "C" CUresult cuMemcpy3DPeer(const CUDA_MEMCPY3D_PEER *pCopy) {
   return rgpu::unimplemented("cuMemcpy3DPeer", "struct-pointer:const struct CUDA_MEMCPY3D_PEER_st");
 }
@@ -2305,6 +2363,10 @@ extern "C" CUresult cuMemcpyAtoHAsync_v2(void *dstHost, CUarray srcArray, size_t
 
 extern "C" CUresult cuMemcpyAtoH_v2(void *dstHost, CUarray srcArray, size_t srcOffset, size_t ByteCount) {
   return rgpu::unimplemented("cuMemcpyAtoH_v2", "void-pointer");
+}
+
+extern "C" CUresult cuMemcpyBatchAsync(CUdeviceptr *dsts, CUdeviceptr *srcs, size_t *sizes, size_t count, CUmemcpyAttributes *attrs, size_t *attrsIdxs, size_t numAttrs, size_t *failIdx, CUstream hStream) {
+  return rgpu::unimplemented("cuMemcpyBatchAsync", "struct-pointer:struct CUmemcpyAttributes_st");
 }
 
 extern "C" CUresult cuMemcpyDtoA_v2(CUarray dstArray, size_t dstOffset, CUdeviceptr srcDevice, size_t ByteCount) {
@@ -3060,6 +3122,17 @@ extern "C" CUresult cuStreamGetCtx_v2(CUstream hStream, CUcontext *pCtx, CUgreen
   return r_;
 }
 
+extern "C" CUresult cuStreamGetDevice(CUstream hStream, CUdevice *device) {
+  rgpu::Buffer req;
+  req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  req.put<uint8_t>(device ? 1 : 0);
+  rgpu::Buffer rsp;
+  CUresult r_ = rgpu::call(rgpu::API_cuStreamGetDevice, req, &rsp);
+  if (r_ != CUDA_SUCCESS) return r_;
+  if (device && !rsp.get(device)) return CUDA_ERROR_UNKNOWN;
+  return r_;
+}
+
 extern "C" CUresult cuStreamGetFlags(CUstream hStream, unsigned int *flags) {
   rgpu::Buffer req;
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
@@ -3257,6 +3330,10 @@ extern "C" CUresult cuSurfRefSetArray(CUsurfref hSurfRef, CUarray hArray, unsign
 
 extern "C" CUresult cuTensorMapEncodeIm2col(CUtensorMap *tensorMap, CUtensorMapDataType tensorDataType, cuuint32_t tensorRank, void *globalAddress, const cuuint64_t *globalDim, const cuuint64_t *globalStrides, const int *pixelBoxLowerCorner, const int *pixelBoxUpperCorner, cuuint32_t channelsPerPixel, cuuint32_t pixelsPerColumn, const cuuint32_t *elementStrides, CUtensorMapInterleave interleave, CUtensorMapSwizzle swizzle, CUtensorMapL2promotion l2Promotion, CUtensorMapFloatOOBfill oobFill) {
   return rgpu::unimplemented("cuTensorMapEncodeIm2col", "struct-pointer:struct CUtensorMap_st");
+}
+
+extern "C" CUresult cuTensorMapEncodeIm2colWide(CUtensorMap *tensorMap, CUtensorMapDataType tensorDataType, cuuint32_t tensorRank, void *globalAddress, const cuuint64_t *globalDim, const cuuint64_t *globalStrides, int pixelBoxLowerCornerWidth, int pixelBoxUpperCornerWidth, cuuint32_t channelsPerPixel, cuuint32_t pixelsPerColumn, const cuuint32_t *elementStrides, CUtensorMapInterleave interleave, CUtensorMapIm2ColWideMode mode, CUtensorMapSwizzle swizzle, CUtensorMapL2promotion l2Promotion, CUtensorMapFloatOOBfill oobFill) {
+  return rgpu::unimplemented("cuTensorMapEncodeIm2colWide", "struct-pointer:struct CUtensorMap_st");
 }
 
 extern "C" CUresult cuTensorMapEncodeTiled(CUtensorMap *tensorMap, CUtensorMapDataType tensorDataType, cuuint32_t tensorRank, void *globalAddress, const cuuint64_t *globalDim, const cuuint64_t *globalStrides, const cuuint32_t *boxDim, const cuuint32_t *elementStrides, CUtensorMapInterleave interleave, CUtensorMapSwizzle swizzle, CUtensorMapL2promotion l2Promotion, CUtensorMapFloatOOBfill oobFill) {

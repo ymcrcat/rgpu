@@ -9,7 +9,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-VERSION=${CUDA_HEADER_VERSION:-12.6.77}
+VERSION=${CUDA_HEADER_VERSION:-12.8.90}
 DEST=third_party/cuda_include
 
 if [[ -f "$DEST/cuda.h" ]]; then
@@ -26,7 +26,8 @@ python3 -m pip download "nvidia-cuda-runtime-cu12==$VERSION" \
   --platform manylinux2014_x86_64 --only-binary=:all: --no-deps -d "$tmp/whl" \
   >/dev/null
 
-unzip -o -q "$tmp"/whl/*.whl -d "$tmp/out"
+# python3 -m zipfile avoids depending on unzip, which slim images lack.
+python3 -m zipfile -e "$(echo "$tmp"/whl/*.whl)" "$tmp/out"
 src="$tmp/out/nvidia/cuda_runtime/include"
 if [[ ! -f "$src/cuda.h" ]]; then
   echo "cuda.h not found in the wheel; layout may have changed" >&2
