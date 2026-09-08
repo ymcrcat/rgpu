@@ -11,3 +11,5 @@ third_party/
 *.o
 *.so
 *.so.*
+__pycache__/
+*.pyc
