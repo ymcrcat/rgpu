@@ -46,8 +46,8 @@ echo "== copying source =="
 # Only what the server build needs. Generated sources go too, so the remote
 # does not need libclang.
 tar czf - \
-  CMakeLists.txt common server client tests codegen scripts docs README.md \
   --exclude='__pycache__' --exclude='*.pyc' \
+  CMakeLists.txt common server client tests codegen scripts docs README.md \
   | ssh_run "mkdir -p $REMOTE_DIR && tar xzf - -C $REMOTE_DIR"
 
 echo
@@ -55,7 +55,9 @@ echo "== building on the GPU host =="
 ssh_run bash -s <<EOF
 set -e
 cd $REMOTE_DIR
-command -v cmake >/dev/null || sudo apt-get update -qq && sudo apt-get install -y -qq cmake build-essential || true
+if ! command -v cmake >/dev/null; then
+  sudo apt-get update -qq && sudo apt-get install -y -qq cmake build-essential
+fi
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo >/dev/null
 cmake --build build -j\$(nproc) 2>&1 | tail -5
 echo

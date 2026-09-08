@@ -34,7 +34,7 @@ design, the prior art it draws on, and the three hard problems it has to solve.
 | Server | compiles; not yet run against a real GPU |
 | End-to-end with a fake driver | passing |
 | End-to-end on a real GPU | needs a GPU host |
-| PyTorch | not started |
+| PyTorch client image and test ladder | written, not yet run |
 
 The GPU-free test is the meaningful one so far: real client stubs, real wire
 format, real server dispatch, with a fake driver at the bottom. A byte-exact
@@ -75,8 +75,23 @@ Then from the client:
 LD_LIBRARY_PATH=build RGPU_SERVER=127.0.0.1:9713 ./build/rpc_smoke
 ```
 
-`scripts/gcp_up.sh` and `scripts/gcp_down.sh` provision and stop a GCP GPU
-instance. It bills while running.
+### On a rented GPU box
+
+`scripts/deploy_server.sh user@host` copies the source over, builds the server
+there, and brings the test fatbin back. It checks for a driver and a toolkit
+first and says which is missing.
+
+`scripts/gcp_up.sh` and `scripts/gcp_down.sh` do the same job on GCP, if you
+would rather use Compute Engine. Either way the instance bills while running.
+
+### PyTorch
+
+`scripts/run_torch.sh` runs `tests/torch/ladder.py` inside a container that has
+stock PyTorch, no GPU and no driver. The ladder climbs from "is CUDA
+available" through tensor allocation, elementwise math, cuBLAS matmul and
+cuDNN convolution to ResNet-18 inference, comparing every rung against a CPU
+reference. Every rung runs even when an earlier one fails, so one run shows
+the whole picture.
 
 ## Environment variables
 

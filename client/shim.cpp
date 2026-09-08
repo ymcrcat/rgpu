@@ -208,8 +208,19 @@ extern "C" {
 CUresult cuGetProcAddress_v2(const char* symbol, void** pfn, int cudaVersion,
                              cuuint64_t flags,
                              CUdriverProcAddressQueryResult* symbolStatus) {
-  (void)flags;
   if (!pfn) return CUDA_ERROR_INVALID_VALUE;
+  // The per-thread-default-stream flag selects the _ptsz entry points, which
+  // treat the default stream as per-thread rather than legacy. We only carry
+  // the regular variants, so serve those and say so once: the difference only
+  // shows up in code that relies on the default stream instead of an explicit
+  // one, which PyTorch does not.
+  if (flags & CU_GET_PROC_ADDRESS_PER_THREAD_DEFAULT_STREAM) {
+    static std::once_flag once;
+    std::call_once(once, [] {
+      rgpu::log("note: per-thread default stream requested; serving the "
+                "legacy default stream variants instead");
+    });
+  }
   void* fn = find_entry(symbol);
   *pfn = fn;
   if (symbolStatus) {
