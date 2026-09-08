@@ -94,12 +94,23 @@ would rather use Compute Engine. Either way the instance bills while running.
 
 ### PyTorch
 
-`scripts/run_torch.sh` runs `tests/torch/ladder.py` inside a container that has
-stock PyTorch, no GPU and no driver. The ladder climbs from "is CUDA
-available" through tensor allocation, elementwise math, cuBLAS matmul and
-cuDNN convolution to ResNet-18 inference, comparing every rung against a CPU
-reference. Every rung runs even when an earlier one fails, so one run shows
-the whole picture.
+`tests/torch/ladder.py` climbs from "is CUDA available" through tensor
+allocation, elementwise math, cuBLAS matmul and cuDNN convolution to ResNet-18
+inference, comparing every rung against a CPU reference. Every rung runs even
+when an earlier one fails, so one run shows the whole picture.
+
+Two ways to run it:
+
+**On the GPU host** (`scripts/remote_torch.sh user@host`) is the fastest loop
+while the CUDA surface is still being filled in. The host has a real driver,
+but `LD_LIBRARY_PATH` puts our shims ahead of it, so PyTorch talks to them and
+they reach a server on the same box over loopback. The script prints which
+libraries actually got loaded so this is verifiable rather than assumed.
+
+**From a client with no GPU** (`scripts/run_torch.sh`) is the real target. It
+builds a container with stock PyTorch and both shims. Note that PyTorch plus
+the CUDA math libraries is several gigabytes; on a Mac, Docker Desktop's disk
+allocation may need raising before this image will build.
 
 ## Environment variables
 
