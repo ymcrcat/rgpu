@@ -1,0 +1,13 @@
+build/
+codegen/api.json
+codegen/report.txt
+
+# NVIDIA headers, extracted from the CUDA image by scripts/fetch_headers.sh.
+# Not redistributed here.
+third_party/
+
+*.fatbin
+*.cubin
+*.o
+*.so
+*.so.*

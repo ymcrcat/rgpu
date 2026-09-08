@@ -1,0 +1,125 @@
+"""Per-function facts the C header cannot express.
+
+A reduced form of AvA's LAPIS vocabulary, as a plain dict rather than a DSL with
+its own compiler, because we target exactly one API.
+
+Parameter annotations
+---------------------
+    in_buffer(expr)   caller's bytes, length given by `expr` over other params
+    out_buffer(expr)  callee fills these bytes, length given by `expr`
+    pod_in / pod_out  fixed-size struct with no pointers inside; copy verbatim
+    fatbin            image whose length is parsed from its own header
+    ignore            never forwarded (e.g. a reserved parameter)
+
+Execution class, following LAPIS
+--------------------------------
+    "sync"   returns data or an immediately observable status. Round trip.
+    "async"  effect only observable at a later synchronization point. May be
+             sent fire-and-forget once batching is enabled.
+    "flush"  returns immediately but must first submit everything queued.
+
+`record` marks a call that establishes durable server-side state. Replaying the
+recorded set reconstructs a session, which is what mrCUDA-style migration and
+reconnect-after-drop would need. Nothing consumes it yet; tagging is cheap and
+retrofitting the tags later would not be.
+"""
+
+# Functions we write by hand. Generated code will not define these.
+HANDWRITTEN = {
+    # Resolves driver entry points; must return our pointers, not the real ones.
+    # This is the reason exported symbols alone are not enough on CUDA 11.3+.
+    "cuGetProcAddress",
+    "cuGetProcAddress_v2",
+    # Return pointers to static strings owned by the driver.
+    "cuGetErrorString",
+    "cuGetErrorName",
+    # Argument marshalling depends on a per-function parameter layout the
+    # server has to look up. See docs/.../design.md, hard problem 2.
+    "cuLaunchKernel",
+    "cuLaunchCooperativeKernel",
+    # Host allocations live on the client, not the server.
+    "cuMemAllocHost_v2",
+    "cuMemHostAlloc",
+    "cuMemFreeHost",
+    "cuMemHostRegister_v2",
+    "cuMemHostUnregister",
+    # Version negotiation is answered locally.
+    "cuDriverGetVersion",
+}
+
+# Explicitly refused, with the reason surfaced in the log. These cannot work
+# across a network and failing loudly beats corrupting silently.
+UNSUPPORTED = {
+    # CUlaunchConfig carries an attribute array we do not marshal yet. Used for
+    # thread-block clusters on Hopper and later; nothing in milestone 1 needs it.
+    "cuLaunchKernelEx": "launch config attributes not marshalled yet",
+    "cuMemAllocManaged": "managed memory cannot span a network",
+    "cuMemHostGetDevicePointer_v2": "zero-copy host mapping cannot span a network",
+    "cuMemHostGetDevicePointer": "zero-copy host mapping cannot span a network",
+    "cuIpcOpenMemHandle_v2": "IPC handles are host-local",
+    "cuIpcGetMemHandle": "IPC handles are host-local",
+    "cuIpcOpenEventHandle": "IPC handles are host-local",
+    "cuIpcGetEventHandle": "IPC handles are host-local",
+}
+
+# name -> {"params": {param: annotation}, "exec": class, "record": bool}
+ANNOTATIONS = {
+    # ---- device queries -------------------------------------------------
+    "cuDeviceGetName": {"params": {"name": "out_buffer(len)"}},
+    "cuDeviceGetUuid": {"params": {"uuid": "pod_out"}},
+    "cuDeviceGetUuid_v2": {"params": {"uuid": "pod_out"}},
+    "cuDeviceGetLuid": {"params": {"luid": "out_buffer(8)",
+                                   "deviceNodeMask": "out_scalar"}},
+
+    # ---- context --------------------------------------------------------
+    "cuCtxCreate_v2": {"record": True},
+    "cuDevicePrimaryCtxRetain": {"record": True},
+    "cuCtxSynchronize": {"exec": "flush"},
+
+    # ---- memory ---------------------------------------------------------
+    "cuMemAlloc_v2": {"record": True},
+    "cuMemcpyHtoD_v2": {"params": {"srcHost": "in_buffer(ByteCount)"}},
+    "cuMemcpyDtoH_v2": {"params": {"dstHost": "out_buffer(ByteCount)"}},
+    "cuMemcpyHtoDAsync_v2": {"params": {"srcHost": "in_buffer(ByteCount)"},
+                             "exec": "async"},
+    # Not async in our sense: the caller may read dstHost right after the next
+    # stream sync, and we must have the bytes by then, so we round trip.
+    "cuMemcpyDtoHAsync_v2": {"params": {"dstHost": "out_buffer(ByteCount)"}},
+
+    # ---- modules and kernels --------------------------------------------
+    "cuModuleLoadData": {"params": {"image": "fatbin"}, "record": True},
+    "cuModuleLoadFatBinary": {"params": {"fatCubin": "fatbin"}, "record": True},
+    "cuLibraryLoadData": {
+        "params": {
+            "code": "fatbin",
+            # Option arrays are unused by cudart in practice; refuse non-empty.
+            "jitOptions": "ignore", "jitOptionsValues": "ignore",
+            "libraryOptions": "ignore", "libraryOptionValues": "ignore",
+        },
+        "record": True,
+    },
+    "cuModuleGetFunction": {"record": True},
+    "cuLibraryGetKernel": {"record": True},
+
+    # ---- streams and events ---------------------------------------------
+    "cuStreamCreate": {"record": True},
+    "cuStreamSynchronize": {"exec": "flush"},
+    "cuStreamWaitEvent": {"exec": "async"},
+    "cuEventRecord": {"exec": "async"},
+    "cuEventSynchronize": {"exec": "flush"},
+    "cuEventCreate": {"record": True},
+}
+
+# Memsets are all fire-and-forget on a stream.
+for _f in ("cuMemsetD8Async", "cuMemsetD16Async", "cuMemsetD32Async",
+           "cuMemsetD2D8Async", "cuMemsetD2D16Async", "cuMemsetD2D32Async"):
+    ANNOTATIONS.setdefault(_f, {})["exec"] = "async"
+
+
+def for_function(name):
+    """Annotation record for `name`, with defaults filled in."""
+    a = dict(ANNOTATIONS.get(name, {}))
+    a.setdefault("params", {})
+    a.setdefault("exec", "sync")
+    a.setdefault("record", False)
+    return a

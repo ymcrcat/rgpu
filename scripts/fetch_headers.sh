@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Extract the CUDA headers we build against into third_party/cuda_include.
+#
+# They come from the nvidia-cuda-runtime pip wheel, which is about a megabyte,
+# rather than the CUDA devel container image, which is several gigabytes. Only
+# headers are needed: the shim replaces the driver instead of linking it, and
+# the server is built on the GPU host where the toolkit already exists.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+VERSION=${CUDA_HEADER_VERSION:-12.6.77}
+DEST=third_party/cuda_include
+
+if [[ -f "$DEST/cuda.h" ]]; then
+  echo "$DEST/cuda.h already present"
+  grep -E '^#define CUDA_VERSION' "$DEST/cuda.h" || true
+  exit 0
+fi
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+echo "downloading nvidia-cuda-runtime-cu12==$VERSION ..."
+python3 -m pip download "nvidia-cuda-runtime-cu12==$VERSION" \
+  --platform manylinux2014_x86_64 --only-binary=:all: --no-deps -d "$tmp/whl" \
+  >/dev/null
+
+unzip -o -q "$tmp"/whl/*.whl -d "$tmp/out"
+src="$tmp/out/nvidia/cuda_runtime/include"
+if [[ ! -f "$src/cuda.h" ]]; then
+  echo "cuda.h not found in the wheel; layout may have changed" >&2
+  exit 1
+fi
+
+mkdir -p "$DEST"
+cp -R "$src"/. "$DEST"/
+echo "extracted $(ls "$DEST" | wc -l | tr -d ' ') headers into $DEST"
+grep -E '^#define CUDA_VERSION' "$DEST/cuda.h"
