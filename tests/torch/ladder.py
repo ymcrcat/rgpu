@@ -13,6 +13,13 @@ import sys
 import time
 import traceback
 
+# PyTorch reaches for two NVIDIA libraries that cannot run on the client,
+# because they initialise through the driver's undocumented export tables.
+#
+# cuBLASLt is not forwarded at all, and addmm uses it by default; this sends
+# addmm through plain cuBLAS, which is. It must be set before torch loads.
+os.environ.setdefault("DISABLE_ADDMM_CUDA_LT", "1")
+
 results = []
 
 
@@ -34,6 +41,10 @@ def rung(name):
 
 
 import torch  # noqa: E402  (imported after the helpers so a failure is visible)
+
+# cuDNN is likewise not forwarded. PyTorch's own convolution kernels work over
+# the shim, and they are what this falls back to.
+torch.backends.cudnn.enabled = False
 
 TOL = dict(rtol=1e-4, atol=1e-4)
 
@@ -82,7 +93,7 @@ def _():
     return "sum matches CPU"
 
 
-@rung("matmul via cuBLAS")
+@rung("matmul via forwarded cuBLAS")
 def _():
     a, b = torch.randn(256, 512), torch.randn(512, 256)
     got = (a.cuda() @ b.cuda()).cpu()
@@ -90,7 +101,7 @@ def _():
     return "256x512 @ 512x256 matches CPU"
 
 
-@rung("convolution via cuDNN")
+@rung("convolution, PyTorch's own kernels")
 def _():
     import torch.nn as nn
     conv = nn.Conv2d(3, 16, kernel_size=3, padding=1)

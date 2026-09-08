@@ -71,10 +71,18 @@ def decl_params(f):
     out = []
     for p in f["params"]:
         t = p["type"]
-        if "[" in t or "(" in t:
-            # Array or function-pointer syntax needs the name spliced inside
-            # the type; we do not generate those, so refuse early.
+        if "(" in t:
+            # Function-pointer syntax needs the name spliced into the middle of
+            # the type. Nothing we generate takes one, so refuse early.
             raise Unmarshalable("undeclarable type %r" % t)
+        if "[" in t:
+            # An array parameter declares as `double *const name[]`, with the
+            # name before the brackets. cuBLAS's batched routines take these.
+            head, bracket = t.split("[", 1)
+            head = head.rstrip()
+            sep = "" if head.endswith("*") else " "
+            out.append("%s%s%s[%s" % (head, sep, p["name"], bracket))
+            continue
         sep = "" if t.endswith("*") else " "
         out.append("%s%s%s" % (t, sep, p["name"]))
     return ", ".join(out)

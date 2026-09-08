@@ -69,6 +69,51 @@ target_link_options(rgpu_cudart PRIVATE
   "-Wl,--version-script=${CMAKE_SOURCE_DIR}/client/cudart.map")
 
 # ---------------------------------------------------------------------------
+# Client: a stand-in for libcublas.so.12.
+#
+# cuBLAS cannot run on the client either: like the stock runtime, it calls
+# cuGetExportTable while initialising and fails without it. For now this is a
+# discovery build, every entry point announcing itself by name, so a real run
+# reports exactly which functions need forwarding.
+# ---------------------------------------------------------------------------
+set(CUBLAS_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/third_party/cublas_include)
+if(EXISTS ${CUBLAS_INCLUDE_DIR}/cublas_v2.h AND
+   EXISTS ${CMAKE_SOURCE_DIR}/client/generated/cublas_stubs.cpp)
+  add_library(rgpu_cublas SHARED
+    client/cublas_impl.cpp
+    client/generated/cublas_stubs.cpp)
+  set_target_properties(rgpu_cublas PROPERTIES OUTPUT_NAME cublas SOVERSION 12)
+  target_include_directories(rgpu_cublas PRIVATE ${CUBLAS_INCLUDE_DIR})
+  target_link_libraries(rgpu_cublas PRIVATE rgpu_client)
+  if(EXISTS ${CMAKE_SOURCE_DIR}/client/cublas.map)
+    target_link_options(rgpu_cublas PRIVATE
+      "-Wl,--version-script=${CMAKE_SOURCE_DIR}/client/cublas.map")
+  endif()
+endif()
+
+# ---------------------------------------------------------------------------
+# Client: a stand-in for libcublasLt.so.12.
+#
+# Nothing is forwarded yet. The point is that the real cuBLASLt segfaults when
+# it runs on the client over a remoted driver, which is a confusing way to
+# fail; every entry point here reports itself and returns an error instead.
+# PyTorch's addmm uses cuBLASLt by default, so set DISABLE_ADDMM_CUDA_LT=1 to
+# route it through plain cuBLAS, which is forwarded.
+# ---------------------------------------------------------------------------
+if(EXISTS ${CUBLAS_INCLUDE_DIR}/cublasLt.h AND
+   EXISTS ${CMAKE_SOURCE_DIR}/client/generated/cublaslt_stubs.cpp)
+  add_library(rgpu_cublaslt SHARED client/generated/cublaslt_stubs.cpp)
+  set_target_properties(rgpu_cublaslt PROPERTIES
+    OUTPUT_NAME cublasLt SOVERSION 12)
+  target_include_directories(rgpu_cublaslt PRIVATE ${CUBLAS_INCLUDE_DIR})
+  target_link_libraries(rgpu_cublaslt PRIVATE rgpu_client)
+  if(EXISTS ${CMAKE_SOURCE_DIR}/client/cublaslt.map)
+    target_link_options(rgpu_cublaslt PRIVATE
+      "-Wl,--version-script=${CMAKE_SOURCE_DIR}/client/cublaslt.map")
+  endif()
+endif()
+
+# ---------------------------------------------------------------------------
 # Server: runs on the GPU host against the real driver.
 #
 # Links the toolkit's libcuda stub; the real driver is resolved at run time.
@@ -81,11 +126,14 @@ find_library(CUDA_DRIVER_LIB NAMES cuda libcuda.so.1
         /usr/local/cuda/lib64/stubs /usr/local/cuda/lib64)
 
 if(CUDA_DRIVER_LIB)
-  add_executable(rgpu_server
-    server/main.cpp
-    ${GEN_SERVER}
-    ${GEN_NAMES}
-  )
+  set(SERVER_SOURCES server/main.cpp ${GEN_SERVER} ${GEN_NAMES})
+  if(EXISTS ${CUBLAS_INCLUDE_DIR}/cublas_v2.h)
+    list(APPEND SERVER_SOURCES server/cublas_server.cpp)
+  endif()
+  add_executable(rgpu_server ${SERVER_SOURCES})
+  if(EXISTS ${CUBLAS_INCLUDE_DIR}/cublas_v2.h)
+    target_include_directories(rgpu_server PRIVATE ${CUBLAS_INCLUDE_DIR})
+  endif()
   # Generated code forwards deprecated entry points on purpose: an application
   # that calls them should still reach the real driver.
   set_source_files_properties(${GEN_SERVER} PROPERTIES

@@ -1,0 +1,1332 @@
+{
+ "header": "third_party/cublas_include/cublasLt.h",
+ "prefix": "cublasLt",
+ "result_type": "cublasStatus_t",
+ "functions": [
+  {
+   "name": "cublasLtCreate",
+   "params": [
+    {
+     "name": "lightHandle",
+     "type": "cublasLtHandle_t *",
+     "kind": "out_handle",
+     "detail": "struct cublasLtContext",
+     "pointee": "cublasLtHandle_t"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cublasLtDestroy",
+   "params": [
+    {
+     "name": "lightHandle",
+     "type": "cublasLtHandle_t",
+     "kind": "handle",
+     "detail": "struct cublasLtContext",
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cublasLtGetProperty",
+   "params": [
+    {
+     "name": "type",
+     "type": "libraryPropertyType",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "value",
+     "type": "int *",
+     "kind": "out_scalar",
+     "detail": "int",
+     "pointee": "int"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cublasLtHeuristicsCacheGetCapacity",
+   "params": [
+    {
+     "name": "capacity",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cublasLtHeuristicsCacheSetCapacity",
+   "params": [
+    {
+     "name": "capacity",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cublasLtLoggerForceDisable",
+   "params": [],
+   "auto": true
+  },
+  {
+   "name": "cublasLtLoggerOpenFile",
+   "params": [
+    {
+     "name": "logFile",
+     "type": "const char *",
+     "kind": "string",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cublasLtLoggerSetCallback",
+   "params": [
+    {
+     "name": "callback",
+     "type": "cublasLtLoggerCallback_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:void (int, const char *, const char *)",
+     "pointee": "void (int, const char *, const char *)"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtLoggerSetFile",
+   "params": [
+    {
+     "name": "file",
+     "type": "FILE *",
+     "kind": "unknown",
+     "detail": "struct-pointer:struct _IO_FILE",
+     "pointee": "FILE"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtLoggerSetLevel",
+   "params": [
+    {
+     "name": "level",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cublasLtLoggerSetMask",
+   "params": [
+    {
+     "name": "mask",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": true
+  },
+  {
+   "name": "cublasLtMatmul",
+   "params": [
+    {
+     "name": "lightHandle",
+     "type": "cublasLtHandle_t",
+     "kind": "handle",
+     "detail": "struct cublasLtContext",
+     "pointee": null
+    },
+    {
+     "name": "computeDesc",
+     "type": "cublasLtMatmulDesc_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatmulDescOpaque_t",
+     "pointee": "cublasLtMatmulDescOpaque_t"
+    },
+    {
+     "name": "alpha",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "A",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "Adesc",
+     "type": "cublasLtMatrixLayout_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixLayoutOpaque_t",
+     "pointee": "cublasLtMatrixLayoutOpaque_t"
+    },
+    {
+     "name": "B",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "Bdesc",
+     "type": "cublasLtMatrixLayout_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixLayoutOpaque_t",
+     "pointee": "cublasLtMatrixLayoutOpaque_t"
+    },
+    {
+     "name": "beta",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "C",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "Cdesc",
+     "type": "cublasLtMatrixLayout_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixLayoutOpaque_t",
+     "pointee": "cublasLtMatrixLayoutOpaque_t"
+    },
+    {
+     "name": "D",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "Ddesc",
+     "type": "cublasLtMatrixLayout_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixLayoutOpaque_t",
+     "pointee": "cublasLtMatrixLayoutOpaque_t"
+    },
+    {
+     "name": "algo",
+     "type": "const cublasLtMatmulAlgo_t *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const cublasLtMatmulAlgo_t",
+     "pointee": "cublasLtMatmulAlgo_t"
+    },
+    {
+     "name": "workspace",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "workspaceSizeInBytes",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatmulAlgoCapGetAttribute",
+   "params": [
+    {
+     "name": "algo",
+     "type": "const cublasLtMatmulAlgo_t *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const cublasLtMatmulAlgo_t",
+     "pointee": "cublasLtMatmulAlgo_t"
+    },
+    {
+     "name": "attr",
+     "type": "cublasLtMatmulAlgoCapAttributes_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "buf",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "sizeInBytes",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "sizeWritten",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatmulAlgoCheck",
+   "params": [
+    {
+     "name": "lightHandle",
+     "type": "cublasLtHandle_t",
+     "kind": "handle",
+     "detail": "struct cublasLtContext",
+     "pointee": null
+    },
+    {
+     "name": "operationDesc",
+     "type": "cublasLtMatmulDesc_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatmulDescOpaque_t",
+     "pointee": "cublasLtMatmulDescOpaque_t"
+    },
+    {
+     "name": "Adesc",
+     "type": "cublasLtMatrixLayout_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixLayoutOpaque_t",
+     "pointee": "cublasLtMatrixLayoutOpaque_t"
+    },
+    {
+     "name": "Bdesc",
+     "type": "cublasLtMatrixLayout_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixLayoutOpaque_t",
+     "pointee": "cublasLtMatrixLayoutOpaque_t"
+    },
+    {
+     "name": "Cdesc",
+     "type": "cublasLtMatrixLayout_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixLayoutOpaque_t",
+     "pointee": "cublasLtMatrixLayoutOpaque_t"
+    },
+    {
+     "name": "Ddesc",
+     "type": "cublasLtMatrixLayout_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixLayoutOpaque_t",
+     "pointee": "cublasLtMatrixLayoutOpaque_t"
+    },
+    {
+     "name": "algo",
+     "type": "const cublasLtMatmulAlgo_t *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const cublasLtMatmulAlgo_t",
+     "pointee": "cublasLtMatmulAlgo_t"
+    },
+    {
+     "name": "result",
+     "type": "cublasLtMatmulHeuristicResult_t *",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatmulHeuristicResult_t",
+     "pointee": "cublasLtMatmulHeuristicResult_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatmulAlgoConfigGetAttribute",
+   "params": [
+    {
+     "name": "algo",
+     "type": "const cublasLtMatmulAlgo_t *",
+     "kind": "unknown",
+     "detail": "struct-pointer:const cublasLtMatmulAlgo_t",
+     "pointee": "cublasLtMatmulAlgo_t"
+    },
+    {
+     "name": "attr",
+     "type": "cublasLtMatmulAlgoConfigAttributes_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "buf",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "sizeInBytes",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "sizeWritten",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatmulAlgoConfigSetAttribute",
+   "params": [
+    {
+     "name": "algo",
+     "type": "cublasLtMatmulAlgo_t *",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatmulAlgo_t",
+     "pointee": "cublasLtMatmulAlgo_t"
+    },
+    {
+     "name": "attr",
+     "type": "cublasLtMatmulAlgoConfigAttributes_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "buf",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "sizeInBytes",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatmulAlgoGetHeuristic",
+   "params": [
+    {
+     "name": "lightHandle",
+     "type": "cublasLtHandle_t",
+     "kind": "handle",
+     "detail": "struct cublasLtContext",
+     "pointee": null
+    },
+    {
+     "name": "operationDesc",
+     "type": "cublasLtMatmulDesc_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatmulDescOpaque_t",
+     "pointee": "cublasLtMatmulDescOpaque_t"
+    },
+    {
+     "name": "Adesc",
+     "type": "cublasLtMatrixLayout_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixLayoutOpaque_t",
+     "pointee": "cublasLtMatrixLayoutOpaque_t"
+    },
+    {
+     "name": "Bdesc",
+     "type": "cublasLtMatrixLayout_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixLayoutOpaque_t",
+     "pointee": "cublasLtMatrixLayoutOpaque_t"
+    },
+    {
+     "name": "Cdesc",
+     "type": "cublasLtMatrixLayout_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixLayoutOpaque_t",
+     "pointee": "cublasLtMatrixLayoutOpaque_t"
+    },
+    {
+     "name": "Ddesc",
+     "type": "cublasLtMatrixLayout_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixLayoutOpaque_t",
+     "pointee": "cublasLtMatrixLayoutOpaque_t"
+    },
+    {
+     "name": "preference",
+     "type": "cublasLtMatmulPreference_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatmulPreferenceOpaque_t",
+     "pointee": "cublasLtMatmulPreferenceOpaque_t"
+    },
+    {
+     "name": "requestedAlgoCount",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "heuristicResultsArray",
+     "type": "cublasLtMatmulHeuristicResult_t[]",
+     "kind": "unknown",
+     "detail": "INCOMPLETEARRAY",
+     "pointee": null
+    },
+    {
+     "name": "returnAlgoCount",
+     "type": "int *",
+     "kind": "out_scalar",
+     "detail": "int",
+     "pointee": "int"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatmulAlgoGetIds",
+   "params": [
+    {
+     "name": "lightHandle",
+     "type": "cublasLtHandle_t",
+     "kind": "handle",
+     "detail": "struct cublasLtContext",
+     "pointee": null
+    },
+    {
+     "name": "computeType",
+     "type": "cublasComputeType_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "scaleType",
+     "type": "cudaDataType_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "Atype",
+     "type": "cudaDataType_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "Btype",
+     "type": "cudaDataType_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "Ctype",
+     "type": "cudaDataType_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "Dtype",
+     "type": "cudaDataType_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "requestedAlgoCount",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "algoIdsArray",
+     "type": "int[]",
+     "kind": "unknown",
+     "detail": "INCOMPLETEARRAY",
+     "pointee": null
+    },
+    {
+     "name": "returnAlgoCount",
+     "type": "int *",
+     "kind": "out_scalar",
+     "detail": "int",
+     "pointee": "int"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatmulAlgoInit",
+   "params": [
+    {
+     "name": "lightHandle",
+     "type": "cublasLtHandle_t",
+     "kind": "handle",
+     "detail": "struct cublasLtContext",
+     "pointee": null
+    },
+    {
+     "name": "computeType",
+     "type": "cublasComputeType_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "scaleType",
+     "type": "cudaDataType_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "Atype",
+     "type": "cudaDataType_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "Btype",
+     "type": "cudaDataType_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "Ctype",
+     "type": "cudaDataType_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "Dtype",
+     "type": "cudaDataType_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "algoId",
+     "type": "int",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "algo",
+     "type": "cublasLtMatmulAlgo_t *",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatmulAlgo_t",
+     "pointee": "cublasLtMatmulAlgo_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatmulDescCreate",
+   "params": [
+    {
+     "name": "matmulDesc",
+     "type": "cublasLtMatmulDesc_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "computeType",
+     "type": "cublasComputeType_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "scaleType",
+     "type": "cudaDataType_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatmulDescDestroy",
+   "params": [
+    {
+     "name": "matmulDesc",
+     "type": "cublasLtMatmulDesc_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatmulDescOpaque_t",
+     "pointee": "cublasLtMatmulDescOpaque_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatmulDescGetAttribute",
+   "params": [
+    {
+     "name": "matmulDesc",
+     "type": "cublasLtMatmulDesc_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatmulDescOpaque_t",
+     "pointee": "cublasLtMatmulDescOpaque_t"
+    },
+    {
+     "name": "attr",
+     "type": "cublasLtMatmulDescAttributes_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "buf",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "sizeInBytes",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "sizeWritten",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatmulDescInit_internal",
+   "params": [
+    {
+     "name": "matmulDesc",
+     "type": "cublasLtMatmulDesc_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatmulDescOpaque_t",
+     "pointee": "cublasLtMatmulDescOpaque_t"
+    },
+    {
+     "name": "size",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "computeType",
+     "type": "cublasComputeType_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "scaleType",
+     "type": "cudaDataType_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatmulDescSetAttribute",
+   "params": [
+    {
+     "name": "matmulDesc",
+     "type": "cublasLtMatmulDesc_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatmulDescOpaque_t",
+     "pointee": "cublasLtMatmulDescOpaque_t"
+    },
+    {
+     "name": "attr",
+     "type": "cublasLtMatmulDescAttributes_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "buf",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "sizeInBytes",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatmulPreferenceCreate",
+   "params": [
+    {
+     "name": "pref",
+     "type": "cublasLtMatmulPreference_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatmulPreferenceDestroy",
+   "params": [
+    {
+     "name": "pref",
+     "type": "cublasLtMatmulPreference_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatmulPreferenceOpaque_t",
+     "pointee": "cublasLtMatmulPreferenceOpaque_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatmulPreferenceGetAttribute",
+   "params": [
+    {
+     "name": "pref",
+     "type": "cublasLtMatmulPreference_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatmulPreferenceOpaque_t",
+     "pointee": "cublasLtMatmulPreferenceOpaque_t"
+    },
+    {
+     "name": "attr",
+     "type": "cublasLtMatmulPreferenceAttributes_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "buf",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "sizeInBytes",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "sizeWritten",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatmulPreferenceInit_internal",
+   "params": [
+    {
+     "name": "pref",
+     "type": "cublasLtMatmulPreference_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatmulPreferenceOpaque_t",
+     "pointee": "cublasLtMatmulPreferenceOpaque_t"
+    },
+    {
+     "name": "size",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatmulPreferenceSetAttribute",
+   "params": [
+    {
+     "name": "pref",
+     "type": "cublasLtMatmulPreference_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatmulPreferenceOpaque_t",
+     "pointee": "cublasLtMatmulPreferenceOpaque_t"
+    },
+    {
+     "name": "attr",
+     "type": "cublasLtMatmulPreferenceAttributes_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "buf",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "sizeInBytes",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatrixLayoutCreate",
+   "params": [
+    {
+     "name": "matLayout",
+     "type": "cublasLtMatrixLayout_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "type",
+     "type": "cudaDataType",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "rows",
+     "type": "uint64_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "cols",
+     "type": "uint64_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "ld",
+     "type": "int64_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatrixLayoutDestroy",
+   "params": [
+    {
+     "name": "matLayout",
+     "type": "cublasLtMatrixLayout_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixLayoutOpaque_t",
+     "pointee": "cublasLtMatrixLayoutOpaque_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatrixLayoutGetAttribute",
+   "params": [
+    {
+     "name": "matLayout",
+     "type": "cublasLtMatrixLayout_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixLayoutOpaque_t",
+     "pointee": "cublasLtMatrixLayoutOpaque_t"
+    },
+    {
+     "name": "attr",
+     "type": "cublasLtMatrixLayoutAttribute_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "buf",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "sizeInBytes",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "sizeWritten",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatrixLayoutInit_internal",
+   "params": [
+    {
+     "name": "matLayout",
+     "type": "cublasLtMatrixLayout_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixLayoutOpaque_t",
+     "pointee": "cublasLtMatrixLayoutOpaque_t"
+    },
+    {
+     "name": "size",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "type",
+     "type": "cudaDataType",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "rows",
+     "type": "uint64_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "cols",
+     "type": "uint64_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "ld",
+     "type": "int64_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatrixLayoutSetAttribute",
+   "params": [
+    {
+     "name": "matLayout",
+     "type": "cublasLtMatrixLayout_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixLayoutOpaque_t",
+     "pointee": "cublasLtMatrixLayoutOpaque_t"
+    },
+    {
+     "name": "attr",
+     "type": "cublasLtMatrixLayoutAttribute_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "buf",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "sizeInBytes",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatrixTransform",
+   "params": [
+    {
+     "name": "lightHandle",
+     "type": "cublasLtHandle_t",
+     "kind": "handle",
+     "detail": "struct cublasLtContext",
+     "pointee": null
+    },
+    {
+     "name": "transformDesc",
+     "type": "cublasLtMatrixTransformDesc_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixTransformDescOpaque_t",
+     "pointee": "cublasLtMatrixTransformDescOpaque_t"
+    },
+    {
+     "name": "alpha",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "A",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "Adesc",
+     "type": "cublasLtMatrixLayout_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixLayoutOpaque_t",
+     "pointee": "cublasLtMatrixLayoutOpaque_t"
+    },
+    {
+     "name": "beta",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "B",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "Bdesc",
+     "type": "cublasLtMatrixLayout_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixLayoutOpaque_t",
+     "pointee": "cublasLtMatrixLayoutOpaque_t"
+    },
+    {
+     "name": "C",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "Cdesc",
+     "type": "cublasLtMatrixLayout_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixLayoutOpaque_t",
+     "pointee": "cublasLtMatrixLayoutOpaque_t"
+    },
+    {
+     "name": "stream",
+     "type": "cudaStream_t",
+     "kind": "handle",
+     "detail": "struct CUstream_st",
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatrixTransformDescCreate",
+   "params": [
+    {
+     "name": "transformDesc",
+     "type": "cublasLtMatrixTransformDesc_t *",
+     "kind": "unknown",
+     "detail": "pointer-to-pointer",
+     "pointee": null
+    },
+    {
+     "name": "scaleType",
+     "type": "cudaDataType",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatrixTransformDescDestroy",
+   "params": [
+    {
+     "name": "transformDesc",
+     "type": "cublasLtMatrixTransformDesc_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixTransformDescOpaque_t",
+     "pointee": "cublasLtMatrixTransformDescOpaque_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatrixTransformDescGetAttribute",
+   "params": [
+    {
+     "name": "transformDesc",
+     "type": "cublasLtMatrixTransformDesc_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixTransformDescOpaque_t",
+     "pointee": "cublasLtMatrixTransformDescOpaque_t"
+    },
+    {
+     "name": "attr",
+     "type": "cublasLtMatrixTransformDescAttributes_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "buf",
+     "type": "void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "sizeInBytes",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "sizeWritten",
+     "type": "size_t *",
+     "kind": "out_scalar",
+     "detail": "unsigned long",
+     "pointee": "size_t"
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatrixTransformDescInit_internal",
+   "params": [
+    {
+     "name": "transformDesc",
+     "type": "cublasLtMatrixTransformDesc_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixTransformDescOpaque_t",
+     "pointee": "cublasLtMatrixTransformDescOpaque_t"
+    },
+    {
+     "name": "size",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "scaleType",
+     "type": "cudaDataType",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  },
+  {
+   "name": "cublasLtMatrixTransformDescSetAttribute",
+   "params": [
+    {
+     "name": "transformDesc",
+     "type": "cublasLtMatrixTransformDesc_t",
+     "kind": "unknown",
+     "detail": "struct-pointer:cublasLtMatrixTransformDescOpaque_t",
+     "pointee": "cublasLtMatrixTransformDescOpaque_t"
+    },
+    {
+     "name": "attr",
+     "type": "cublasLtMatrixTransformDescAttributes_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    },
+    {
+     "name": "buf",
+     "type": "const void *",
+     "kind": "unknown",
+     "detail": "void-pointer",
+     "pointee": null
+    },
+    {
+     "name": "sizeInBytes",
+     "type": "size_t",
+     "kind": "scalar",
+     "detail": null,
+     "pointee": null
+    }
+   ],
+   "auto": false
+  }
+ ],
+ "aliases": {}
+}

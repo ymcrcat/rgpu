@@ -26,6 +26,9 @@ namespace rgpu {
 
 // Defined in server/generated/dispatch.cpp.
 bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out);
+// Defined in server/cublas_server.cpp, when cuBLAS support is built in.
+bool dispatch_cublas(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out)
+    __attribute__((weak));
 
 namespace {
 
@@ -134,8 +137,11 @@ void serve(int fd) {
     Buffer rsp;
     CUresult result = CUDA_ERROR_NOT_SUPPORTED;
 
-    if (!dispatch_internal(h.api_id, req, &rsp, &result) &&
-        !dispatch_generated(h.api_id, req, &rsp, &result)) {
+    const bool handled =
+        dispatch_internal(h.api_id, req, &rsp, &result) ||
+        (dispatch_cublas && dispatch_cublas(h.api_id, req, &rsp, &result)) ||
+        dispatch_generated(h.api_id, req, &rsp, &result);
+    if (!handled) {
       logf("unknown api id %u (%s)", h.api_id, api_name(h.api_id));
       result = CUDA_ERROR_NOT_SUPPORTED;
     } else if (!req.ok()) {

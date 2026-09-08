@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""Emit weak stubs for the whole CUDA runtime API.
+"""Emit weak stubs for a whole API.
 
     python3 codegen/emit_runtime.py --api codegen/runtime_api.json
+    python3 codegen/emit_runtime.py --api codegen/cublas_api.json \
+        --out client/generated/cublas_stubs.cpp --header cublas_v2.h \
+        --result-type cublasStatus_t --error CUBLAS_STATUS_NOT_SUPPORTED
 
 The runtime shim is a translation layer, not a forwarding one: each function
 that matters is hand-written in client/cudart_impl.cpp in terms of driver API
@@ -29,6 +32,9 @@ def main():
     ap.add_argument("--api", default="codegen/runtime_api.json")
     ap.add_argument("--root", default=".")
     ap.add_argument("--out", default="client/generated/cudart_stubs.cpp")
+    ap.add_argument("--header", default="cuda_runtime_api.h")
+    ap.add_argument("--result-type", default="cudaError_t")
+    ap.add_argument("--error", default="cudaErrorNotSupported")
     a = ap.parse_args()
 
     with open(a.api) as f:
@@ -36,10 +42,10 @@ def main():
 
     lines = [
         HEADER,
-        "// Weak definitions of every CUDA runtime entry point.",
-        "// client/cudart_impl.cpp defines strong versions of the ones we",
-        "// actually translate; these catch everything else by name.",
-        "#include <cuda_runtime_api.h>",
+        "// Weak definitions of every entry point in this API. Hand-written",
+        "// implementations are strong and override them; these catch",
+        "// everything else by name instead of failing to link.",
+        "#include <%s>" % a.header,
         "",
         "#include \"client/rpc.h\"",
         "",
@@ -54,10 +60,10 @@ def main():
             skipped.append((name, str(e)))
             continue
         lines += [
-            "extern \"C\" __attribute__((weak)) cudaError_t %s(%s) {"
-            % (name, params),
+            "extern \"C\" __attribute__((weak)) %s %s(%s) {"
+            % (a.result_type, name, params),
             "  rgpu::unimplemented_rt(\"%s\");" % name,
-            "  return cudaErrorNotSupported;",
+            "  return %s;" % a.error,
             "}",
             "",
         ]

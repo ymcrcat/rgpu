@@ -169,6 +169,11 @@ def parse(header, extra_args, prefix="cu", result_type="CUresult"):
         # the driver, cudaError_t for the runtime.
         if cur.result_type.spelling != result_type:
             continue
+        # Some headers define small helpers inline. Those already have a body,
+        # so emitting our own would be a redefinition. cublasLt.h does this for
+        # its *Init helpers.
+        if cur.is_definition():
+            continue
         seen.add(name)
 
         params = []

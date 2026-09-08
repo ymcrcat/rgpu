@@ -235,3 +235,42 @@ directly:
 `cudaMemcpyDefault` needs to know whether each pointer is host or device.
 Remotely we cannot probe a device pointer, since it is an address in the
 server's process, so the client remembers the ranges it handed out.
+
+
+## Finding, 2026-09-08: the export table problem is not limited to the runtime
+
+Every NVIDIA library initialises the same way. cuBLAS calls `cuGetExportTable`
+during `cublasCreate` and returns `CUBLAS_STATUS_NOT_INITIALIZED` without it.
+cuBLASLt is worse: it does not report an error at all but segfaults inside
+`cublasLtMatmulAlgoGetHeuristic`, which is where PyTorch's `addmm` lands by
+default.
+
+So the rule is general. A library that talks to the driver through the dark API
+has to run on the GPU host, and the client gets a shim that forwards its calls.
+That is the rCUDA shape, arrived at from the other direction.
+
+cuBLAS is now forwarded. Its calls are hand-written rather than generated,
+because the parameters need judgement the header does not carry: matrix
+arguments are device pointers passed through untouched, while alpha and beta
+are host values or device pointers depending on the handle's pointer mode,
+which the client therefore tracks. Getting that wrong would produce quietly
+wrong arithmetic rather than an error.
+
+### Milestone 1 reached
+
+ResNet-18 inference on a remote RTX A4000 matches a CPU reference to 3.8e-06
+with identical top-5 predictions, over the full stack: PyTorch on stock wheels,
+our runtime shim, our cuBLAS shim, our driver shim, TCP, and the real driver on
+the host.
+
+Two PyTorch settings are needed until cuBLASLt and cuDNN are forwarded:
+`DISABLE_ADDMM_CUDA_LT=1` and `torch.backends.cudnn.enabled = False`.
+
+### On library precedence
+
+`LD_LIBRARY_PATH` is not enough to put a shim in front of PyTorch. Its
+libraries carry `RPATH`, which the loader consults before `LD_LIBRARY_PATH`,
+and PyTorch additionally preloads the CUDA libraries by absolute path.
+`LD_PRELOAD` wins over both, because symbol lookup finds preloaded objects
+first regardless of which file was loaded. A client that never installs the
+stock libraries does not have this problem.

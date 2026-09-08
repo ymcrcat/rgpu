@@ -49,7 +49,7 @@ echo "== copying source =="
 tar czf - \
   --exclude='__pycache__' --exclude='*.pyc' \
   CMakeLists.txt common server client tests codegen scripts docs README.md \
-  third_party/cuda_include \
+  third_party \
   | ssh_run "mkdir -p $REMOTE_DIR && tar xzf - -C $REMOTE_DIR"
 
 echo
@@ -61,7 +61,10 @@ if ! command -v cmake >/dev/null; then
   sudo apt-get update -qq && sudo apt-get install -y -qq cmake build-essential
 fi
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo >/dev/null
-cmake --build build -j\$(nproc) 2>&1 | tail -5
+# Keep the exit status: piping cmake's output through tail would hide a
+# failed build behind tail's success.
+set -o pipefail
+cmake --build build -j\$(nproc) 2>&1 | grep -E "error|Error|Built target" | tail -8
 echo
 ls -la build/rgpu-server
 if command -v nvcc >/dev/null; then ./scripts/build_fatbin.sh; fi

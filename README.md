@@ -37,20 +37,27 @@ design, the prior art it draws on, and the three hard problems it has to solve.
 | Wire format and transport | working |
 | Code generation from `cuda.h` | working, 259 of 435 functions generated |
 | Client shim `libcuda.so.1` | builds, 436 exported entry points |
-| Client shim `libcudart.so.12` | builds, ~55 translated |
-| Server | running on a real GPU |
-| Driver API end-to-end, fake driver and real GPU | passing |
-| Kernel launch marshalling, fake driver | passing |
-| Runtime API end-to-end, fake driver and real GPU | passing |
+| Client shim `libcudart.so.12` | ~55 runtime calls translated |
+| Client shim `libcublas.so.12` | matmul family forwarded to the host |
+| Client shim `libcublasLt.so.12` | stubs only, reports rather than crashes |
+| Server | runs on the GPU host |
+| Driver API end-to-end | passing, fake driver and real GPU |
+| Runtime API end-to-end | passing, fake driver and real GPU |
+| Kernel launch marshalling | passing, fake driver |
 | A real CUDA kernel on a remote GPU | passing |
-| PyTorch: import, device query, tensors, elementwise, reductions | passing |
-| PyTorch: matmul, convolution | blocked on cuBLAS |
+| **PyTorch, all nine rungs including ResNet-18** | **passing** |
 | End-to-end on a real GPU | needs a GPU host |
 | PyTorch client image and test ladder | written, not yet run |
 
-On a rented RTX A4000, PyTorch imports, reports the remote GPU, allocates
-tensors, and computes elementwise operations and reductions whose results match
-CPU exactly. Anything reaching cuBLAS fails: see Known limits.
+On a rented RTX A4000, every rung of `tests/torch/ladder.py` passes. ResNet-18
+inference runs on the remote GPU and its logits match a CPU reference to
+3.8e-06, with identical top-5 predictions. The client process has our shims in
+front of the driver, which `ldd` confirms.
+
+Two settings are required, and the ladder sets both. `DISABLE_ADDMM_CUDA_LT=1`
+keeps `addmm` on plain cuBLAS, and `torch.backends.cudnn.enabled = False` keeps
+convolution on PyTorch's own kernels. Both are there because cuBLASLt and cuDNN
+are not forwarded yet: see Known limits.
 
 The GPU-free tests are the meaningful ones so far: real client stubs, real wire
 format, real server dispatch, with a fake driver at the bottom. They cover a
@@ -152,12 +159,16 @@ and stubbed.
 
 ## Known limits
 
-**cuBLAS does not work on the client.** Like the CUDA runtime, it calls
-`cuGetExportTable` during initialisation and fails without it, so `cublasCreate`
-returns `CUBLAS_STATUS_NOT_INITIALIZED`. Everything that reaches cuBLAS is
-blocked, which includes matrix multiplication and, because PyTorch's fallback
-convolution is built on it, convolution too, with or without cuDNN. Fixing this
-means shimming cuBLAS so it runs on the GPU host, the way rCUDA does.
+**No NVIDIA math library can run on the client.** Each one initialises through
+the driver's undocumented export tables, exactly as the stock runtime does, so
+each has to be forwarded to the GPU host instead.
+
+cuBLAS is forwarded, covering the matmul family PyTorch uses. cuBLASLt and
+cuDNN are not. Both have a stand-in that reports every call rather than
+running: the real cuBLASLt does not fail cleanly on a remoted driver, it
+segfaults inside `cublasLtMatmulAlgoGetHeuristic`. PyTorch reaches for both by
+default, hence the two settings above. Forwarding them is the next piece of
+work, and cuDNN's graph API is much the larger of the two.
 
 Note also that `LD_LIBRARY_PATH` is not enough to put these shims in front of
 PyTorch: its libraries use `RPATH`, which takes precedence, and it preloads the
