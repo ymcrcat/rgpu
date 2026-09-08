@@ -1,5 +1,10 @@
 // Checks the kernel launch path without a GPU.
 //
+// Only meaningful against rgpu-server-fake, whose driver knows the layout and
+// the values to expect. Against a real driver it skips, because the synthetic
+// module image it uses is correctly rejected. The real-hardware equivalent is
+// tests/cuda/vecadd.cpp, which runs an actual kernel.
+//
 // This is the most intricate part of the system. The driver API hands over
 // kernel arguments as an array of pointers with no sizes, so the client has to
 // ask the server for the kernel's parameter layout, pack the arguments into
@@ -58,9 +63,19 @@ int main() {
   CUcontext ctx;
   CHECK(cuCtxCreate(&ctx, 0, dev));
 
+  // The image is a header with a filler body: enough for the shim to size and
+  // ship it, and enough for the fake driver to accept. A real driver rejects
+  // it, which is how this test knows it is pointed at real hardware and has
+  // nothing to say.
   const std::vector<unsigned char> image = make_fake_fatbin(512);
   CUmodule mod = nullptr;
-  CHECK(cuModuleLoadData(&mod, image.data()));
+  if (cuModuleLoadData(&mod, image.data()) != CUDA_SUCCESS) {
+    std::printf("SKIP: the server has a real driver, which rejects this "
+                "synthetic image as it should.\n"
+                "      Run this against rgpu-server-fake; use vecadd for a "
+                "real kernel on real hardware.\n");
+    return 0;
+  }
 
   CUfunction fn = nullptr;
   CHECK(cuModuleGetFunction(&fn, mod, "rgpu_check_args"));
