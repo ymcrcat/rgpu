@@ -104,9 +104,16 @@ LD_LIBRARY_PATH=build RGPU_SERVER=127.0.0.1:9713 ./build/rpc_smoke
 
 ### On a rented GPU box
 
-`scripts/deploy_server.sh user@host` copies the source over, builds the server
-there, and brings the test fatbin back. It checks for a driver and a toolkit
-first and says which is missing.
+`scripts/runpod.sh create` rents one from RunPod, reading the API key from
+1Password so it never lands in a file, and prints the ssh and deploy commands.
+`status`, `stop` and `delete` do what they say. A running pod bills by the
+hour, around twenty cents for the cards this asks for, and a stopped one still
+bills for its disk, so delete it when you are done.
+
+`scripts/deploy_server.sh user@host` copies the source over and builds the
+server there. It checks for a driver and a toolkit first and says which is
+missing. `scripts/remote_torch.sh user@host` then runs the PyTorch ladder on
+that box.
 
 `scripts/gcp_up.sh` and `scripts/gcp_down.sh` do the same job on GCP, if you
 would rather use Compute Engine. Either way the instance bills while running.
