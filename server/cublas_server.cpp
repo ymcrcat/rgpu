@@ -39,6 +39,9 @@ void* cublas_handle() {
 
 template <typename Fn>
 Fn cublas_sym(const char* name) {
+  // Whatever is already in the process wins, which is how the fake library
+  // in the test build gets used without opening anything.
+  if (void* here = ::dlsym(RTLD_DEFAULT, name)) return reinterpret_cast<Fn>(here);
   void* lib = cublas_handle();
   if (!lib) return nullptr;
   void* fn = ::dlsym(lib, name);

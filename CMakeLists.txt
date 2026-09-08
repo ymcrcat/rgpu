@@ -102,7 +102,9 @@ endif()
 # ---------------------------------------------------------------------------
 if(EXISTS ${CUBLAS_INCLUDE_DIR}/cublasLt.h AND
    EXISTS ${CMAKE_SOURCE_DIR}/client/generated/cublaslt_stubs.cpp)
-  add_library(rgpu_cublaslt SHARED client/generated/cublaslt_stubs.cpp)
+  add_library(rgpu_cublaslt SHARED
+    client/cublaslt_impl.cpp
+    client/generated/cublaslt_stubs.cpp)
   set_target_properties(rgpu_cublaslt PROPERTIES
     OUTPUT_NAME cublasLt SOVERSION 12)
   target_include_directories(rgpu_cublaslt PRIVATE ${CUBLAS_INCLUDE_DIR})
@@ -129,6 +131,9 @@ if(CUDA_DRIVER_LIB)
   set(SERVER_SOURCES server/main.cpp ${GEN_SERVER} ${GEN_NAMES})
   if(EXISTS ${CUBLAS_INCLUDE_DIR}/cublas_v2.h)
     list(APPEND SERVER_SOURCES server/cublas_server.cpp)
+  endif()
+  if(EXISTS ${CUBLAS_INCLUDE_DIR}/cublasLt.h)
+    list(APPEND SERVER_SOURCES server/cublaslt_server.cpp)
   endif()
   add_executable(rgpu_server ${SERVER_SOURCES})
   if(EXISTS ${CUBLAS_INCLUDE_DIR}/cublas_v2.h)
@@ -167,6 +172,21 @@ target_link_libraries(rpc_smoke PRIVATE rgpu_client)
 add_executable(launch_smoke tests/launch_smoke.cpp)
 target_link_libraries(launch_smoke PRIVATE rgpu_client)
 
+# Checks that cuBLAS and cuBLASLt arguments survive the wire. Needs both shims
+# and the fake libraries in the test server.
+if(TARGET rgpu_cublas AND TARGET rgpu_cublaslt)
+  add_executable(cublas_smoke tests/cublas_smoke.cpp)
+  target_include_directories(cublas_smoke PRIVATE ${CUBLAS_INCLUDE_DIR})
+  target_link_libraries(cublas_smoke PRIVATE rgpu_cublas rgpu_cublaslt
+                        rgpu_client)
+endif()
+
+# The fake maths libraries, when their headers are available.
+set(FAKE_CUBLAS_SOURCES "")
+if(EXISTS ${CUBLAS_INCLUDE_DIR}/cublas_v2.h)
+  set(FAKE_CUBLAS_SOURCES tests/fake_cublas.cpp)
+endif()
+
 # A server backed by a fake driver instead of a GPU. Lets the whole stack run
 # on a machine with no NVIDIA hardware: real client stubs, real wire format,
 # real server dispatch, fake bottom layer.
@@ -176,7 +196,13 @@ add_executable(rgpu_server_fake
   ${GEN_NAMES}
   tests/generated/fake_driver.cpp
   tests/fake_cuda.cpp
+  ${FAKE_CUBLAS_SOURCES}
 )
+if(FAKE_CUBLAS_SOURCES)
+  target_sources(rgpu_server_fake PRIVATE
+    server/cublas_server.cpp server/cublaslt_server.cpp)
+  target_include_directories(rgpu_server_fake PRIVATE ${CUBLAS_INCLUDE_DIR})
+endif()
 set_target_properties(rgpu_server_fake PROPERTIES
   OUTPUT_NAME rgpu-server-fake
   # The fake driver is compiled into this binary, so its symbols must be in the

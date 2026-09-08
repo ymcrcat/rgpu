@@ -29,6 +29,12 @@ if [[ -x "$BUILD/launch_smoke" ]]; then
     "$BUILD/launch_smoke" || rc=1
 fi
 
+if [[ -x "$BUILD/cublas_smoke" ]]; then
+  echo
+  LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$PORT" \
+    "$BUILD/cublas_smoke" || rc=1
+fi
+
 # The runtime API path, if it was built. Our libcudart must come first so the
 # loader picks it over any stock one.
 if [[ -x "$BUILD/cudart_smoke" ]]; then

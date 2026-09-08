@@ -2,6 +2,7 @@
 # Start, stop, inspect or delete the RunPod GPU box used for testing.
 #
 #   ./scripts/runpod.sh create     # rent one and print the ssh command
+#   ./scripts/runpod.sh start      # restart one that was stopped
 #   ./scripts/runpod.sh status     # what is running, and how to reach it
 #   ./scripts/runpod.sh stop       # release the GPU, keep the disk
 #   ./scripts/runpod.sh delete     # destroy it and everything on it
@@ -107,6 +108,18 @@ PY
     [[ -n "$id" ]] || { echo "no pod named $NAME"; exit 0; }
     show "$id"
     ;;
+  start)
+    id=$(pod_id)
+    [[ -n "$id" ]] || { echo "no pod named $NAME; use create" >&2; exit 1; }
+    api POST "/pods/$id/start" >/dev/null
+    echo "starting $id; waiting for ssh"
+    for _ in $(seq 1 60); do
+      sleep 5
+      out=$(show "$id")
+      grep -q "^ssh -i" <<<"$out" && { echo "$out"; exit 0; }
+    done
+    show "$id"
+    ;;
   stop)
     id=$(pod_id)
     [[ -n "$id" ]] || { echo "no pod named $NAME"; exit 0; }
@@ -122,7 +135,7 @@ PY
     echo "deleted $id"
     ;;
   *)
-    echo "usage: $0 {create|status|stop|delete}" >&2
+    echo "usage: $0 {create|start|status|stop|delete}" >&2
     exit 1
     ;;
 esac
