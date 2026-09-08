@@ -104,6 +104,11 @@ add_test(NAME remoting
 add_executable(rpc_smoke tests/rpc_smoke.cpp)
 target_link_libraries(rpc_smoke PRIVATE rgpu_client)
 
+# Checks the kernel launch path: parameter layout lookup, argument packing and
+# the extra[] handoff.
+add_executable(launch_smoke tests/launch_smoke.cpp)
+target_link_libraries(launch_smoke PRIVATE rgpu_client)
+
 # A server backed by a fake driver instead of a GPU. Lets the whole stack run
 # on a machine with no NVIDIA hardware: real client stubs, real wire format,
 # real server dispatch, fake bottom layer.

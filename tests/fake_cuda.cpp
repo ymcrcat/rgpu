@@ -160,16 +160,97 @@ CUresult cuMemsetD8_v2(CUdeviceptr dst, unsigned char value, size_t n) {
   return CUDA_SUCCESS;
 }
 
-// No kernels without a GPU. Reporting this rather than pretending to succeed
-// keeps the fake honest: a test that needs a real launch must fail here.
-CUresult cuLaunchKernel(CUfunction, unsigned int, unsigned int, unsigned int,
-                        unsigned int, unsigned int, unsigned int, unsigned int,
-                        CUstream, void**, void**) {
-  return CUDA_ERROR_NOT_SUPPORTED;
+// ---------------------------------------------------------------------------
+// Modules and kernels
+// ---------------------------------------------------------------------------
+//
+// No kernel can actually run without a GPU, but everything up to the launch
+// can be checked: sizing the fatbin, shipping it, resolving a function,
+// reporting its parameter layout, and packing arguments into that layout.
+// That path is the most intricate part of the system, so the fake validates
+// the arguments it receives instead of ignoring them.
+//
+// The kernel named by kCheckedKernel expects exactly the values in
+// kExpectedArgs. A mismatch is reported as an error, which reaches the client
+// as a failed launch.
+
+constexpr const char* kCheckedKernel = "rgpu_check_args";
+const unsigned long long kExpectedPtrs[3] = {0x1111111111111111ull,
+                                             0x2222222222222222ull,
+                                             0x3333333333333333ull};
+constexpr int kExpectedInt = 42;
+
+CUresult cuModuleLoadData(CUmodule* module, const void* image) {
+  if (!module || !image) return CUDA_ERROR_INVALID_VALUE;
+  // The client sized this from the image header; a wrong size would have
+  // truncated it before it got here.
+  unsigned int magic = 0;
+  std::memcpy(&magic, image, sizeof(magic));
+  if (magic != 0xBA55ED50u) return CUDA_ERROR_INVALID_IMAGE;
+  *module = reinterpret_cast<CUmodule>(0x0D0100ull);
+  return CUDA_SUCCESS;
 }
 
-CUresult cuFuncGetParamInfo(CUfunction, size_t, size_t*, size_t*) {
-  return CUDA_ERROR_NOT_SUPPORTED;
+CUresult cuModuleUnload(CUmodule) { return CUDA_SUCCESS; }
+
+CUresult cuModuleGetFunction(CUfunction* hfunc, CUmodule hmod,
+                             const char* name) {
+  if (!hfunc || !hmod || !name) return CUDA_ERROR_INVALID_VALUE;
+  if (std::strcmp(name, kCheckedKernel) != 0) return CUDA_ERROR_NOT_FOUND;
+  *hfunc = reinterpret_cast<CUfunction>(0xF0C0100ull);
+  return CUDA_SUCCESS;
+}
+
+// Three pointers then an int, which is the layout of the checked kernel.
+CUresult cuFuncGetParamInfo(CUfunction f, size_t index, size_t* offset,
+                            size_t* size) {
+  if (!f || !offset || !size) return CUDA_ERROR_INVALID_VALUE;
+  if (index < 3) {
+    *offset = index * 8;
+    *size = 8;
+    return CUDA_SUCCESS;
+  }
+  if (index == 3) {
+    *offset = 24;
+    *size = 4;
+    return CUDA_SUCCESS;
+  }
+  return CUDA_ERROR_INVALID_VALUE;  // past the last parameter
+}
+
+CUresult cuLaunchKernel(CUfunction f, unsigned int gx, unsigned int gy,
+                        unsigned int gz, unsigned int bx, unsigned int by,
+                        unsigned int bz, unsigned int shmem, CUstream stream,
+                        void** kernelParams, void** extra) {
+  (void)gy; (void)gz; (void)by; (void)bz; (void)shmem; (void)stream;
+  if (!f) return CUDA_ERROR_INVALID_HANDLE;
+  if (gx == 0 || bx == 0) return CUDA_ERROR_INVALID_VALUE;
+  // The client always packs arguments and hands them over through extra.
+  if (kernelParams) return CUDA_ERROR_INVALID_VALUE;
+  if (!extra) return CUDA_ERROR_INVALID_VALUE;
+
+  const unsigned char* buf = nullptr;
+  size_t size = 0;
+  for (size_t i = 0; extra[i] != CU_LAUNCH_PARAM_END; i++) {
+    if (extra[i] == CU_LAUNCH_PARAM_BUFFER_POINTER) {
+      buf = static_cast<const unsigned char*>(extra[++i]);
+    } else if (extra[i] == CU_LAUNCH_PARAM_BUFFER_SIZE) {
+      size = *static_cast<const size_t*>(extra[++i]);
+    } else {
+      return CUDA_ERROR_INVALID_VALUE;
+    }
+  }
+  if (!buf || size < 28) return CUDA_ERROR_INVALID_VALUE;
+
+  for (int i = 0; i < 3; i++) {
+    unsigned long long v = 0;
+    std::memcpy(&v, buf + i * 8, sizeof(v));
+    if (v != kExpectedPtrs[i]) return CUDA_ERROR_INVALID_VALUE;
+  }
+  int n = 0;
+  std::memcpy(&n, buf + 24, sizeof(n));
+  if (n != kExpectedInt) return CUDA_ERROR_INVALID_VALUE;
+  return CUDA_SUCCESS;
 }
 
 }  // extern "C"

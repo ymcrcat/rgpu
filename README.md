@@ -40,13 +40,18 @@ design, the prior art it draws on, and the three hard problems it has to solve.
 | Client shim `libcudart.so.12` | builds, 38 translated and 278 stubs |
 | Server | compiles; not yet run against a real GPU |
 | Driver API end-to-end, fake driver | passing |
+| Kernel launch marshalling, fake driver | passing |
 | Runtime API end-to-end, fake driver | passing |
 | End-to-end on a real GPU | needs a GPU host |
 | PyTorch client image and test ladder | written, not yet run |
 
-The GPU-free test is the meaningful one so far: real client stubs, real wire
-format, real server dispatch, with a fake driver at the bottom. A byte-exact
-memory round trip through it means the marshalling is right.
+The GPU-free tests are the meaningful ones so far: real client stubs, real wire
+format, real server dispatch, with a fake driver at the bottom. They cover a
+byte-exact memory round trip, the runtime API path that PyTorch sits on, and
+the kernel launch path, where the client must ask the server for a kernel's
+parameter layout and pack arguments into it. That last test includes a launch
+with deliberately wrong arguments, which must be rejected: without it, a server
+that accepted anything would pass.
 
 ## Build and test, no GPU required
 
