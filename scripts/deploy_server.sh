@@ -35,8 +35,9 @@ fi
 if command -v nvcc >/dev/null; then
   nvcc --version | tail -2 | head -1
 else
-  echo "ERROR: nvcc not found; install the CUDA toolkit" >&2
-  exit 1
+  # Only the vector-add test kernel needs nvcc. The server and the PyTorch
+  # ladder do not.
+  echo "note: no nvcc, so the vecadd fatbin will be skipped"
 fi
 command -v cmake >/dev/null || echo "WARNING: cmake missing; will try to install"
 EOF
@@ -48,6 +49,7 @@ echo "== copying source =="
 tar czf - \
   --exclude='__pycache__' --exclude='*.pyc' \
   CMakeLists.txt common server client tests codegen scripts docs README.md \
+  third_party/cuda_include \
   | ssh_run "mkdir -p $REMOTE_DIR && tar xzf - -C $REMOTE_DIR"
 
 echo
@@ -62,13 +64,14 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo >/dev/null
 cmake --build build -j\$(nproc) 2>&1 | tail -5
 echo
 ls -la build/rgpu-server
-./scripts/build_fatbin.sh
+if command -v nvcc >/dev/null; then ./scripts/build_fatbin.sh; fi
 EOF
 
 echo
-echo "== bringing the fatbin back =="
+echo "== bringing the fatbin back, if one was built =="
 mkdir -p build
-scp "${SSH_OPTS[@]}" "$TARGET:$REMOTE_DIR/build/vecadd.fatbin" build/vecadd.fatbin
+scp "${SSH_OPTS[@]}" "$TARGET:$REMOTE_DIR/build/vecadd.fatbin" build/vecadd.fatbin \
+  2>/dev/null || echo "no fatbin (no nvcc on the host); skipping"
 
 echo
 cat <<EOF

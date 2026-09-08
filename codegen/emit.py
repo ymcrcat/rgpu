@@ -233,12 +233,20 @@ def emit_server_case(f, plans, meta=None):
         else:
             raise Unmarshalable(m)
 
-    L.append("  CUresult r_ = ::%s(%s);" % (name, ", ".join(args)))
+    # Resolve on first use rather than linking directly, so an entry point the
+    # host driver lacks costs one unsupported call instead of stopping the
+    # server from loading at all. decltype gives the signature from the header.
+    L.append("  static auto fn_ = reinterpret_cast<decltype(&::%s)>("
+             "rgpu::driver_sym(\"%s\"));" % (name, name))
+    L.append("  if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }")
+    L.append("  CUresult r_ = fn_(%s);" % ", ".join(args))
     sync = meta.get("sync_stream")
     if sync:
         # The call only enqueued work; wait for it before reading outputs back.
-        L.append("  if (r_ == CUDA_SUCCESS) r_ = ::cuStreamSynchronize(v_%s);"
-                 % sync)
+        L.append("  static auto sync_ = reinterpret_cast<"
+                 "decltype(&::cuStreamSynchronize)>("
+                 "rgpu::driver_sym(\"cuStreamSynchronize\"));")
+        L.append("  if (r_ == CUDA_SUCCESS && sync_) r_ = sync_(v_%s);" % sync)
     # Outputs are only meaningful on success, but CUDA fills some of them even
     # on failure; sending them back unconditionally keeps client and server in
     # lockstep on the response layout.
@@ -368,6 +376,7 @@ def main():
     sv = [HEADER, "#include <cstring>", "#include <string>", "#include <vector>",
           "#include <cuda.h>", "",
           "#include \"common/generated/api_ids.h\"", "#include \"common/wire.h\"",
+          "#include \"server/driver_syms.h\"",
           "",
           "namespace rgpu {",
           "// Returns true if `id` was handled. Hand-written handlers get first",

@@ -11,7 +11,8 @@ include_directories(${CMAKE_SOURCE_DIR})
 # CUDA headers. We need cuda.h on both sides; only the server needs to link
 # the driver library itself.
 find_path(CUDA_INCLUDE_DIR cuda.h
-  HINTS /usr/local/cuda/include /usr/include
+  HINTS ${CMAKE_SOURCE_DIR}/third_party/cuda_include
+        /usr/local/cuda/include /usr/include
   REQUIRED)
 include_directories(${CUDA_INCLUDE_DIR})
 
@@ -68,9 +69,12 @@ target_link_libraries(rgpu_cudart PRIVATE rgpu_client Threads::Threads)
 #
 # Links the toolkit's libcuda stub; the real driver is resolved at run time.
 # ---------------------------------------------------------------------------
-find_library(CUDA_DRIVER_LIB cuda
-  HINTS /usr/local/cuda/lib64/stubs /usr/local/cuda/lib64
-        /usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu)
+# The driver library itself where the host has one, otherwise the toolkit's
+# stub. Generated dispatch resolves entry points at run time, so the link only
+# has to satisfy the handful the server calls directly.
+find_library(CUDA_DRIVER_LIB NAMES cuda libcuda.so.1
+  HINTS /usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu
+        /usr/local/cuda/lib64/stubs /usr/local/cuda/lib64)
 
 if(CUDA_DRIVER_LIB)
   add_executable(rgpu_server
@@ -82,8 +86,10 @@ if(CUDA_DRIVER_LIB)
   # that calls them should still reach the real driver.
   set_source_files_properties(${GEN_SERVER} PROPERTIES
     COMPILE_OPTIONS "-Wno-deprecated-declarations")
-  set_target_properties(rgpu_server PROPERTIES OUTPUT_NAME rgpu-server)
-  target_link_libraries(rgpu_server PRIVATE ${CUDA_DRIVER_LIB} Threads::Threads)
+  set_target_properties(rgpu_server PROPERTIES OUTPUT_NAME rgpu-server
+                        ENABLE_EXPORTS ON)
+  target_link_libraries(rgpu_server PRIVATE ${CUDA_DRIVER_LIB} ${CMAKE_DL_LIBS}
+                        Threads::Threads)
 else()
   message(STATUS "libcuda not found; skipping server target (client-only build)")
 endif()
@@ -119,9 +125,14 @@ add_executable(rgpu_server_fake
   tests/generated/fake_driver.cpp
   tests/fake_cuda.cpp
 )
-set_target_properties(rgpu_server_fake PROPERTIES OUTPUT_NAME rgpu-server-fake)
+set_target_properties(rgpu_server_fake PROPERTIES
+  OUTPUT_NAME rgpu-server-fake
+  # The fake driver is compiled into this binary, so its symbols must be in the
+  # dynamic table for dlsym(RTLD_DEFAULT) to find them.
+  ENABLE_EXPORTS ON)
 target_link_libraries(rgpu_server_fake PRIVATE Threads::Threads)
 target_compile_options(rgpu_server_fake PRIVATE -Wno-deprecated-declarations)
+target_link_libraries(rgpu_server_fake PRIVATE ${CMAKE_DL_LIBS})
 
 # The phase-2 test: stock libcudart on top of the shim. Built only when the
 # runtime has been fetched, since it is not part of a plain client build.
