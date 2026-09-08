@@ -116,7 +116,16 @@ def parse_aliases(header):
     than guessing by stripping suffixes.
     """
     aliases = {}
-    pat = re.compile(r"^\s*#define\s+(cu[A-Za-z0-9_]+)\s+(cu[A-Za-z0-9_]+)\s*$")
+    # The stream-ordered entry points are wrapped:
+    #   #define cuMemcpyHtoD  __CUDA_API_PTDS(cuMemcpyHtoD_v2)
+    # Both wrappers expand to their argument in a normal build, so unwrap them.
+    # Missing these is not cosmetic: cuBLAS and cudart ask cuGetProcAddress for
+    # the base names, and an unanswered request stops them initialising.
+    pat = re.compile(
+        r"^\s*#define\s+(cu[A-Za-z0-9_]+)\s+"
+        r"(?:__CUDA_API_PT(?:DS|SZ)\(\s*)?"
+        r"(cu[A-Za-z0-9_]+)"
+        r"\s*\)?\s*$")
     with open(header, "r", errors="replace") as f:
         for line in f:
             m = pat.match(line)

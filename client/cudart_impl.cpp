@@ -657,6 +657,116 @@ cudaError_t cudaEventElapsedTime(float* ms, cudaEvent_t start,
 }
 
 // ---------------------------------------------------------------------------
+// Stream and device attributes
+// ---------------------------------------------------------------------------
+
+cudaError_t cudaDeviceGetStreamPriorityRange(int* leastPriority,
+                                             int* greatestPriority) {
+  CUresult r = ensure_context();
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  return record_cu(cuCtxGetStreamPriorityRange(leastPriority,
+                                               greatestPriority));
+}
+
+cudaError_t cudaStreamGetPriority(cudaStream_t stream, int* priority) {
+  return record_cu(cuStreamGetPriority(reinterpret_cast<CUstream>(stream),
+                                       priority));
+}
+
+cudaError_t cudaStreamGetFlags(cudaStream_t stream, unsigned int* flags) {
+  return record_cu(cuStreamGetFlags(reinterpret_cast<CUstream>(stream), flags));
+}
+
+cudaError_t cudaGetDeviceFlags(unsigned int* flags) {
+  CUresult r = ensure_context();
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  return record_cu(cuCtxGetFlags(flags));
+}
+
+cudaError_t cudaSetDeviceFlags(unsigned int flags) {
+  CUresult r = ensure_init();
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  CUdevice dev;
+  r = cuDeviceGet(&dev, t_device);
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  return record_cu(cuDevicePrimaryCtxSetFlags(dev, flags));
+}
+
+cudaError_t cudaStreamIsCapturing(cudaStream_t stream,
+                                  enum cudaStreamCaptureStatus* pStatus) {
+  if (!pStatus) return record(cudaErrorInvalidValue);
+  CUstreamCaptureStatus st = CU_STREAM_CAPTURE_STATUS_NONE;
+  CUresult r = cuStreamIsCapturing(reinterpret_cast<CUstream>(stream), &st);
+  // The enumerations line up value for value.
+  *pStatus = static_cast<cudaStreamCaptureStatus>(st);
+  return record_cu(r);
+}
+
+cudaError_t cudaThreadExchangeStreamCaptureMode(
+    enum cudaStreamCaptureMode* mode) {
+  if (!mode) return record(cudaErrorInvalidValue);
+  auto m = static_cast<CUstreamCaptureMode>(*mode);
+  CUresult r = cuThreadExchangeStreamCaptureMode(&m);
+  *mode = static_cast<cudaStreamCaptureMode>(m);
+  return record_cu(r);
+}
+
+cudaError_t cudaEventRecordWithFlags(cudaEvent_t event, cudaStream_t stream,
+                                     unsigned int flags) {
+  return record_cu(cuEventRecordWithFlags(reinterpret_cast<CUevent>(event),
+                                          reinterpret_cast<CUstream>(stream),
+                                          flags));
+}
+
+// ---------------------------------------------------------------------------
+// Asynchronous allocation
+// ---------------------------------------------------------------------------
+
+cudaError_t cudaMallocAsync(void** devPtr, size_t size, cudaStream_t stream) {
+  if (!devPtr) return record(cudaErrorInvalidValue);
+  CUresult r = ensure_context();
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  CUdeviceptr d = 0;
+  r = cuMemAllocAsync(&d, size ? size : 1, reinterpret_cast<CUstream>(stream));
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  note_alloc(d, size ? size : 1);
+  *devPtr = reinterpret_cast<void*>(d);
+  return cudaSuccess;
+}
+
+cudaError_t cudaFreeAsync(void* devPtr, cudaStream_t stream) {
+  if (!devPtr) return cudaSuccess;
+  auto d = reinterpret_cast<CUdeviceptr>(devPtr);
+  CUresult r = cuMemFreeAsync(d, reinterpret_cast<CUstream>(stream));
+  if (r == CUDA_SUCCESS) forget_alloc(d);
+  return record_cu(r);
+}
+
+// ---------------------------------------------------------------------------
+// Pointer queries
+// ---------------------------------------------------------------------------
+
+cudaError_t cudaPointerGetAttributes(struct cudaPointerAttributes* attributes,
+                                     const void* ptr) {
+  if (!attributes) return record(cudaErrorInvalidValue);
+  std::memset(attributes, 0, sizeof(*attributes));
+  // Our own record of what we handed out is authoritative and free; asking the
+  // server would cost a round trip and could not classify host pointers at all.
+  if (is_device_ptr(ptr)) {
+    attributes->type = cudaMemoryTypeDevice;
+    attributes->device = t_device;
+    attributes->devicePointer = const_cast<void*>(ptr);
+    attributes->hostPointer = nullptr;
+  } else {
+    attributes->type = cudaMemoryTypeUnregistered;
+    attributes->device = t_device;
+    attributes->devicePointer = nullptr;
+    attributes->hostPointer = const_cast<void*>(ptr);
+  }
+  return cudaSuccess;
+}
+
+// ---------------------------------------------------------------------------
 // Kernel registration and launch
 // ---------------------------------------------------------------------------
 
@@ -780,6 +890,74 @@ cudaError_t __cudaPopCallConfiguration(dim3* gridDim, dim3* blockDim,
   if (sharedMem) *sharedMem = c.shared;
   if (stream) *static_cast<cudaStream_t*>(stream) = c.stream;
   return cudaSuccess;
+}
+
+// Declared in cuda_profiler_api.h rather than cuda_runtime_api.h, so the
+// generator did not produce stubs for them, and libtorch references them.
+// Profiling a remote GPU from here would measure the wrong thing, so these
+// accept and do nothing.
+cudaError_t cudaProfilerStart(void) { return cudaSuccess; }
+cudaError_t cudaProfilerStop(void) { return cudaSuccess; }
+
+cudaError_t cudaFuncGetAttributes(struct cudaFuncAttributes* attr,
+                                  const void* func) {
+  if (!attr) return record(cudaErrorInvalidValue);
+  CUresult r = ensure_context();
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  CUfunction fn = nullptr;
+  r = resolve_kernel(func, &fn);
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  std::memset(attr, 0, sizeof(*attr));
+  auto q = [&](CUfunction_attribute a, int* dst) {
+    int v = 0;
+    if (cuFuncGetAttribute(&v, a, fn) == CUDA_SUCCESS) *dst = v;
+  };
+  int shared = 0, cnst = 0, local = 0;
+  q(CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES, &shared);
+  q(CU_FUNC_ATTRIBUTE_CONST_SIZE_BYTES, &cnst);
+  q(CU_FUNC_ATTRIBUTE_LOCAL_SIZE_BYTES, &local);
+  attr->sharedSizeBytes = static_cast<size_t>(shared);
+  attr->constSizeBytes = static_cast<size_t>(cnst);
+  attr->localSizeBytes = static_cast<size_t>(local);
+  q(CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK, &attr->maxThreadsPerBlock);
+  q(CU_FUNC_ATTRIBUTE_NUM_REGS, &attr->numRegs);
+  q(CU_FUNC_ATTRIBUTE_PTX_VERSION, &attr->ptxVersion);
+  q(CU_FUNC_ATTRIBUTE_BINARY_VERSION, &attr->binaryVersion);
+  q(CU_FUNC_ATTRIBUTE_CACHE_MODE_CA, &attr->cacheModeCA);
+  q(CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES,
+    &attr->maxDynamicSharedSizeBytes);
+  q(CU_FUNC_ATTRIBUTE_PREFERRED_SHARED_MEMORY_CARVEOUT,
+    &attr->preferredShmemCarveout);
+  return cudaSuccess;
+}
+
+cudaError_t cudaFuncSetAttribute(const void* func, enum cudaFuncAttribute attr,
+                                 int value) {
+  CUresult r = ensure_context();
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  CUfunction fn = nullptr;
+  r = resolve_kernel(func, &fn);
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  return record_cu(cuFuncSetAttribute(
+      fn, static_cast<CUfunction_attribute>(attr), value));
+}
+
+cudaError_t cudaOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
+    int* numBlocks, const void* func, int blockSize, size_t dynamicSMemSize,
+    unsigned int flags) {
+  CUresult r = ensure_context();
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  CUfunction fn = nullptr;
+  r = resolve_kernel(func, &fn);
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  return record_cu(cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
+      numBlocks, fn, blockSize, dynamicSMemSize, flags));
+}
+
+cudaError_t cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+    int* numBlocks, const void* func, int blockSize, size_t dynamicSMemSize) {
+  return cudaOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
+      numBlocks, func, blockSize, dynamicSMemSize, 0);
 }
 
 cudaError_t cudaLaunchKernel(const void* func, dim3 gridDim, dim3 blockDim,

@@ -37,13 +37,20 @@ design, the prior art it draws on, and the three hard problems it has to solve.
 | Wire format and transport | working |
 | Code generation from `cuda.h` | working, 259 of 435 functions generated |
 | Client shim `libcuda.so.1` | builds, 436 exported entry points |
-| Client shim `libcudart.so.12` | builds, 38 translated and 278 stubs |
-| Server | compiles; not yet run against a real GPU |
-| Driver API end-to-end, fake driver | passing |
+| Client shim `libcudart.so.12` | builds, ~55 translated |
+| Server | running on a real GPU |
+| Driver API end-to-end, fake driver and real GPU | passing |
 | Kernel launch marshalling, fake driver | passing |
-| Runtime API end-to-end, fake driver | passing |
+| Runtime API end-to-end, fake driver and real GPU | passing |
+| A real CUDA kernel on a remote GPU | passing |
+| PyTorch: import, device query, tensors, elementwise, reductions | passing |
+| PyTorch: matmul, convolution | blocked on cuBLAS |
 | End-to-end on a real GPU | needs a GPU host |
 | PyTorch client image and test ladder | written, not yet run |
+
+On a rented RTX A4000, PyTorch imports, reports the remote GPU, allocates
+tensors, and computes elementwise operations and reductions whose results match
+CPU exactly. Anything reaching cuBLAS fails: see Known limits.
 
 The GPU-free tests are the meaningful ones so far: real client stubs, real wire
 format, real server dispatch, with a fake driver at the bottom. They cover a
@@ -144,6 +151,18 @@ than wrong answers. `codegen/report.txt` lists what is generated, hand-written
 and stubbed.
 
 ## Known limits
+
+**cuBLAS does not work on the client.** Like the CUDA runtime, it calls
+`cuGetExportTable` during initialisation and fails without it, so `cublasCreate`
+returns `CUBLAS_STATUS_NOT_INITIALIZED`. Everything that reaches cuBLAS is
+blocked, which includes matrix multiplication and, because PyTorch's fallback
+convolution is built on it, convolution too, with or without cuDNN. Fixing this
+means shimming cuBLAS so it runs on the GPU host, the way rCUDA does.
+
+Note also that `LD_LIBRARY_PATH` is not enough to put these shims in front of
+PyTorch: its libraries use `RPATH`, which takes precedence, and it preloads the
+CUDA libraries by absolute path. Use `LD_PRELOAD`, or install without the stock
+`nvidia-cuda-runtime` package.
 
 Managed memory and zero-copy host mapping cannot work across a network and are
 refused explicitly. Kernel launches with `cuLaunchKernelEx` launch

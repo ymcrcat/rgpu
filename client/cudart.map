@@ -1,0 +1,7 @@
+# The real libcudart puts its symbols in a version node named after the
+# library, and everything built against it references them that way. Without a
+# matching node the loader reports "undefined symbol: ..., version
+# libcudart.so.12" even though the symbol is present.
+libcudart.so.12 {
+  global: *;
+};

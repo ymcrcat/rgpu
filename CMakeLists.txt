@@ -63,6 +63,10 @@ set_target_properties(rgpu_cudart PROPERTIES
   SOVERSION 12
 )
 target_link_libraries(rgpu_cudart PRIVATE rgpu_client Threads::Threads)
+# Anything built against the real libcudart references its symbols through a
+# version node named after the library, so ours has to define the same node.
+target_link_options(rgpu_cudart PRIVATE
+  "-Wl,--version-script=${CMAKE_SOURCE_DIR}/client/cudart.map")
 
 # ---------------------------------------------------------------------------
 # Server: runs on the GPU host against the real driver.
