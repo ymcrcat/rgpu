@@ -39,7 +39,7 @@ design, the prior art it draws on, and the three hard problems it has to solve.
 | Client shim `libcuda.so.1` | builds, 436 exported entry points |
 | Client shim `libcudart.so.12` | ~55 runtime calls translated |
 | Client shim `libcublas.so.12` | matmul family forwarded to the host |
-| Client shim `libcublasLt.so.12` | stubs only, reports rather than crashes |
+| Client shim `libcublasLt.so.12` | matmul path forwarded to the host |
 | Server | runs on the GPU host |
 | Driver API end-to-end | passing, fake driver and real GPU |
 | Runtime API end-to-end | passing, fake driver and real GPU |
@@ -54,10 +54,12 @@ inference runs on the remote GPU and its logits match a CPU reference to
 3.8e-06, with identical top-5 predictions. The client process has our shims in
 front of the driver, which `ldd` confirms.
 
-Two settings are required, and the ladder sets both. `DISABLE_ADDMM_CUDA_LT=1`
-keeps `addmm` on plain cuBLAS, and `torch.backends.cudnn.enabled = False` keeps
-convolution on PyTorch's own kernels. Both are there because cuBLASLt and cuDNN
-are not forwarded yet: see Known limits.
+One setting is required and the ladder sets it:
+`torch.backends.cudnn.enabled = False`, which keeps convolution on PyTorch's
+own kernels because cuDNN is not forwarded yet. `addmm` runs on its default
+cuBLASLt path. Set `RGPU_NO_CUBLASLT=1` to send it through plain cuBLAS
+instead, which is useful for telling the two paths apart when something
+breaks.
 
 The GPU-free tests are the meaningful ones so far: real client stubs, real wire
 format, real server dispatch, with a fake driver at the bottom. They cover a
@@ -156,6 +158,8 @@ allocation may need raising before this image will build.
 | `common/wire.h` | frame format and serialization |
 | `client/shim.cpp` | `cuGetProcAddress`, kernel launch marshalling, host allocations |
 | `client/cudart_impl.cpp` | the runtime API translated into driver calls, plus kernel registration |
+| `client/cublas_impl.cpp`, `client/cublaslt_impl.cpp` | the maths calls PyTorch makes, forwarded to the host |
+| `.claude/skills/rcuda-runpod` | how to rent, use and release a test GPU without wasting money |
 | `server/main.cpp` | accept loop, dispatch, parameter layout lookup |
 | `tests/fake_cuda.cpp` | a driver backed by host memory, for testing without a GPU |
 
@@ -170,12 +174,14 @@ and stubbed.
 the driver's undocumented export tables, exactly as the stock runtime does, so
 each has to be forwarded to the GPU host instead.
 
-cuBLAS is forwarded, covering the matmul family PyTorch uses. cuBLASLt and
-cuDNN are not. Both have a stand-in that reports every call rather than
-running: the real cuBLASLt does not fail cleanly on a remoted driver, it
-segfaults inside `cublasLtMatmulAlgoGetHeuristic`. PyTorch reaches for both by
-default, hence the two settings above. Forwarding them is the next piece of
-work, and cuDNN's graph API is much the larger of the two.
+cuBLAS and cuBLASLt are forwarded, covering the matmul paths PyTorch uses.
+cuDNN is not, and has a stand-in that reports every call rather than running,
+hence the one setting above. Forwarding cuDNN is the next piece of work and is
+much the largest of the three, because of its graph API.
+
+The real cuBLASLt is worth a note: over a remoted driver it does not report an
+error, it segfaults inside `cublasLtMatmulAlgoGetHeuristic`. Anything unshimmed
+that reaches the driver may fail that way rather than cleanly.
 
 Note also that `LD_LIBRARY_PATH` is not enough to put these shims in front of
 PyTorch: its libraries use `RPATH`, which takes precedence, and it preloads the

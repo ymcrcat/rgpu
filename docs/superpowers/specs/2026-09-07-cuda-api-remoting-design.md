@@ -249,7 +249,7 @@ So the rule is general. A library that talks to the driver through the dark API
 has to run on the GPU host, and the client gets a shim that forwards its calls.
 That is the rCUDA shape, arrived at from the other direction.
 
-cuBLAS is now forwarded. Its calls are hand-written rather than generated,
+cuBLAS and cuBLASLt are now forwarded. Its calls are hand-written rather than generated,
 because the parameters need judgement the header does not carry: matrix
 arguments are device pointers passed through untouched, while alpha and beta
 are host values or device pointers depending on the handle's pointer mode,
@@ -263,8 +263,9 @@ with identical top-5 predictions, over the full stack: PyTorch on stock wheels,
 our runtime shim, our cuBLAS shim, our driver shim, TCP, and the real driver on
 the host.
 
-Two PyTorch settings are needed until cuBLASLt and cuDNN are forwarded:
-`DISABLE_ADDMM_CUDA_LT=1` and `torch.backends.cudnn.enabled = False`.
+One PyTorch setting is needed until cuDNN is forwarded:
+`torch.backends.cudnn.enabled = False`. With cuBLASLt forwarded, `addmm` runs
+on its default path and all nine rungs pass.
 
 ### On library precedence
 

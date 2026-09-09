@@ -6,6 +6,7 @@
 #   ./scripts/runpod.sh status     # what is running, and how to reach it
 #   ./scripts/runpod.sh stop       # release the GPU, keep the disk
 #   ./scripts/runpod.sh delete     # destroy it and everything on it
+#   ./scripts/runpod.sh delete --yes
 #
 # The API key comes from 1Password, so it never lands in a file or the shell
 # history. A running pod bills by the hour; a stopped one still bills for its
@@ -129,8 +130,12 @@ PY
   delete)
     id=$(pod_id)
     [[ -n "$id" ]] || { echo "no pod named $NAME"; exit 0; }
-    read -r -p "Delete pod $id and everything on it? [y/N] " a
-    [[ "$a" == "y" || "$a" == "Y" ]] || { echo aborted; exit 1; }
+    # Nothing on a community pod's container disk survives a stop anyway, so
+    # deleting usually costs nothing that stopping would have kept.
+    if [[ "${2:-}" != "--yes" ]]; then
+      read -r -p "Delete pod $id and everything on it? [y/N] " a
+      [[ "$a" == "y" || "$a" == "Y" ]] || { echo aborted; exit 1; }
+    fi
     api DELETE "/pods/$id" >/dev/null
     echo "deleted $id"
     ;;
