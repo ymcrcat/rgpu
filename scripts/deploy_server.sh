@@ -46,8 +46,12 @@ echo
 echo "== copying source =="
 # Only what the server build needs. Generated sources go too, so the remote
 # does not need libclang.
+# third_party/cudart holds a stock libcudart for the client's own
+# architecture, used locally to show what the real runtime does over a remoted
+# driver. Shipping it to a host of a different architecture breaks the link.
 tar czf - \
   --exclude='__pycache__' --exclude='*.pyc' \
+  --exclude='third_party/cudart' --exclude='third_party/nvcc' \
   CMakeLists.txt common server client tests codegen scripts docs README.md \
   third_party \
   | ssh_run "mkdir -p $REMOTE_DIR && tar xzf - -C $REMOTE_DIR"
