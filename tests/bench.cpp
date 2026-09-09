@@ -47,6 +47,10 @@ std::vector<unsigned char> fake_fatbin(size_t body) {
 
 int main(int argc, char** argv) {
   const int n = argc > 1 ? std::atoi(argv[1]) : 2000;
+  // A real driver rejects the synthetic image, so on real hardware pass a
+  // fatbin built by nvcc and the launch numbers become measurable too. That is
+  // the call a workload makes most, so it is the one worth measuring there.
+  const char* fatbin_path = argc > 2 ? argv[2] : nullptr;
 
   if (cuInit(0) != CUDA_SUCCESS) {
     std::fprintf(stderr, "cuInit failed; is the server running?\n");
@@ -101,14 +105,48 @@ int main(int argc, char** argv) {
 
   // Kernel launches, the call that dominates any real workload.
   {
-    const std::vector<unsigned char> image = fake_fatbin(512);
+    std::vector<unsigned char> image;
+    const char* kernel = "rgpu_check_args";
+    if (fatbin_path) {
+      std::FILE* f = std::fopen(fatbin_path, "rb");
+      if (!f) {
+        std::fprintf(stderr, "cannot open %s\n", fatbin_path);
+        return 1;
+      }
+      std::fseek(f, 0, SEEK_END);
+      const long len = std::ftell(f);
+      std::fseek(f, 0, SEEK_SET);
+      image.resize(static_cast<size_t>(len));
+      if (std::fread(image.data(), 1, image.size(), f) != image.size()) {
+        std::fprintf(stderr, "short read on %s\n", fatbin_path);
+        std::fclose(f);
+        return 1;
+      }
+      std::fclose(f);
+      kernel = "vecadd";
+    } else {
+      image = fake_fatbin(512);
+    }
+
     CUmodule mod = nullptr;
     CUfunction fn = nullptr;
+    // Real device buffers when running a real kernel; the fake driver only
+    // checks that the recognisable values arrive.
+    CUdeviceptr a = 0x1111111111111111ull, b = 0x2222222222222222ull,
+                c = 0x3333333333333333ull;
+    int k = 42;
+    if (fatbin_path) {
+      k = 1024;
+      const size_t bytes = size_t(k) * sizeof(float);
+      if (cuMemAlloc(&a, bytes) != CUDA_SUCCESS ||
+          cuMemAlloc(&b, bytes) != CUDA_SUCCESS ||
+          cuMemAlloc(&c, bytes) != CUDA_SUCCESS) {
+        std::fprintf(stderr, "could not allocate kernel buffers\n");
+        return 1;
+      }
+    }
     if (cuModuleLoadData(&mod, image.data()) == CUDA_SUCCESS &&
-        cuModuleGetFunction(&fn, mod, "rgpu_check_args") == CUDA_SUCCESS) {
-      CUdeviceptr a = 0x1111111111111111ull, b = 0x2222222222222222ull,
-                  c = 0x3333333333333333ull;
-      int k = 42;
+        cuModuleGetFunction(&fn, mod, kernel) == CUDA_SUCCESS) {
       void* args[] = {&a, &b, &c, &k};
       // Warm the parameter layout cache so the first call does not skew it.
       cuLaunchKernel(fn, 1, 1, 1, 1, 1, 1, 0, nullptr, args, nullptr);

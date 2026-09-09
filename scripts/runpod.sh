@@ -39,19 +39,33 @@ api() {
   fi
 }
 
-pod_id() {
-  api GET /pods | python3 -c "
+# Parses an API response, or explains it if it is not JSON. Every call goes
+# through this so an auth failure or a gateway error reads as itself rather
+# than as a JSON decode traceback.
+parse() {
+  python3 -c "
 import json,sys
-for p in json.load(sys.stdin):
+raw = sys.stdin.read()
+try:
+    doc = json.loads(raw)
+except Exception:
+    sys.stderr.write('runpod API did not return JSON:\n  %s\n' % raw[:300].strip())
+    sys.exit(1)
+$1
+"
+}
+
+pod_id() {
+  api GET /pods | parse "
+for p in doc:
     if p.get('name') == '$NAME':
         print(p['id']); break
 "
 }
 
 show() {
-  api GET "/pods/$1" | python3 -c "
-import json,sys
-p = json.load(sys.stdin)
+  api GET "/pods/$1" | parse "
+p = doc
 m = p.get('machine') or {}
 print('id        ', p['id'])
 print('status    ', p.get('desiredStatus'))
@@ -94,8 +108,15 @@ print(json.dumps({
 }))
 PY
 )
-    id=$(api POST /pods "$body" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))")
-    [[ -n "$id" ]] || { echo "creation failed" >&2; exit 1; }
+    id=$(api POST /pods "$body" | parse "print(doc.get('id',''))") || id=""
+    if [[ -z "$id" ]]; then
+      # The request may still have created something. Say so loudly rather
+      # than exiting and leaving it to bill unnoticed.
+      echo "creation did not return an id. Checking whether one was made anyway:" >&2
+      "$0" status >&2
+      echo "if a pod is listed above, delete it with: $0 delete" >&2
+      exit 1
+    fi
     echo "created $id; waiting for ssh"
     for _ in $(seq 1 60); do
       sleep 5
@@ -105,9 +126,20 @@ PY
     show "$id"
     ;;
   status)
+    # Every pod, not just the first match. A create that looked like it failed
+    # but did not leaves a second pod with the same name, and showing only one
+    # of them is how it goes on billing unnoticed.
+    api GET /pods | parse "
+if not doc:
+    print('no pods: nothing is billing')
+for p in doc:
+    m = p.get('machine') or {}
+    print('%-16s %-12s %-9s \$%s/hr %s' % (p.get('id'), p.get('name'),
+          p.get('desiredStatus'), p.get('costPerHr'), m.get('gpuTypeId') or ''))
+"
     id=$(pod_id)
-    [[ -n "$id" ]] || { echo "no pod named $NAME"; exit 0; }
-    show "$id"
+    [[ -n "$id" ]] && { echo; show "$id"; }
+    exit 0
     ;;
   start)
     id=$(pod_id)
@@ -128,16 +160,29 @@ PY
     echo "stopped $id; the GPU is released, the disk still costs a little"
     ;;
   delete)
-    id=$(pod_id)
-    [[ -n "$id" ]] || { echo "no pod named $NAME"; exit 0; }
+    # Every pod of this name, for the same reason status lists them all.
+    ids=$(api GET /pods | parse "
+print(' '.join(p['id'] for p in doc if p.get('name') == '$NAME'))
+")
+    [[ -n "$ids" ]] || { echo "no pod named $NAME"; exit 0; }
+    id=$ids
     # Nothing on a community pod's container disk survives a stop anyway, so
     # deleting usually costs nothing that stopping would have kept.
     if [[ "${2:-}" != "--yes" ]]; then
       read -r -p "Delete pod $id and everything on it? [y/N] " a
       [[ "$a" == "y" || "$a" == "Y" ]] || { echo aborted; exit 1; }
     fi
-    api DELETE "/pods/$id" >/dev/null
-    echo "deleted $id"
+    for one in $ids; do
+      code=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+             -H "Authorization: Bearer $(key)" \
+             "https://rest.runpod.io/v1/pods/$one")
+      echo "deleted $one (http $code)"
+    done
+    # Confirm rather than assume: a delete that silently failed is exactly the
+    # case that leaves something billing.
+    sleep 3
+    left=$(api GET /pods | parse "print(len(doc))")
+    echo "pods remaining on the account: $left"
     ;;
   *)
     echo "usage: $0 {create|start|status|stop|delete}" >&2

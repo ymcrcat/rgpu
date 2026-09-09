@@ -275,3 +275,31 @@ and PyTorch additionally preloads the CUDA libraries by absolute path.
 `LD_PRELOAD` wins over both, because symbol lookup finds preloaded objects
 first regardless of which file was loaded. A client that never installs the
 stock libraries does not have this problem.
+
+
+## Phase 4 result, 2026-09-09: batching
+
+Calls in the async class now go without a reply, queued on the client and
+written in one batch ahead of the next call that needs an answer. TCP keeps the
+order, so the server sees the sequence the application issued.
+
+Measured on an RTX 3090 with a real kernel, 2000 launches, over loopback:
+
+| | round trip | batched |
+|---|---|---|
+| issue only | 20.3 us | 0.2 us |
+| issue and synchronize | 20.3 us | 3.2 us |
+
+Six times faster end to end on the least favourable transport there is. The
+protocol reservation made in the original design, a NO_REPLY flag plus an
+execution class per function, turned out to be the whole of what was needed:
+enabling this was a policy change in the generator, not a protocol rewrite.
+
+A call with no reply has nowhere to report a failure. The server holds the
+first one and returns it from the next call that does reply, and logs it either
+way. That is how CUDA reports asynchronous failures too, so the semantics are
+not a compromise. The generator refuses to make a call fire-and-forget if it
+returns data.
+
+Verified on real hardware: all nine ladder rungs pass with batching on, and
+identically with it off.

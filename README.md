@@ -46,6 +46,7 @@ design, the prior art it draws on, and the three hard problems it has to solve.
 | Kernel launch marshalling | passing, fake driver |
 | A real CUDA kernel on a remote GPU | passing |
 | **PyTorch, all nine rungs including ResNet-18** | **passing** |
+| Asynchronous batching | working, 6x on real hardware |
 | End-to-end on a real GPU | needs a GPU host |
 | PyTorch client image and test ladder | written, not yet run |
 
@@ -140,6 +141,29 @@ builds a container with stock PyTorch and both shims. Note that PyTorch plus
 the CUDA math libraries is several gigabytes; on a Mac, Docker Desktop's disk
 allocation may need raising before this image will build.
 
+## Cost of a call
+
+Calls whose effect is only visible at a later synchronization go without a
+reply, queued and written in one batch ahead of the next call that needs an
+answer. Measured on an RTX 3090 over loopback, 2000 real kernel launches:
+
+| | round trip per call | batched |
+|---|---|---|
+| kernel launch, issue only | 20.3 us | 0.2 us |
+| kernel launch, including the synchronize | 20.3 us | 3.2 us |
+
+The second row is the honest one: it waits for all 2000 kernels to actually
+run. Reporting only the first would measure how fast work can be deferred
+rather than how fast it happens.
+
+Loopback is the least favourable case for this, since a round trip costs
+almost nothing there. Over a network the saving is a full round trip per
+launch, so the gap widens with latency. Calls that return data still round
+trip and are unaffected.
+
+`RGPU_BATCH=0` turns batching off, which is slower but makes a failing call
+report itself where it happened rather than at the next synchronization.
+
 ## Environment variables
 
 | Variable | Meaning |
@@ -147,6 +171,8 @@ allocation may need raising before this image will build.
 | `RGPU_SERVER` | `host:port` of the GPU server, default `127.0.0.1:9713` |
 | `RGPU_PORT` | port the server listens on, default `9713` |
 | `RGPU_VERBOSE` | log every forwarded call |
+| `RGPU_BATCH` | `0` to make every call a round trip, for debugging |
+| `RGPU_CUBLAS`, `RGPU_CUBLASLT` | paths the server opens for the real maths libraries |
 
 ## How the code is organized
 
