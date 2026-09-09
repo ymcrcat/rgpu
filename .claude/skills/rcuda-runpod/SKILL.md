@@ -74,10 +74,12 @@ python3 -m venv venv && ./venv/bin/pip install -q torch==2.9.1 torchvision \
   --index-url https://download.pytorch.org/whl/cu128
 ```
 
-Both settings the ladder needs are set inside it, so there is nothing to
-remember: cuDNN off, because it is not forwarded yet. Batching is on by
-default; `RGPU_BATCH=0` turns it off, which is worth doing as a control when a
-result looks wrong, since it makes every call report itself where it happened.
+The ladder needs no settings now: cuBLAS, cuBLASLt and cuDNN are all
+forwarded. `RGPU_NO_CUDNN=1` falls back to PyTorch's own convolution kernels
+and `RGPU_NO_CUBLASLT=1` to plain cuBLAS, which is how to tell a library
+problem apart from a problem underneath it. Batching is on by default;
+`RGPU_BATCH=0` turns it off, which is worth doing as a control when a result
+looks wrong, since it makes every call report itself where it happened.
 
 Then run the ladder. The shims have to go in front of PyTorch's own CUDA
 libraries, and `LD_LIBRARY_PATH` will not do it: PyTorch's libraries carry
@@ -88,9 +90,10 @@ libraries by absolute path. `LD_PRELOAD` wins over both.
 NV=$(echo $PWD/venv/lib/python3*/site-packages/nvidia)   # version varies
 RGPU_CUBLAS=$NV/cublas/lib/libcublas.so.12 \
 RGPU_CUBLASLT=$NV/cublas/lib/libcublasLt.so.12 \
+RGPU_CUDNN=$NV/cudnn/lib/libcudnn.so.9 \
   ./build/rgpu-server > server.log 2>&1 &
 
-LD_PRELOAD=$PWD/build/libcudart.so.12:$PWD/build/libcublas.so.12:$PWD/build/libcublasLt.so.12:$PWD/build/libcuda.so.1 \
+LD_PRELOAD=$PWD/build/libcudart.so.12:$PWD/build/libcublas.so.12:$PWD/build/libcublasLt.so.12:$PWD/build/libcudnn.so.9:$PWD/build/libcuda.so.1 \
 RGPU_SERVER=127.0.0.1:9713 \
   ./venv/bin/python ladder.py
 ```
@@ -128,6 +131,31 @@ module image the fake server accepts, so pass a real fatbin.
 NVCC=/usr/local/cuda/bin/nvcc ./scripts/build_fatbin.sh
 ./build/bench 2000 build/vecadd.fatbin      # launch numbers need this argument
 ```
+
+**A new pod reuses an old pod's address.** RunPod hands out host and port
+pairs from a pool, so ssh refuses with "Host key verification failed" on a pod
+that is perfectly healthy. Drop the stale entry and take the new key:
+
+```sh
+ssh-keygen -R "[HOST]:PORT"
+ssh-keyscan -p PORT -H HOST >> ~/.ssh/known_hosts
+```
+
+**Check the shim's symbols against the real library before running anything.**
+A missing one is an import failure with an unhelpful message, and it costs one
+command to know. The host's library is in the venv, not the system:
+
+```sh
+nm -D --defined-only $NV/cudnn/lib/libcudnn.so.9 | awk '$2 ~ /[TWi]/ {print $3}' \
+  | sed 's/@.*//' | sort -u > /tmp/real.txt
+nm -D --undefined-only venv/lib/python3*/site-packages/torch/lib/libtorch_cuda.so \
+  | awk '{print $2}' | sed 's/@.*//' | grep '^cudnn' | sort -u > /tmp/needed.txt
+```
+
+Strip the `@version` suffix on both sides or every symbol looks missing: nm
+spells a definition `foo@@lib` and a reference `foo@lib`. This found
+`cudnnGetLastErrorString`, which torch links by name and which the stub
+generator had skipped because it does not return a status.
 
 **Two things on the laptop side fail quietly.** Docker Desktop stops running
 and `scripts/build_client.sh` then fails with a daemon socket error; reopen it
