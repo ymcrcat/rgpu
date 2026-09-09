@@ -10,9 +10,23 @@
 
 namespace rgpu {
 
-// Sends one call and waits for its reply. Returns the remote CUresult, or a
+// Sends one call and waits for its reply. Anything queued by call_async is
+// sent first, so ordering is preserved. Returns the remote CUresult, or a
 // local error if the connection failed.
 CUresult call(uint32_t api_id, const Buffer& req, Buffer* rsp);
+
+// Queues a call whose effect is only observable at a later synchronization
+// point, and returns without waiting. This is what removes a round trip from
+// every kernel launch and every asynchronous copy.
+//
+// The reply is not merely ignored, it is never sent: the frame carries
+// kFlagNoReply. A failure therefore cannot be reported here, so the server
+// holds it and returns it from the next call that does reply, which is how
+// CUDA reports asynchronous failures anyway.
+//
+// Only for calls with no output parameters. The generator refuses to use it
+// for anything that has to return data.
+CUresult call_async(uint32_t api_id, const Buffer& req);
 
 // Logs the first occurrence of an unimplemented entry point and returns
 // CUDA_ERROR_NOT_SUPPORTED. The log is the worklist for filling the API out.

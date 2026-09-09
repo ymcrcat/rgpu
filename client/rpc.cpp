@@ -18,10 +18,20 @@
 namespace rgpu {
 namespace {
 
-std::mutex g_mu;          // guards the socket and the request counter
+std::mutex g_mu;          // guards the socket, the counter and the send queue
 int g_fd = -1;
 uint32_t g_next_req = 1;
 bool g_connect_failed = false;
+
+// Frames queued by call_async and not yet written. Holding them lets a run of
+// launches leave the client in one write instead of one per call, and lets
+// none of them wait for a reply.
+std::vector<uint8_t> g_queued;
+
+// Flushed automatically once the queue reaches this size, so a long stretch of
+// asynchronous work cannot grow it without bound. Otherwise it goes out with
+// the next call that needs a reply.
+constexpr size_t kQueueFlushBytes = 256 * 1024;
 
 int env_int(const char* k, int dflt) {
   const char* v = std::getenv(k);
@@ -30,6 +40,13 @@ int env_int(const char* k, int dflt) {
 
 bool verbose() {
   static bool v = env_int("RGPU_VERBOSE", 0) != 0;
+  return v;
+}
+
+// Batching is on by default. RGPU_BATCH=0 makes every call a round trip,
+// which is slower but makes a failing call report itself where it happened.
+bool batching() {
+  static bool v = env_int("RGPU_BATCH", 1) != 0;
   return v;
 }
 
@@ -104,25 +121,78 @@ void log(const char* fmt, ...) {
   va_end(ap);
 }
 
+// Appends one frame to the queue rather than writing it.
+void queue_frame_locked(uint32_t api_id, const Buffer& req, uint32_t flags) {
+  ReqHeader h{};
+  h.magic = kMagicReq;
+  h.api_id = api_id;
+  h.req_id = g_next_req++;
+  h.flags = flags;
+  h.payload_len = static_cast<uint32_t>(req.size());
+  const auto* hb = reinterpret_cast<const uint8_t*>(&h);
+  g_queued.insert(g_queued.end(), hb, hb + sizeof(h));
+  g_queued.insert(g_queued.end(), req.data().begin(), req.data().end());
+}
+
+// Writes everything queued as a single write. Returns false if the connection
+// died, in which case it has already been dropped.
+bool flush_locked() {
+  if (g_queued.empty()) return true;
+  const bool ok = write_exact(g_fd, g_queued.data(), g_queued.size());
+  g_queued.clear();
+  if (!ok) drop_connection_locked("send failed");
+  return ok;
+}
+
+CUresult call_async(uint32_t api_id, const Buffer& req) {
+  std::lock_guard<std::mutex> lk(g_mu);
+  if (!ensure_connected_locked()) return CUDA_ERROR_NOT_INITIALIZED;
+
+  if (verbose()) log("~> %s (%zu bytes, no reply)", api_name(api_id), req.size());
+
+  if (!batching()) {
+    // Same frame, but wait for the reply so a failure surfaces here.
+    ReqHeader h{};
+    h.magic = kMagicReq;
+    h.api_id = api_id;
+    h.req_id = g_next_req++;
+    h.flags = 0;
+    h.payload_len = static_cast<uint32_t>(req.size());
+    if (!flush_locked()) return CUDA_ERROR_UNKNOWN;
+    if (!send_frame(g_fd, h, req)) {
+      drop_connection_locked("send failed");
+      return CUDA_ERROR_UNKNOWN;
+    }
+    RspHeader rh{};
+    std::vector<uint8_t> payload;
+    if (!recv_frame(g_fd, kMagicRsp, &rh, &payload)) {
+      drop_connection_locked("recv failed");
+      return CUDA_ERROR_UNKNOWN;
+    }
+    return static_cast<CUresult>(rh.result);
+  }
+
+  queue_frame_locked(api_id, req, kFlagNoReply);
+  if (g_queued.size() >= kQueueFlushBytes && !flush_locked()) {
+    return CUDA_ERROR_UNKNOWN;
+  }
+  // The call has not run yet. CUDA says the same of any asynchronous call.
+  return CUDA_SUCCESS;
+}
+
 CUresult call(uint32_t api_id, const Buffer& req, Buffer* rsp) {
   // ponytail: one connection under a global lock. Per-thread connections only
   // if profiling shows contention; correctness first.
   std::lock_guard<std::mutex> lk(g_mu);
   if (!ensure_connected_locked()) return CUDA_ERROR_NOT_INITIALIZED;
 
-  ReqHeader h{};
-  h.magic = kMagicReq;
-  h.api_id = api_id;
-  h.req_id = g_next_req++;
-  h.flags = 0;
-  h.payload_len = static_cast<uint32_t>(req.size());
-
   if (verbose()) log("-> %s (%zu bytes)", api_name(api_id), req.size());
 
-  if (!send_frame(g_fd, h, req)) {
-    drop_connection_locked("send failed");
-    return CUDA_ERROR_UNKNOWN;
-  }
+  // Anything queued goes out ahead of this call, in one write, so the server
+  // sees the same order the application issued.
+  queue_frame_locked(api_id, req, 0);
+  const uint32_t expect_id = g_next_req - 1;
+  if (!flush_locked()) return CUDA_ERROR_UNKNOWN;
 
   RspHeader rh{};
   std::vector<uint8_t> payload;
@@ -130,7 +200,7 @@ CUresult call(uint32_t api_id, const Buffer& req, Buffer* rsp) {
     drop_connection_locked("recv failed");
     return CUDA_ERROR_UNKNOWN;
   }
-  if (rh.req_id != h.req_id) {
+  if (rh.req_id != expect_id) {
     // Under the lock this cannot happen unless the stream desynced.
     drop_connection_locked("response id mismatch");
     return CUDA_ERROR_UNKNOWN;

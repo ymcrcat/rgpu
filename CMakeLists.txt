@@ -187,6 +187,10 @@ if(EXISTS ${CUBLAS_INCLUDE_DIR}/cublas_v2.h)
   set(FAKE_CUBLAS_SOURCES tests/fake_cublas.cpp)
 endif()
 
+# Measures the per-call cost of the remoting layer.
+add_executable(bench tests/bench.cpp)
+target_link_libraries(bench PRIVATE rgpu_client)
+
 # A server backed by a fake driver instead of a GPU. Lets the whole stack run
 # on a machine with no NVIDIA hardware: real client stubs, real wire format,
 # real server dispatch, fake bottom layer.

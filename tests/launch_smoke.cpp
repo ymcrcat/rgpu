@@ -105,14 +105,21 @@ int main() {
                    CU_LAUNCH_PARAM_END};
   CHECK(cuLaunchKernel(fn, 8, 1, 1, 256, 1, 1, 0, nullptr, nullptr, extra));
 
-  // A wrong argument must be rejected, otherwise the checks above prove
+  // A wrong argument must be reported, otherwise the checks above prove
   // nothing: a server that accepted anything would pass them too.
+  //
+  // Where it is reported depends on batching. A launch is normally sent
+  // without waiting for a reply, so it returns success and the failure
+  // arrives at the next call that does reply. The rule that holds either way
+  // is that it must not survive the next synchronization.
   int wrong = 43;
   void* bad_args[] = {&a, &b, &c, &wrong};
-  if (cuLaunchKernel(fn, 8, 1, 1, 256, 1, 1, 0, nullptr, bad_args, nullptr) ==
-      CUDA_SUCCESS) {
-    std::fprintf(stderr, "FAIL: a launch with wrong arguments was accepted, "
-                         "so the checks above prove nothing\n");
+  const CUresult launch_rc =
+      cuLaunchKernel(fn, 8, 1, 1, 256, 1, 1, 0, nullptr, bad_args, nullptr);
+  const CUresult sync_rc = cuCtxSynchronize();
+  if (launch_rc == CUDA_SUCCESS && sync_rc == CUDA_SUCCESS) {
+    std::fprintf(stderr, "FAIL: a launch with wrong arguments was never "
+                         "reported, so the checks above prove nothing\n");
     g_failures++;
   }
 

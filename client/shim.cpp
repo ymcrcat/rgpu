@@ -131,8 +131,10 @@ CUresult launch_common(CUfunction f, unsigned gx, unsigned gy, unsigned gz,
   req.put<uint64_t>(reinterpret_cast<uint64_t>(stream));
   req.put_sized(args, args_len);
 
-  rgpu::Buffer rsp;
-  return rgpu::call(rgpu::API_rgpu_launch, req, &rsp);
+  // A launch returns nothing and its effect is only visible at the next
+  // synchronization, so it goes without a reply. This is the round trip that
+  // matters: it is the call a real workload makes most.
+  return rgpu::call_async(rgpu::API_rgpu_launch, req);
 }
 
 // ---------------------------------------------------------------------------

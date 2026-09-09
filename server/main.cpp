@@ -129,6 +129,12 @@ bool dispatch_internal(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
 
 void serve(int fd) {
   tune_socket(fd);
+  // A call sent without expecting a reply has nowhere to report a failure, so
+  // we hold the first one and hand it to the next call that does reply. CUDA
+  // reports asynchronous failures the same way, at a later call rather than
+  // the one that caused them.
+  CUresult pending_async = CUDA_SUCCESS;
+
   // Each connection is one client process. Its CUDA objects live in this
   // server process and die with the connection.
   for (;;) {
@@ -161,7 +167,21 @@ void serve(int fd) {
       logf("%s -> %d (%zu bytes back)", api_name(h.api_id), result, rsp.size());
     }
 
-    if (h.flags & kFlagNoReply) continue;
+    if (h.flags & kFlagNoReply) {
+      if (result != CUDA_SUCCESS && pending_async == CUDA_SUCCESS) {
+        pending_async = result;
+        // Always logged: an application that ignores the next return value
+        // would otherwise never learn this happened.
+        logf("%s failed with %d and had no reply to report it in; the next "
+             "call that replies will carry it", api_name(h.api_id), result);
+      }
+      continue;
+    }
+
+    if (pending_async != CUDA_SUCCESS) {
+      result = pending_async;
+      pending_async = CUDA_SUCCESS;
+    }
 
     RspHeader rh{};
     rh.magic = kMagicRsp;

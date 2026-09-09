@@ -796,10 +796,7 @@ extern "C" CUresult cuEventRecord(CUevent hEvent, CUstream hStream) {
   rgpu::Buffer req;
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hEvent));
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuEventRecord, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  return r_;
+  return rgpu::call_async(rgpu::API_cuEventRecord, req);
 }
 
 extern "C" CUresult cuEventRecordWithFlags(CUevent hEvent, CUstream hStream, unsigned int flags) {
@@ -2446,10 +2443,7 @@ extern "C" CUresult cuMemcpyHtoDAsync_v2(CUdeviceptr dstDevice, const void *srcH
   if (srcHost) req.put_sized(srcHost, (size_t)(ByteCount));
   req.put<size_t>(ByteCount);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuMemcpyHtoDAsync_v2, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  return r_;
+  return rgpu::call_async(rgpu::API_cuMemcpyHtoDAsync_v2, req);
 }
 
 extern "C" CUresult cuMemcpyHtoD_v2(CUdeviceptr dstDevice, const void *srcHost, size_t ByteCount) {
@@ -2497,10 +2491,7 @@ extern "C" CUresult cuMemsetD16Async(CUdeviceptr dstDevice, unsigned short us, s
   req.put<unsigned short>(us);
   req.put<size_t>(N);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuMemsetD16Async, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  return r_;
+  return rgpu::call_async(rgpu::API_cuMemsetD16Async, req);
 }
 
 extern "C" CUresult cuMemsetD16_v2(CUdeviceptr dstDevice, unsigned short us, size_t N) {
@@ -2522,10 +2513,7 @@ extern "C" CUresult cuMemsetD2D16Async(CUdeviceptr dstDevice, size_t dstPitch, u
   req.put<size_t>(Width);
   req.put<size_t>(Height);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuMemsetD2D16Async, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  return r_;
+  return rgpu::call_async(rgpu::API_cuMemsetD2D16Async, req);
 }
 
 extern "C" CUresult cuMemsetD2D16_v2(CUdeviceptr dstDevice, size_t dstPitch, unsigned short us, size_t Width, size_t Height) {
@@ -2549,10 +2537,7 @@ extern "C" CUresult cuMemsetD2D32Async(CUdeviceptr dstDevice, size_t dstPitch, u
   req.put<size_t>(Width);
   req.put<size_t>(Height);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuMemsetD2D32Async, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  return r_;
+  return rgpu::call_async(rgpu::API_cuMemsetD2D32Async, req);
 }
 
 extern "C" CUresult cuMemsetD2D32_v2(CUdeviceptr dstDevice, size_t dstPitch, unsigned int ui, size_t Width, size_t Height) {
@@ -2576,10 +2561,7 @@ extern "C" CUresult cuMemsetD2D8Async(CUdeviceptr dstDevice, size_t dstPitch, un
   req.put<size_t>(Width);
   req.put<size_t>(Height);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuMemsetD2D8Async, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  return r_;
+  return rgpu::call_async(rgpu::API_cuMemsetD2D8Async, req);
 }
 
 extern "C" CUresult cuMemsetD2D8_v2(CUdeviceptr dstDevice, size_t dstPitch, unsigned char uc, size_t Width, size_t Height) {
@@ -2601,10 +2583,7 @@ extern "C" CUresult cuMemsetD32Async(CUdeviceptr dstDevice, unsigned int ui, siz
   req.put<unsigned int>(ui);
   req.put<size_t>(N);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuMemsetD32Async, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  return r_;
+  return rgpu::call_async(rgpu::API_cuMemsetD32Async, req);
 }
 
 extern "C" CUresult cuMemsetD32_v2(CUdeviceptr dstDevice, unsigned int ui, size_t N) {
@@ -2624,10 +2603,7 @@ extern "C" CUresult cuMemsetD8Async(CUdeviceptr dstDevice, unsigned char uc, siz
   req.put<unsigned char>(uc);
   req.put<size_t>(N);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuMemsetD8Async, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  return r_;
+  return rgpu::call_async(rgpu::API_cuMemsetD8Async, req);
 }
 
 extern "C" CUresult cuMemsetD8_v2(CUdeviceptr dstDevice, unsigned char uc, size_t N) {
@@ -3241,10 +3217,7 @@ extern "C" CUresult cuStreamWaitEvent(CUstream hStream, CUevent hEvent, unsigned
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hEvent));
   req.put<unsigned int>(Flags);
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuStreamWaitEvent, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  return r_;
+  return rgpu::call_async(rgpu::API_cuStreamWaitEvent, req);
 }
 
 extern "C" CUresult cuStreamWaitValue32_v2(CUstream stream, CUdeviceptr addr, cuuint32_t value, unsigned int flags) {

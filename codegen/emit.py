@@ -152,11 +152,24 @@ def emit_client_stub(f, plans, a):
     lines.append("  rgpu::Buffer req;")
     for p, plan in zip(f["params"], plans):
         lines += emit_client_request(p, plan)
+    # A call with nothing to return and an effect only visible at a later
+    # synchronization point does not need a reply, which is what removes the
+    # round trip. Anything that returns data must wait for it.
+    response = []
+    for p, plan in zip(f["params"], plans):
+        response += emit_client_response(p, plan)
+    if a.get("exec") == "async" and not response:
+        lines.append("  return rgpu::call_async(rgpu::API_%s, req);" % name)
+        lines.append("}")
+        return lines
+    if a.get("exec") == "async":
+        raise Unmarshalable(
+            "annotated async but returns data, which cannot be fire-and-forget")
+
     lines.append("  rgpu::Buffer rsp;")
     lines.append("  CUresult r_ = rgpu::call(rgpu::API_%s, req, &rsp);" % name)
     lines.append("  if (r_ != CUDA_SUCCESS) return r_;")
-    for p, plan in zip(f["params"], plans):
-        lines += emit_client_response(p, plan)
+    lines += response
     lines.append("  return r_;")
     lines.append("}")
     return lines
