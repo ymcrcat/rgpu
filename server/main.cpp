@@ -32,6 +32,9 @@ bool dispatch_cublas(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out)
 // Defined in server/cublaslt_server.cpp likewise.
 bool dispatch_cublaslt(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out)
     __attribute__((weak));
+// Defined in server/cudnn_server.cpp likewise.
+bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out)
+    __attribute__((weak));
 
 namespace {
 
@@ -151,6 +154,7 @@ void serve(int fd) {
         (dispatch_cublas && dispatch_cublas(h.api_id, req, &rsp, &result)) ||
         (dispatch_cublaslt &&
          dispatch_cublaslt(h.api_id, req, &rsp, &result)) ||
+        (dispatch_cudnn && dispatch_cudnn(h.api_id, req, &rsp, &result)) ||
         dispatch_generated(h.api_id, req, &rsp, &result);
     if (!handled) {
       logf("unknown api id %u (%s)", h.api_id, api_name(h.api_id));

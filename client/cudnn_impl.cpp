@@ -1,0 +1,271 @@
+// The cuDNN calls PyTorch makes, forwarded to the GPU host.
+//
+// cuDNN cannot run on the client. Like the stock CUDA runtime and cuBLAS, it
+// initialises through the driver's undocumented export tables, which hold
+// pointers into the driver's own process and cannot cross a machine boundary.
+//
+// PyTorch reaches cuDNN through the backend graph API, which is why this file
+// is short. Convolutions, matmuls, normalisations and the rest are all built
+// out of descriptors and attributes, so nine functions carry the whole surface
+// rather than the two hundred entry points the library exports.
+//
+// Attribute values are arrays of fixed-size elements whose width follows from
+// the attribute type, so they travel verbatim. That is right even for the
+// pointer-shaped types: a device pointer, a handle and a descriptor are all
+// already values in the server's address space.
+//
+// Definitions here are strong and override the weak, logging ones in
+// client/generated/cudnn_stubs.cpp.
+
+#include <cstring>
+
+#include <cudnn.h>
+
+#include "client/rpc.h"
+#include "common/cudnn_ids.h"
+
+namespace {
+
+// Width of one element of an attribute array. Getting this wrong would send
+// the wrong number of bytes, so the unknown case refuses rather than guesses.
+size_t element_size(cudnnBackendAttributeType_t t) {
+  switch (t) {
+    case CUDNN_TYPE_INT64:
+    case CUDNN_TYPE_DOUBLE:
+      return 8;
+    // A handle, a device pointer and a descriptor are all pointer-sized values
+    // belonging to the server. Copying the bytes is exactly right.
+    case CUDNN_TYPE_VOID_PTR:
+    case CUDNN_TYPE_HANDLE:
+    case CUDNN_TYPE_BACKEND_DESCRIPTOR:
+      return sizeof(void*);
+    case CUDNN_TYPE_FLOAT:
+    case CUDNN_TYPE_INT32:
+      return 4;
+    case CUDNN_TYPE_BOOLEAN:
+      return sizeof(bool);
+    case CUDNN_TYPE_CHAR:
+      return 1;
+    case CUDNN_TYPE_FRACTION:
+      return sizeof(cudnnFraction_t);
+    default:
+      // Every remaining type is an enumeration, which is int-sized. Listing
+      // them all would be a maintenance burden for no gain, but an unexpected
+      // value is worth saying out loud.
+      if (t < CUDNN_TYPE_HANDLE || t > CUDNN_TYPE_TENSOR_REORDERING_MODE) {
+        rgpu::log("unknown cuDNN attribute type %d; assuming an enumeration",
+                  static_cast<int>(t));
+      }
+      return sizeof(int);
+  }
+}
+
+cudnnStatus_t from_cu(CUresult r) {
+  return r == CUDA_SUCCESS ? CUDNN_STATUS_SUCCESS
+                           : CUDNN_STATUS_EXECUTION_FAILED;
+}
+
+// The status travels in the payload; the frame's result field is a CUresult.
+cudnnStatus_t send(uint32_t id, rgpu::Buffer& req, rgpu::Buffer* rsp) {
+  CUresult r = rgpu::call(id, req, rsp);
+  if (r != CUDA_SUCCESS) return from_cu(r);
+  int32_t status = CUDNN_STATUS_INTERNAL_ERROR;
+  if (!rsp->get(&status)) return CUDNN_STATUS_INTERNAL_ERROR;
+  return static_cast<cudnnStatus_t>(status);
+}
+
+void put_ptr(rgpu::Buffer& b, const void* p) {
+  b.put<uint64_t>(reinterpret_cast<uint64_t>(p));
+}
+
+}  // namespace
+
+extern "C" {
+
+cudnnStatus_t cudnnCreate(cudnnHandle_t* handle) {
+  if (!handle) return CUDNN_STATUS_BAD_PARAM;
+  rgpu::Buffer req, rsp;
+  cudnnStatus_t s = send(rgpu::API_cudnnCreate, req, &rsp);
+  if (s != CUDNN_STATUS_SUCCESS) return s;
+  uint64_t h = 0;
+  if (!rsp.get(&h)) return CUDNN_STATUS_INTERNAL_ERROR;
+  *handle = reinterpret_cast<cudnnHandle_t>(h);
+  return s;
+}
+
+cudnnStatus_t cudnnDestroy(cudnnHandle_t handle) {
+  rgpu::Buffer req, rsp;
+  put_ptr(req, handle);
+  return send(rgpu::API_cudnnDestroy, req, &rsp);
+}
+
+cudnnStatus_t cudnnSetStream(cudnnHandle_t handle, cudaStream_t streamId) {
+  rgpu::Buffer req, rsp;
+  put_ptr(req, handle);
+  put_ptr(req, streamId);
+  return send(rgpu::API_cudnnSetStream, req, &rsp);
+}
+
+cudnnStatus_t cudnnGetStream(cudnnHandle_t handle, cudaStream_t* streamId) {
+  if (!streamId) return CUDNN_STATUS_BAD_PARAM;
+  rgpu::Buffer req, rsp;
+  put_ptr(req, handle);
+  cudnnStatus_t s = send(rgpu::API_cudnnGetStream, req, &rsp);
+  if (s != CUDNN_STATUS_SUCCESS) return s;
+  uint64_t v = 0;
+  if (!rsp.get(&v)) return CUDNN_STATUS_INTERNAL_ERROR;
+  *streamId = reinterpret_cast<cudaStream_t>(v);
+  return s;
+}
+
+size_t cudnnGetVersion(void) {
+  rgpu::Buffer req, rsp;
+  if (send(rgpu::API_cudnnGetVersion, req, &rsp) != CUDNN_STATUS_SUCCESS) {
+    return 0;
+  }
+  uint64_t v = 0;
+  return rsp.get(&v) ? static_cast<size_t>(v) : 0;
+}
+
+size_t cudnnGetCudartVersion(void) {
+  rgpu::Buffer req, rsp;
+  if (send(rgpu::API_cudnnGetCudartVersion, req, &rsp) !=
+      CUDNN_STATUS_SUCCESS) {
+    return 0;
+  }
+  uint64_t v = 0;
+  return rsp.get(&v) ? static_cast<size_t>(v) : 0;
+}
+
+cudnnStatus_t cudnnGetProperty(libraryPropertyType type, int* value) {
+  if (!value) return CUDNN_STATUS_BAD_PARAM;
+  rgpu::Buffer req, rsp;
+  req.put<int32_t>(static_cast<int32_t>(type));
+  cudnnStatus_t s = send(rgpu::API_cudnnGetProperty, req, &rsp);
+  if (s != CUDNN_STATUS_SUCCESS) return s;
+  int32_t v = 0;
+  if (!rsp.get(&v)) return CUDNN_STATUS_INTERNAL_ERROR;
+  *value = v;
+  return s;
+}
+
+// Error strings are static data in the real library, so answering locally
+// avoids a round trip and gives the caller a pointer that stays valid.
+const char* cudnnGetErrorString(cudnnStatus_t status) {
+  switch (status) {
+    case CUDNN_STATUS_SUCCESS: return "CUDNN_STATUS_SUCCESS";
+    case CUDNN_STATUS_NOT_INITIALIZED: return "CUDNN_STATUS_NOT_INITIALIZED";
+    case CUDNN_STATUS_ALLOC_FAILED: return "CUDNN_STATUS_ALLOC_FAILED";
+    case CUDNN_STATUS_BAD_PARAM: return "CUDNN_STATUS_BAD_PARAM";
+    case CUDNN_STATUS_INTERNAL_ERROR: return "CUDNN_STATUS_INTERNAL_ERROR";
+    case CUDNN_STATUS_NOT_SUPPORTED: return "CUDNN_STATUS_NOT_SUPPORTED";
+    case CUDNN_STATUS_EXECUTION_FAILED: return "CUDNN_STATUS_EXECUTION_FAILED";
+    default: return "CUDNN_STATUS_UNKNOWN";
+  }
+}
+
+// --- the backend graph API -------------------------------------------------
+
+cudnnStatus_t cudnnBackendCreateDescriptor(
+    cudnnBackendDescriptorType_t descriptorType,
+    cudnnBackendDescriptor_t* descriptor) {
+  if (!descriptor) return CUDNN_STATUS_BAD_PARAM;
+  rgpu::Buffer req, rsp;
+  req.put<int32_t>(static_cast<int32_t>(descriptorType));
+  cudnnStatus_t s = send(rgpu::API_cudnnBackendCreateDescriptor, req, &rsp);
+  if (s != CUDNN_STATUS_SUCCESS) return s;
+  uint64_t d = 0;
+  if (!rsp.get(&d)) return CUDNN_STATUS_INTERNAL_ERROR;
+  *descriptor = reinterpret_cast<cudnnBackendDescriptor_t>(d);
+  return s;
+}
+
+cudnnStatus_t cudnnBackendDestroyDescriptor(
+    cudnnBackendDescriptor_t descriptor) {
+  rgpu::Buffer req, rsp;
+  put_ptr(req, descriptor);
+  return send(rgpu::API_cudnnBackendDestroyDescriptor, req, &rsp);
+}
+
+cudnnStatus_t cudnnBackendInitialize(cudnnBackendDescriptor_t descriptor) {
+  rgpu::Buffer req, rsp;
+  put_ptr(req, descriptor);
+  return send(rgpu::API_cudnnBackendInitialize, req, &rsp);
+}
+
+cudnnStatus_t cudnnBackendFinalize(cudnnBackendDescriptor_t descriptor) {
+  rgpu::Buffer req, rsp;
+  put_ptr(req, descriptor);
+  return send(rgpu::API_cudnnBackendFinalize, req, &rsp);
+}
+
+cudnnStatus_t cudnnBackendSetAttribute(cudnnBackendDescriptor_t descriptor,
+                                       cudnnBackendAttributeName_t attributeName,
+                                       cudnnBackendAttributeType_t attributeType,
+                                       int64_t elementCount,
+                                       const void* arrayOfElements) {
+  if (elementCount < 0) return CUDNN_STATUS_BAD_PARAM;
+  const size_t width = element_size(attributeType);
+  rgpu::Buffer req, rsp;
+  put_ptr(req, descriptor);
+  req.put<int32_t>(static_cast<int32_t>(attributeName));
+  req.put<int32_t>(static_cast<int32_t>(attributeType));
+  req.put<int64_t>(elementCount);
+  req.put<uint8_t>(arrayOfElements ? 1 : 0);
+  if (arrayOfElements) {
+    req.put_sized(arrayOfElements, static_cast<size_t>(elementCount) * width);
+  }
+  return send(rgpu::API_cudnnBackendSetAttribute, req, &rsp);
+}
+
+cudnnStatus_t cudnnBackendGetAttribute(cudnnBackendDescriptor_t descriptor,
+                                       cudnnBackendAttributeName_t attributeName,
+                                       cudnnBackendAttributeType_t attributeType,
+                                       int64_t requestedElementCount,
+                                       int64_t* elementCount,
+                                       void* arrayOfElements) {
+  if (requestedElementCount < 0) return CUDNN_STATUS_BAD_PARAM;
+  const size_t width = element_size(attributeType);
+  const size_t bytes = static_cast<size_t>(requestedElementCount) * width;
+
+  rgpu::Buffer req, rsp;
+  put_ptr(req, descriptor);
+  req.put<int32_t>(static_cast<int32_t>(attributeName));
+  req.put<int32_t>(static_cast<int32_t>(attributeType));
+  req.put<int64_t>(requestedElementCount);
+  req.put<uint8_t>(elementCount ? 1 : 0);
+  // The caller's buffer goes out as well as coming back. For descriptor
+  // arrays the caller passes descriptors it created and cuDNN fills them in
+  // place, so the outgoing contents are part of the request, not just space
+  // to be overwritten.
+  req.put<uint8_t>(arrayOfElements ? 1 : 0);
+  if (arrayOfElements) req.put_sized(arrayOfElements, bytes);
+
+  cudnnStatus_t s = send(rgpu::API_cudnnBackendGetAttribute, req, &rsp);
+  if (s != CUDNN_STATUS_SUCCESS) return s;
+
+  if (elementCount) {
+    int64_t n = 0;
+    if (!rsp.get(&n)) return CUDNN_STATUS_INTERNAL_ERROR;
+    *elementCount = n;
+  }
+  if (arrayOfElements) {
+    const uint8_t* b = nullptr;
+    size_t n = 0;
+    if (!rsp.get_sized(&b, &n)) return CUDNN_STATUS_INTERNAL_ERROR;
+    std::memcpy(arrayOfElements, b, n < bytes ? n : bytes);
+  }
+  return s;
+}
+
+cudnnStatus_t cudnnBackendExecute(cudnnHandle_t handle,
+                                  cudnnBackendDescriptor_t executionPlan,
+                                  cudnnBackendDescriptor_t variantPack) {
+  rgpu::Buffer req, rsp;
+  put_ptr(req, handle);
+  put_ptr(req, executionPlan);
+  put_ptr(req, variantPack);
+  return send(rgpu::API_cudnnBackendExecute, req, &rsp);
+}
+
+}  // extern "C"

@@ -116,6 +116,28 @@ if(EXISTS ${CUBLAS_INCLUDE_DIR}/cublasLt.h AND
 endif()
 
 # ---------------------------------------------------------------------------
+# Client: a stand-in for libcudnn.so.9.
+#
+# PyTorch reaches cuDNN through its backend graph API, so the nine functions
+# hand-written in client/cudnn_impl.cpp carry the whole surface. The generated
+# stubs exist so the symbol set is complete and anything else names itself.
+# ---------------------------------------------------------------------------
+set(CUDNN_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/third_party/cudnn_include)
+if(EXISTS ${CUDNN_INCLUDE_DIR}/cudnn.h AND
+   EXISTS ${CMAKE_SOURCE_DIR}/client/generated/cudnn_stubs.cpp)
+  add_library(rgpu_cudnn SHARED
+    client/cudnn_impl.cpp
+    client/generated/cudnn_stubs.cpp)
+  set_target_properties(rgpu_cudnn PROPERTIES OUTPUT_NAME cudnn SOVERSION 9)
+  target_include_directories(rgpu_cudnn PRIVATE ${CUDNN_INCLUDE_DIR})
+  target_link_libraries(rgpu_cudnn PRIVATE rgpu_client)
+  if(EXISTS ${CMAKE_SOURCE_DIR}/client/cudnn.map)
+    target_link_options(rgpu_cudnn PRIVATE
+      "-Wl,--version-script=${CMAKE_SOURCE_DIR}/client/cudnn.map")
+  endif()
+endif()
+
+# ---------------------------------------------------------------------------
 # Server: runs on the GPU host against the real driver.
 #
 # Links the toolkit's libcuda stub; the real driver is resolved at run time.
@@ -135,9 +157,15 @@ if(CUDA_DRIVER_LIB)
   if(EXISTS ${CUBLAS_INCLUDE_DIR}/cublasLt.h)
     list(APPEND SERVER_SOURCES server/cublaslt_server.cpp)
   endif()
+  if(EXISTS ${CUDNN_INCLUDE_DIR}/cudnn.h)
+    list(APPEND SERVER_SOURCES server/cudnn_server.cpp)
+  endif()
   add_executable(rgpu_server ${SERVER_SOURCES})
   if(EXISTS ${CUBLAS_INCLUDE_DIR}/cublas_v2.h)
     target_include_directories(rgpu_server PRIVATE ${CUBLAS_INCLUDE_DIR})
+  endif()
+  if(EXISTS ${CUDNN_INCLUDE_DIR}/cudnn.h)
+    target_include_directories(rgpu_server PRIVATE ${CUDNN_INCLUDE_DIR})
   endif()
   # Generated code forwards deprecated entry points on purpose: an application
   # that calls them should still reach the real driver.
@@ -184,12 +212,22 @@ endif()
 # The fake maths libraries, when their headers are available.
 set(FAKE_CUBLAS_SOURCES "")
 if(EXISTS ${CUBLAS_INCLUDE_DIR}/cublas_v2.h)
-  set(FAKE_CUBLAS_SOURCES tests/fake_cublas.cpp)
+  list(APPEND FAKE_CUBLAS_SOURCES tests/fake_cublas.cpp)
+endif()
+if(EXISTS ${CUDNN_INCLUDE_DIR}/cudnn.h)
+  list(APPEND FAKE_CUBLAS_SOURCES tests/fake_cudnn.cpp)
 endif()
 
 # Measures the per-call cost of the remoting layer.
 add_executable(bench tests/bench.cpp)
 target_link_libraries(bench PRIVATE rgpu_client)
+
+# Checks that cuDNN backend attributes survive the wire.
+if(TARGET rgpu_cudnn)
+  add_executable(cudnn_smoke tests/cudnn_smoke.cpp)
+  target_include_directories(cudnn_smoke PRIVATE ${CUDNN_INCLUDE_DIR})
+  target_link_libraries(cudnn_smoke PRIVATE rgpu_cudnn rgpu_client)
+endif()
 
 # A server backed by a fake driver instead of a GPU. Lets the whole stack run
 # on a machine with no NVIDIA hardware: real client stubs, real wire format,
@@ -206,6 +244,10 @@ if(FAKE_CUBLAS_SOURCES)
   target_sources(rgpu_server_fake PRIVATE
     server/cublas_server.cpp server/cublaslt_server.cpp)
   target_include_directories(rgpu_server_fake PRIVATE ${CUBLAS_INCLUDE_DIR})
+endif()
+if(EXISTS ${CUDNN_INCLUDE_DIR}/cudnn.h)
+  target_sources(rgpu_server_fake PRIVATE server/cudnn_server.cpp)
+  target_include_directories(rgpu_server_fake PRIVATE ${CUDNN_INCLUDE_DIR})
 endif()
 set_target_properties(rgpu_server_fake PROPERTIES
   OUTPUT_NAME rgpu-server-fake

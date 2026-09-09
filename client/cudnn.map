@@ -1,0 +1,5 @@
+# Same reason as client/cudart.map: callers reference cuDNN symbols through a
+# version node named after the library.
+libcudnn.so.9 {
+  global: *;
+};
