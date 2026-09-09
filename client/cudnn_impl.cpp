@@ -18,6 +18,9 @@
 // client/generated/cudnn_stubs.cpp.
 
 #include <cstring>
+#include <mutex>
+#include <unordered_map>
+#include <vector>
 
 #include <cudnn.h>
 
@@ -76,6 +79,34 @@ cudnnStatus_t send(uint32_t id, rgpu::Buffer& req, rgpu::Buffer* rsp) {
 
 void put_ptr(rgpu::Buffer& b, const void* p) {
   b.put<uint64_t>(reinterpret_cast<uint64_t>(p));
+}
+
+// A tensor descriptor's element type, remembered when it is set. The
+// descriptor itself lives on the server, but alpha and beta are host scalars
+// whose width follows from it: double for a double tensor, float otherwise.
+// Reading the wrong width off the caller's stack is the sort of bug that only
+// shows up as slightly wrong numbers, so this is worth tracking.
+std::mutex g_type_mu;
+std::unordered_map<const void*, int> g_tensor_type;
+
+void remember_type(const void* desc, int type) {
+  std::lock_guard<std::mutex> lock(g_type_mu);
+  g_tensor_type[desc] = type;
+}
+
+void forget_type(const void* desc) {
+  std::lock_guard<std::mutex> lock(g_type_mu);
+  g_tensor_type.erase(desc);
+}
+
+size_t scalar_width(const void* desc) {
+  std::lock_guard<std::mutex> lock(g_type_mu);
+  auto it = g_tensor_type.find(desc);
+  // An unset descriptor cannot be used in a call anyway; float is the answer
+  // for every type except double.
+  return it != g_tensor_type.end() && it->second == CUDNN_DATA_DOUBLE
+             ? sizeof(double)
+             : sizeof(float);
 }
 
 }  // namespace
@@ -147,6 +178,35 @@ cudnnStatus_t cudnnGetProperty(libraryPropertyType type, int* value) {
   if (!rsp.get(&v)) return CUDNN_STATUS_INTERNAL_ERROR;
   *value = v;
   return s;
+}
+
+// The last error happened on the GPU host, so its text has to come from
+// there. The caller owns the buffer, so the reply is copied into it.
+void cudnnGetLastErrorString(char* message, size_t max_size) {
+  if (!message || max_size == 0) return;
+  message[0] = '\0';
+  rgpu::Buffer req, rsp;
+  req.put<uint64_t>(static_cast<uint64_t>(max_size));
+  if (send(rgpu::API_cudnnGetLastErrorString, req, &rsp) !=
+      CUDNN_STATUS_SUCCESS) {
+    return;
+  }
+  const uint8_t* bytes = nullptr;
+  size_t n = 0;
+  if (!rsp.get_sized(&bytes, &n)) return;
+  if (n > max_size - 1) n = max_size - 1;
+  std::memcpy(message, bytes, n);
+  message[n] = '\0';
+}
+
+size_t cudnnGetMaxDeviceVersion(void) {
+  rgpu::Buffer req, rsp;
+  if (send(rgpu::API_cudnnGetMaxDeviceVersion, req, &rsp) !=
+      CUDNN_STATUS_SUCCESS) {
+    return 0;
+  }
+  uint64_t v = 0;
+  return rsp.get(&v) ? static_cast<size_t>(v) : 0;
 }
 
 // Error strings are static data in the real library, so answering locally
@@ -266,6 +326,123 @@ cudnnStatus_t cudnnBackendExecute(cudnnHandle_t handle,
   put_ptr(req, executionPlan);
   put_ptr(req, variantPack);
   return send(rgpu::API_cudnnBackendExecute, req, &rsp);
+}
+
+// --- the legacy descriptor API ---------------------------------------------
+//
+// Only what batch normalisation needs. Convolution goes through the graph API
+// above; PyTorch has no graph path for batch norm, so ResNet comes through
+// here.
+
+cudnnStatus_t cudnnCreateTensorDescriptor(cudnnTensorDescriptor_t* desc) {
+  if (!desc) return CUDNN_STATUS_BAD_PARAM;
+  rgpu::Buffer req, rsp;
+  cudnnStatus_t s = send(rgpu::API_cudnnCreateTensorDescriptor, req, &rsp);
+  if (s != CUDNN_STATUS_SUCCESS) return s;
+  uint64_t v = 0;
+  if (!rsp.get(&v)) return CUDNN_STATUS_INTERNAL_ERROR;
+  *desc = reinterpret_cast<cudnnTensorDescriptor_t>(v);
+  return s;
+}
+
+cudnnStatus_t cudnnDestroyTensorDescriptor(cudnnTensorDescriptor_t desc) {
+  rgpu::Buffer req, rsp;
+  put_ptr(req, desc);
+  cudnnStatus_t s = send(rgpu::API_cudnnDestroyTensorDescriptor, req, &rsp);
+  forget_type(desc);
+  return s;
+}
+
+cudnnStatus_t cudnnSetTensorNdDescriptor(cudnnTensorDescriptor_t desc,
+                                         cudnnDataType_t dataType, int nbDims,
+                                         const int dimA[],
+                                         const int strideA[]) {
+  if (!dimA || !strideA || nbDims <= 0 || nbDims > CUDNN_DIM_MAX) {
+    return CUDNN_STATUS_BAD_PARAM;
+  }
+  rgpu::Buffer req, rsp;
+  put_ptr(req, desc);
+  req.put<int32_t>(static_cast<int32_t>(dataType));
+  req.put<int32_t>(nbDims);
+  req.put_sized(dimA, nbDims * sizeof(int));
+  req.put_sized(strideA, nbDims * sizeof(int));
+  cudnnStatus_t s = send(rgpu::API_cudnnSetTensorNdDescriptor, req, &rsp);
+  if (s == CUDNN_STATUS_SUCCESS) remember_type(desc, dataType);
+  return s;
+}
+
+cudnnStatus_t cudnnGetTensorNdDescriptor(cudnnTensorDescriptor_t desc,
+                                         int nbDimsRequested,
+                                         cudnnDataType_t* dataType,
+                                         int* nbDims, int dimA[],
+                                         int strideA[]) {
+  if (nbDimsRequested <= 0 || nbDimsRequested > CUDNN_DIM_MAX) {
+    return CUDNN_STATUS_BAD_PARAM;
+  }
+  rgpu::Buffer req, rsp;
+  put_ptr(req, desc);
+  req.put<int32_t>(nbDimsRequested);
+  cudnnStatus_t s = send(rgpu::API_cudnnGetTensorNdDescriptor, req, &rsp);
+  if (s != CUDNN_STATUS_SUCCESS) return s;
+  int32_t type = 0, dims = 0;
+  const uint8_t* d = nullptr;
+  const uint8_t* st = nullptr;
+  size_t dn = 0, sn = 0;
+  if (!rsp.get(&type) || !rsp.get(&dims) || !rsp.get_sized(&d, &dn) ||
+      !rsp.get_sized(&st, &sn)) {
+    return CUDNN_STATUS_INTERNAL_ERROR;
+  }
+  if (dataType) *dataType = static_cast<cudnnDataType_t>(type);
+  if (nbDims) *nbDims = dims;
+  if (dimA) std::memcpy(dimA, d, dn);
+  if (strideA) std::memcpy(strideA, st, sn);
+  return s;
+}
+
+cudnnStatus_t cudnnDeriveBNTensorDescriptor(
+    cudnnTensorDescriptor_t derivedBnDesc, const cudnnTensorDescriptor_t xDesc,
+    cudnnBatchNormMode_t mode) {
+  rgpu::Buffer req, rsp;
+  put_ptr(req, derivedBnDesc);
+  put_ptr(req, xDesc);
+  req.put<int32_t>(static_cast<int32_t>(mode));
+  cudnnStatus_t s = send(rgpu::API_cudnnDeriveBNTensorDescriptor, req, &rsp);
+  if (s == CUDNN_STATUS_SUCCESS) {
+    // The derived descriptor carries the same element type in every case
+    // PyTorch uses, and it is only ever the scale/bias descriptor, never the
+    // one alpha is scaled against.
+    remember_type(derivedBnDesc, CUDNN_DATA_FLOAT);
+  }
+  return s;
+}
+
+cudnnStatus_t cudnnBatchNormalizationForwardInference(
+    cudnnHandle_t handle, cudnnBatchNormMode_t mode, const void* alpha,
+    const void* beta, const cudnnTensorDescriptor_t xDesc, const void* x,
+    const cudnnTensorDescriptor_t yDesc, void* y,
+    const cudnnTensorDescriptor_t bnScaleBiasMeanVarDesc, const void* bnScale,
+    const void* bnBias, const void* estimatedMean,
+    const void* estimatedVariance, double epsilon) {
+  if (!alpha || !beta) return CUDNN_STATUS_BAD_PARAM;
+  const size_t width = scalar_width(yDesc);
+  rgpu::Buffer req, rsp;
+  put_ptr(req, handle);
+  req.put<int32_t>(static_cast<int32_t>(mode));
+  // The width goes first so the server knows how to read what follows.
+  req.put<uint32_t>(static_cast<uint32_t>(width));
+  req.put_sized(alpha, width);
+  req.put_sized(beta, width);
+  put_ptr(req, xDesc);
+  put_ptr(req, x);
+  put_ptr(req, yDesc);
+  put_ptr(req, y);
+  put_ptr(req, bnScaleBiasMeanVarDesc);
+  put_ptr(req, bnScale);
+  put_ptr(req, bnBias);
+  put_ptr(req, estimatedMean);
+  put_ptr(req, estimatedVariance);
+  req.put<double>(epsilon);
+  return send(rgpu::API_cudnnBatchNormalizationForwardInference, req, &rsp);
 }
 
 }  // extern "C"

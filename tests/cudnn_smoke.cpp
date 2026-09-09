@@ -42,6 +42,14 @@ int main() {
     g_failures++;
   }
 
+  // A string coming back the other way, into a buffer the caller owns.
+  char err[64] = {0};
+  cudnnGetLastErrorString(err, sizeof(err));
+  if (std::strcmp(err, "fake cuDNN has nothing to report") != 0) {
+    std::fprintf(stderr, "FAIL: last error string came back as \"%s\"\n", err);
+    g_failures++;
+  }
+
   cudnnBackendDescriptor_t tensor = nullptr;
   CHECK(cudnnBackendCreateDescriptor(CUDNN_BACKEND_TENSOR_DESCRIPTOR, &tensor));
 
@@ -96,6 +104,39 @@ int main() {
   CHECK(cudnnBackendCreateDescriptor(CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR,
                                      &plan));
   CHECK(cudnnBackendExecute(h, plan, pack));
+
+  // The legacy path, which is how batch normalisation still reaches cuDNN.
+  cudnnTensorDescriptor_t td = nullptr;
+  CHECK(cudnnCreateTensorDescriptor(&td));
+  int dims[4], strides[4];
+  for (int i = 0; i < 4; i++) {
+    dims[i] = static_cast<int>(kDims[i]);
+    strides[i] = i + 1;
+  }
+  CHECK(cudnnSetTensorNdDescriptor(td, CUDNN_DATA_FLOAT, 4, dims, strides));
+
+  cudnnDataType_t back = CUDNN_DATA_DOUBLE;
+  int nb = 0, gotDims[8] = {0}, gotStrides[8] = {0};
+  CHECK(cudnnGetTensorNdDescriptor(td, 8, &back, &nb, gotDims, gotStrides));
+  if (back != CUDNN_DATA_FLOAT || nb != 4 || gotDims[3] != dims[3] ||
+      gotStrides[3] != strides[3]) {
+    std::fprintf(stderr, "FAIL: descriptor read back wrong\n");
+    g_failures++;
+  }
+
+  cudnnTensorDescriptor_t bnd = nullptr;
+  CHECK(cudnnCreateTensorDescriptor(&bnd));
+  CHECK(cudnnDeriveBNTensorDescriptor(bnd, td, CUDNN_BATCHNORM_SPATIAL));
+
+  // alpha and beta are floats here, because the tensor is float. Sending them
+  // as doubles would arrive as zero, which is the bug this catches.
+  const float one = 1.0f, zero = 0.0f;
+  CHECK(cudnnBatchNormalizationForwardInference(
+      h, CUDNN_BATCHNORM_SPATIAL, &one, &zero, td, kDevicePtr, td, kDevicePtr,
+      bnd, kDevicePtr, kDevicePtr, kDevicePtr, kDevicePtr, 1e-5));
+
+  CHECK(cudnnDestroyTensorDescriptor(bnd));
+  CHECK(cudnnDestroyTensorDescriptor(td));
 
   CHECK(cudnnBackendDestroyDescriptor(plan));
   CHECK(cudnnBackendDestroyDescriptor(pack));

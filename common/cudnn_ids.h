@@ -20,6 +20,11 @@ enum CudnnId : uint32_t {
   API_cudnnGetCudartVersion = kCudnnBase + 6,
   API_cudnnGetProperty = kCudnnBase + 7,
 
+  // Not generated: these two do not return a status, so the stub generator
+  // skips them, and torch links against the first of them by name.
+  API_cudnnGetLastErrorString = kCudnnBase + 8,
+  API_cudnnGetMaxDeviceVersion = kCudnnBase + 9,
+
   // The backend graph API, which is what PyTorch actually uses. Everything a
   // convolution needs is expressed through descriptors and attributes, so
   // these few functions carry the whole surface.
@@ -30,6 +35,16 @@ enum CudnnId : uint32_t {
   API_cudnnBackendSetAttribute = kCudnnBase + 14,
   API_cudnnBackendGetAttribute = kCudnnBase + 15,
   API_cudnnBackendExecute = kCudnnBase + 16,
+
+  // The legacy descriptor API. Convolution goes through the graph API above,
+  // but batch normalisation still has no graph equivalent in PyTorch, so
+  // ResNet needs these.
+  API_cudnnCreateTensorDescriptor = kCudnnBase + 20,
+  API_cudnnDestroyTensorDescriptor = kCudnnBase + 21,
+  API_cudnnSetTensorNdDescriptor = kCudnnBase + 22,
+  API_cudnnGetTensorNdDescriptor = kCudnnBase + 23,
+  API_cudnnDeriveBNTensorDescriptor = kCudnnBase + 24,
+  API_cudnnBatchNormalizationForwardInference = kCudnnBase + 25,
 };
 
 }  // namespace rgpu

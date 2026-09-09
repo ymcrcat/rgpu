@@ -42,9 +42,10 @@ def rung(name):
 
 import torch  # noqa: E402  (imported after the helpers so a failure is visible)
 
-# cuDNN is not forwarded yet. PyTorch's own convolution kernels work over the
-# shim, and they are what this falls back to.
-torch.backends.cudnn.enabled = False
+# cuDNN is forwarded, so convolution can take its normal path. Set
+# RGPU_NO_CUDNN=1 to fall back to PyTorch's own convolution kernels, which is
+# how to tell a cuDNN problem apart from a problem underneath it.
+torch.backends.cudnn.enabled = not os.environ.get("RGPU_NO_CUDNN")
 
 TOL = dict(rtol=1e-4, atol=1e-4)
 
@@ -101,8 +102,7 @@ def _():
     return "256x512 @ 512x256 matches CPU"
 
 
-@rung("convolution, PyTorch's own kernels")
-def _():
+def _conv_check():
     import torch.nn as nn
     conv = nn.Conv2d(3, 16, kernel_size=3, padding=1)
     x = torch.randn(2, 3, 32, 32)
@@ -110,6 +110,27 @@ def _():
     got = conv.cuda()(x.cuda()).cpu()
     assert torch.allclose(got, want, rtol=1e-3, atol=1e-3), "conv differs"
     return "2x3x32x32 conv matches CPU"
+
+
+@rung("convolution, PyTorch's own kernels")
+def _():
+    # Explicitly without cuDNN, so this rung still isolates the layer below it
+    # when cuDNN is the thing that broke.
+    was = torch.backends.cudnn.enabled
+    torch.backends.cudnn.enabled = False
+    try:
+        return _conv_check()
+    finally:
+        torch.backends.cudnn.enabled = was
+
+
+@rung("convolution via forwarded cuDNN")
+def _():
+    if not torch.backends.cudnn.enabled:
+        return "skipped, RGPU_NO_CUDNN is set"
+    assert torch.backends.cudnn.is_available(), "torch says cuDNN is unavailable"
+    detail = _conv_check()
+    return "%s, cuDNN %s" % (detail, torch.backends.cudnn.version())
 
 
 @rung("ResNet-18 inference")

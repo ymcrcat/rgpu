@@ -6,6 +6,7 @@
 // wrong width sends the wrong number of bytes and would corrupt a graph rather
 // than fail it.
 
+#include <cstdio>
 #include <cstring>
 
 #include <cudnn.h>
@@ -37,6 +38,13 @@ cudnnStatus_t cudnnSetStream(cudnnHandle_t h, cudaStream_t) {
 }
 
 size_t cudnnGetVersion(void) { return 90502; }
+
+const char kLastError[] = "fake cuDNN has nothing to report";
+
+void cudnnGetLastErrorString(char* message, size_t max_size) {
+  if (!message || max_size == 0) return;
+  std::snprintf(message, max_size, "%s", kLastError);
+}
 
 cudnnStatus_t cudnnBackendCreateDescriptor(cudnnBackendDescriptorType_t type,
                                            cudnnBackendDescriptor_t* d) {
@@ -112,6 +120,66 @@ cudnnStatus_t cudnnBackendGetAttribute(cudnnBackendDescriptor_t d,
   if (array && requested >= give) {
     std::memcpy(array, kGetBack, sizeof(kGetBack));
   }
+  return CUDNN_STATUS_SUCCESS;
+}
+
+// The legacy path: a descriptor whose dimensions must arrive intact, and a
+// batch norm whose alpha is a float, not a widened double.
+cudnnStatus_t cudnnCreateTensorDescriptor(cudnnTensorDescriptor_t* d) {
+  if (!d) return CUDNN_STATUS_BAD_PARAM;
+  *d = reinterpret_cast<cudnnTensorDescriptor_t>(0x7E4501ull);
+  return CUDNN_STATUS_SUCCESS;
+}
+
+cudnnStatus_t cudnnDestroyTensorDescriptor(cudnnTensorDescriptor_t d) {
+  return d ? CUDNN_STATUS_SUCCESS : CUDNN_STATUS_BAD_PARAM;
+}
+
+cudnnStatus_t cudnnSetTensorNdDescriptor(cudnnTensorDescriptor_t d,
+                                         cudnnDataType_t type, int nbDims,
+                                         const int dimA[], const int strideA[]) {
+  if (!d || type != CUDNN_DATA_FLOAT || nbDims != 4) return CUDNN_STATUS_BAD_PARAM;
+  for (int i = 0; i < 4; i++) {
+    if (dimA[i] != static_cast<int>(kDims[i]) || strideA[i] != i + 1) {
+      return CUDNN_STATUS_BAD_PARAM;
+    }
+  }
+  return CUDNN_STATUS_SUCCESS;
+}
+
+cudnnStatus_t cudnnGetTensorNdDescriptor(cudnnTensorDescriptor_t d, int requested,
+                                         cudnnDataType_t* type, int* nbDims,
+                                         int dimA[], int strideA[]) {
+  if (!d || requested < 4) return CUDNN_STATUS_BAD_PARAM;
+  if (type) *type = CUDNN_DATA_FLOAT;
+  if (nbDims) *nbDims = 4;
+  for (int i = 0; i < 4; i++) {
+    if (dimA) dimA[i] = static_cast<int>(kDims[i]);
+    if (strideA) strideA[i] = i + 1;
+  }
+  return CUDNN_STATUS_SUCCESS;
+}
+
+cudnnStatus_t cudnnDeriveBNTensorDescriptor(cudnnTensorDescriptor_t derived,
+                                            cudnnTensorDescriptor_t x,
+                                            cudnnBatchNormMode_t) {
+  return derived && x ? CUDNN_STATUS_SUCCESS : CUDNN_STATUS_BAD_PARAM;
+}
+
+cudnnStatus_t cudnnBatchNormalizationForwardInference(
+    cudnnHandle_t h, cudnnBatchNormMode_t mode, const void* alpha,
+    const void* beta, cudnnTensorDescriptor_t xDesc, const void* x,
+    cudnnTensorDescriptor_t yDesc, void* y, cudnnTensorDescriptor_t bnDesc,
+    const void* scale, const void* bias, const void* mean, const void* var,
+    double epsilon) {
+  if (!h || !xDesc || !yDesc || !bnDesc) return CUDNN_STATUS_BAD_PARAM;
+  if (mode != CUDNN_BATCHNORM_SPATIAL) return CUDNN_STATUS_BAD_PARAM;
+  // A float tensor, so these are floats. Widening on the way would give 0.
+  if (*static_cast<const float*>(alpha) != 1.0f) return CUDNN_STATUS_BAD_PARAM;
+  if (*static_cast<const float*>(beta) != 0.0f) return CUDNN_STATUS_BAD_PARAM;
+  if (x != kDevicePtr || y != kDevicePtr) return CUDNN_STATUS_BAD_PARAM;
+  if (!scale || !bias || !mean || !var) return CUDNN_STATUS_BAD_PARAM;
+  if (epsilon != 1e-5) return CUDNN_STATUS_BAD_PARAM;
   return CUDNN_STATUS_SUCCESS;
 }
 
