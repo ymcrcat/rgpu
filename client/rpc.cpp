@@ -4,10 +4,12 @@
 #include <netdb.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <map>
 #include <mutex>
 #include <set>
 #include <string>
@@ -27,6 +29,38 @@ bool g_connect_failed = false;
 // launches leave the client in one write instead of one per call, and lets
 // none of them wait for a reply.
 std::vector<uint8_t> g_queued;
+
+// What the remoting layer actually cost, printed at exit when RGPU_STATS is
+// set. Round trips are the number that matters: on a real network each one
+// costs a full latency, so round trips per inference times the link's RTT is
+// the added time, without having to run over that link to find out.
+struct Stats {
+  uint64_t round_trips = 0;
+  uint64_t async_calls = 0;
+  uint64_t bytes_out = 0;
+  uint64_t bytes_in = 0;
+  // Which calls the round trips went to, so the ones worth making
+  // asynchronous can be picked by evidence rather than by guess.
+  std::map<uint32_t, uint64_t> by_api;
+
+  ~Stats() {
+    if (!std::getenv("RGPU_STATS")) return;
+    std::fprintf(stderr,
+                 "[rgpu] %llu round trips, %llu one-way calls, "
+                 "%.1f MiB out, %.1f MiB in\n",
+                 (unsigned long long)round_trips, (unsigned long long)async_calls,
+                 bytes_out / 1048576.0, bytes_in / 1048576.0);
+    std::vector<std::pair<uint64_t, uint32_t>> top;
+    for (const auto& kv : by_api) top.emplace_back(kv.second, kv.first);
+    std::sort(top.rbegin(), top.rend());
+    for (size_t i = 0; i < top.size() && i < 15; i++) {
+      std::fprintf(stderr, "[rgpu]   %8llu  %s (0x%x)\n",
+                   (unsigned long long)top[i].first, api_name(top[i].second),
+                   top[i].second);
+    }
+  }
+};
+Stats g_stats;
 
 // Flushed automatically once the queue reaches this size, so a long stretch of
 // asynchronous work cannot grow it without bound. Otherwise it goes out with
@@ -132,6 +166,7 @@ void queue_frame_locked(uint32_t api_id, const Buffer& req, uint32_t flags) {
   const auto* hb = reinterpret_cast<const uint8_t*>(&h);
   g_queued.insert(g_queued.end(), hb, hb + sizeof(h));
   g_queued.insert(g_queued.end(), req.data().begin(), req.data().end());
+  g_stats.bytes_out += sizeof(h) + req.size();
 }
 
 // Writes everything queued as a single write. Returns false if the connection
@@ -163,16 +198,21 @@ CUresult call_async(uint32_t api_id, const Buffer& req) {
       drop_connection_locked("send failed");
       return CUDA_ERROR_UNKNOWN;
     }
+    g_stats.bytes_out += sizeof(h) + req.size();
     RspHeader rh{};
     std::vector<uint8_t> payload;
     if (!recv_frame(g_fd, kMagicRsp, &rh, &payload)) {
       drop_connection_locked("recv failed");
       return CUDA_ERROR_UNKNOWN;
     }
+    g_stats.round_trips++;
+    g_stats.by_api[api_id]++;
+    g_stats.bytes_in += sizeof(rh) + payload.size();
     return static_cast<CUresult>(rh.result);
   }
 
   queue_frame_locked(api_id, req, kFlagNoReply);
+  g_stats.async_calls++;
   if (g_queued.size() >= kQueueFlushBytes && !flush_locked()) {
     return CUDA_ERROR_UNKNOWN;
   }
@@ -206,6 +246,9 @@ CUresult call(uint32_t api_id, const Buffer& req, Buffer* rsp) {
     return CUDA_ERROR_UNKNOWN;
   }
 
+  g_stats.round_trips++;
+  g_stats.by_api[api_id]++;
+  g_stats.bytes_in += sizeof(rh) + payload.size();
   *rsp = Buffer(std::move(payload));
   if (verbose()) log("<- %s result=%d", api_name(api_id), rh.result);
   return static_cast<CUresult>(rh.result);

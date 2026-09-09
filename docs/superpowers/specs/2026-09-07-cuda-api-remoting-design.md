@@ -303,3 +303,55 @@ returns data.
 
 Verified on real hardware: all nine ladder rungs pass with batching on, and
 identically with it off.
+
+
+## Measured, 2026-09-09: ResNet-18 on an RTX A4000
+
+Native and remoted on the same box, so the network is loopback and every
+figure below is the floor, not an estimate of a real deployment.
+
+| | native | remoted | remoted, RGPU_BATCH=0 |
+|---|---|---|---|
+| batch 1 | 2.37 ms | 24.99 ms | 23.14 ms |
+| batch 32 | 11.26 ms | 24.58 ms | 23.59 ms |
+
+Two things stand out. Remoted time barely moves with batch size, so this is
+not about how much data crosses the wire. And batching makes almost no
+difference, which says the calls being made are not the ones the async class
+covers.
+
+The round trip counter explains both: **638 round trips per inference**, and
+27 one-way calls. At loopback's roughly 40 microseconds that is 25 ms, which
+is the whole measurement. Where they go, per inference:
+
+| calls | what |
+|---|---|
+| 289 | `cuDevicePrimaryCtxGetState` |
+| 60 | `cudnnBackendSetAttribute` |
+| 40 each | `cudnnCreateTensorDescriptor`, `cudnnSetTensorNdDescriptor`, `cudnnDestroyTensorDescriptor`, `cudnnSetStream` |
+| 20 each | `cudnnBackendCreateDescriptor`, `Finalize`, `DestroyDescriptor`, `Execute`, `cudnnBatchNormalizationForwardInference` |
+| 9 | cuBLAS |
+
+So the ceiling is not bandwidth and not the kernel launch path that phase 4
+addressed. It is that PyTorch asks the same cheap questions hundreds of times
+per inference, and that cuDNN's descriptor churn is a round trip per
+descriptor.
+
+Three fixes follow directly, in order of what they buy:
+
+1. **Cache `cuDevicePrimaryCtxGetState` on the client.** Its answer only
+   changes when the client itself retains or releases the primary context, so
+   it can be answered locally. Removes 45% of all round trips.
+2. **Make the status-only cuDNN calls asynchronous.** `SetAttribute`,
+   `Finalize`, `Destroy`, `Execute`, `SetStream` and the batch norm forward
+   return nothing but a status, which is exactly what the deferred class is
+   for. Another 200 per inference.
+3. **Handles are what is left.** The `Create` calls have to answer with a
+   value, so removing those 60 means minting handles on the client and
+   teaching the server to map them, which is a real change rather than an
+   annotation.
+
+The first two together should take 638 to roughly 65, and they are policy and
+annotation rather than new machinery. Worth doing before any transport work:
+a shared memory transport makes each round trip cheaper, but there are 638 of
+them, and ten times fewer round trips beats a faster one.
