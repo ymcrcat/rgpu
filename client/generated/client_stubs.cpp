@@ -646,59 +646,6 @@ extern "C" CUresult cuDeviceGraphMemTrim(CUdevice device) {
   return r_;
 }
 
-extern "C" CUresult cuDevicePrimaryCtxGetState(CUdevice dev, unsigned int *flags, int *active) {
-  rgpu::Buffer req;
-  req.put<CUdevice>(dev);
-  req.put<uint8_t>(flags ? 1 : 0);
-  req.put<uint8_t>(active ? 1 : 0);
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuDevicePrimaryCtxGetState, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  if (flags && !rsp.get(flags)) return CUDA_ERROR_UNKNOWN;
-  if (active && !rsp.get(active)) return CUDA_ERROR_UNKNOWN;
-  return r_;
-}
-
-extern "C" CUresult cuDevicePrimaryCtxRelease_v2(CUdevice dev) {
-  rgpu::Buffer req;
-  req.put<CUdevice>(dev);
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuDevicePrimaryCtxRelease_v2, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  return r_;
-}
-
-extern "C" CUresult cuDevicePrimaryCtxReset_v2(CUdevice dev) {
-  rgpu::Buffer req;
-  req.put<CUdevice>(dev);
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuDevicePrimaryCtxReset_v2, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  return r_;
-}
-
-extern "C" CUresult cuDevicePrimaryCtxRetain(CUcontext *pctx, CUdevice dev) {
-  rgpu::Buffer req;
-  req.put<uint8_t>(pctx ? 1 : 0);
-  req.put<CUdevice>(dev);
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuDevicePrimaryCtxRetain, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  if (pctx) { uint64_t h_; if (!rsp.get(&h_)) return CUDA_ERROR_UNKNOWN;
-            *pctx = reinterpret_cast<CUcontext>(h_); }
-  return r_;
-}
-
-extern "C" CUresult cuDevicePrimaryCtxSetFlags_v2(CUdevice dev, unsigned int flags) {
-  rgpu::Buffer req;
-  req.put<CUdevice>(dev);
-  req.put<unsigned int>(flags);
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuDevicePrimaryCtxSetFlags_v2, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  return r_;
-}
-
 extern "C" CUresult cuDeviceRegisterAsyncNotification(CUdevice device, CUasyncCallback callbackFunc, void *userData, CUasyncCallbackHandle *callback) {
   return rgpu::unimplemented("cuDeviceRegisterAsyncNotification", "struct-pointer:void (struct CUasyncNotificationInfo_st *, void *, struct CUasyncCallbackEntry_st *)");
 }

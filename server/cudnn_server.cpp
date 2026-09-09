@@ -47,8 +47,13 @@ Fn cudnn_sym(const char* name) {
   return reinterpret_cast<Fn>(fn);
 }
 
-void put_status(Buffer* rsp, cudnnStatus_t s) {
+// The status goes in the payload, where a caller that waited for a reply can
+// read the exact value. A failure also marks the frame itself, because a call
+// sent without waiting has no payload to read: the frame result is what the
+// server's deferred-error path carries to the next call that does reply.
+void put_status(Buffer* rsp, CUresult* out, cudnnStatus_t s) {
   rsp->put<int32_t>(static_cast<int32_t>(s));
+  if (s != CUDNN_STATUS_SUCCESS) *out = CUDA_ERROR_UNKNOWN;
 }
 
 void* get_ptr(Buffer& req, bool* ok) {
@@ -74,10 +79,10 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
   switch (id) {
     case API_cudnnCreate: {
       auto fn = cudnn_sym<cudnnStatus_t (*)(cudnnHandle_t*)>("cudnnCreate");
-      if (!fn) { put_status(rsp, CUDNN_STATUS_NOT_INITIALIZED); return true; }
+      if (!fn) { put_status(rsp, out, CUDNN_STATUS_NOT_INITIALIZED); return true; }
       cudnnHandle_t h = nullptr;
       cudnnStatus_t s = fn(&h);
-      put_status(rsp, s);
+      put_status(rsp, out, s);
       if (s == CUDNN_STATUS_SUCCESS) {
         rsp->put<uint64_t>(reinterpret_cast<uint64_t>(h));
       }
@@ -86,8 +91,8 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
     case API_cudnnDestroy: {
       auto fn = cudnn_sym<cudnnStatus_t (*)(cudnnHandle_t)>("cudnnDestroy");
       auto h = static_cast<cudnnHandle_t>(get_ptr(req, &ok));
-      if (!fn || !ok) { put_status(rsp, CUDNN_STATUS_BAD_PARAM); return true; }
-      put_status(rsp, fn(h));
+      if (!fn || !ok) { put_status(rsp, out, CUDNN_STATUS_BAD_PARAM); return true; }
+      put_status(rsp, out, fn(h));
       return true;
     }
     case API_cudnnSetStream: {
@@ -95,18 +100,18 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
           "cudnnSetStream");
       auto h = static_cast<cudnnHandle_t>(get_ptr(req, &ok));
       auto st = static_cast<cudaStream_t>(get_ptr(req, &ok));
-      if (!fn || !ok) { put_status(rsp, CUDNN_STATUS_BAD_PARAM); return true; }
-      put_status(rsp, fn(h, st));
+      if (!fn || !ok) { put_status(rsp, out, CUDNN_STATUS_BAD_PARAM); return true; }
+      put_status(rsp, out, fn(h, st));
       return true;
     }
     case API_cudnnGetStream: {
       auto fn = cudnn_sym<cudnnStatus_t (*)(cudnnHandle_t, cudaStream_t*)>(
           "cudnnGetStream");
       auto h = static_cast<cudnnHandle_t>(get_ptr(req, &ok));
-      if (!fn || !ok) { put_status(rsp, CUDNN_STATUS_BAD_PARAM); return true; }
+      if (!fn || !ok) { put_status(rsp, out, CUDNN_STATUS_BAD_PARAM); return true; }
       cudaStream_t st = nullptr;
       cudnnStatus_t s = fn(h, &st);
-      put_status(rsp, s);
+      put_status(rsp, out, s);
       if (s == CUDNN_STATUS_SUCCESS) {
         rsp->put<uint64_t>(reinterpret_cast<uint64_t>(st));
       }
@@ -117,8 +122,8 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       const char* name = id == API_cudnnGetVersion ? "cudnnGetVersion"
                                                    : "cudnnGetCudartVersion";
       auto fn = cudnn_sym<size_t (*)(void)>(name);
-      if (!fn) { put_status(rsp, CUDNN_STATUS_NOT_INITIALIZED); return true; }
-      put_status(rsp, CUDNN_STATUS_SUCCESS);
+      if (!fn) { put_status(rsp, out, CUDNN_STATUS_NOT_INITIALIZED); return true; }
+      put_status(rsp, out, CUDNN_STATUS_SUCCESS);
       rsp->put<uint64_t>(static_cast<uint64_t>(fn()));
       return true;
     }
@@ -126,7 +131,7 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       auto fn = cudnn_sym<void (*)(char*, size_t)>("cudnnGetLastErrorString");
       uint64_t max_size = 0;
       if (!fn || !req.get(&max_size)) {
-        put_status(rsp, CUDNN_STATUS_NOT_SUPPORTED);
+        put_status(rsp, out, CUDNN_STATUS_NOT_SUPPORTED);
         return true;
       }
       // The caller's buffer can be any size it likes; this one only has to be
@@ -135,14 +140,14 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       std::vector<char> buf(max_size ? max_size : 1, '\0');
       fn(buf.data(), buf.size());
       buf.back() = '\0';
-      put_status(rsp, CUDNN_STATUS_SUCCESS);
+      put_status(rsp, out, CUDNN_STATUS_SUCCESS);
       rsp->put_sized(buf.data(), std::strlen(buf.data()));
       return true;
     }
     case API_cudnnGetMaxDeviceVersion: {
       auto fn = cudnn_sym<size_t (*)(void)>("cudnnGetMaxDeviceVersion");
-      if (!fn) { put_status(rsp, CUDNN_STATUS_NOT_SUPPORTED); return true; }
-      put_status(rsp, CUDNN_STATUS_SUCCESS);
+      if (!fn) { put_status(rsp, out, CUDNN_STATUS_NOT_SUPPORTED); return true; }
+      put_status(rsp, out, CUDNN_STATUS_SUCCESS);
       rsp->put<uint64_t>(static_cast<uint64_t>(fn()));
       return true;
     }
@@ -151,12 +156,12 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
           "cudnnGetProperty");
       int32_t type = 0;
       if (!fn || !req.get(&type)) {
-        put_status(rsp, CUDNN_STATUS_BAD_PARAM);
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
         return true;
       }
       int v = 0;
       cudnnStatus_t s = fn(static_cast<libraryPropertyType>(type), &v);
-      put_status(rsp, s);
+      put_status(rsp, out, s);
       if (s == CUDNN_STATUS_SUCCESS) rsp->put<int32_t>(v);
       return true;
     }
@@ -167,13 +172,13 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
           "cudnnBackendCreateDescriptor");
       int32_t type = 0;
       if (!fn || !req.get(&type)) {
-        put_status(rsp, CUDNN_STATUS_BAD_PARAM);
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
         return true;
       }
       cudnnBackendDescriptor_t d = nullptr;
       cudnnStatus_t s =
           fn(static_cast<cudnnBackendDescriptorType_t>(type), &d);
-      put_status(rsp, s);
+      put_status(rsp, out, s);
       if (s == CUDNN_STATUS_SUCCESS) {
         rsp->put<uint64_t>(reinterpret_cast<uint64_t>(d));
       }
@@ -189,8 +194,8 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
                                                   : "cudnnBackendFinalize");
       auto fn = cudnn_sym<cudnnStatus_t (*)(cudnnBackendDescriptor_t)>(name);
       auto d = static_cast<cudnnBackendDescriptor_t>(get_ptr(req, &ok));
-      if (!fn || !ok) { put_status(rsp, CUDNN_STATUS_BAD_PARAM); return true; }
-      put_status(rsp, fn(d));
+      if (!fn || !ok) { put_status(rsp, out, CUDNN_STATUS_BAD_PARAM); return true; }
+      put_status(rsp, out, fn(d));
       return true;
     }
     case API_cudnnBackendSetAttribute: {
@@ -206,16 +211,16 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       if (!fn || !ok || !req.get(&name) || !req.get(&type) ||
           !req.get(&count) || !req.get(&present) || count < 0 ||
           count > kMaxElements) {
-        put_status(rsp, CUDNN_STATUS_BAD_PARAM);
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
         return true;
       }
       const uint8_t* bytes = nullptr;
       size_t n = 0;
       if (present && !req.get_sized(&bytes, &n)) {
-        put_status(rsp, CUDNN_STATUS_BAD_PARAM);
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
         return true;
       }
-      put_status(rsp, fn(d, static_cast<cudnnBackendAttributeName_t>(name),
+      put_status(rsp, out, fn(d, static_cast<cudnnBackendAttributeName_t>(name),
                          static_cast<cudnnBackendAttributeType_t>(type), count,
                          present ? bytes : nullptr));
       return true;
@@ -233,7 +238,7 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       if (!fn || !ok || !req.get(&name) || !req.get(&type) ||
           !req.get(&requested) || !req.get(&want_count) ||
           !req.get(&has_array) || requested < 0 || requested > kMaxElements) {
-        put_status(rsp, CUDNN_STATUS_BAD_PARAM);
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
         return true;
       }
       // The caller's current contents came with the request, because for
@@ -243,7 +248,7 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
         const uint8_t* bytes = nullptr;
         size_t n = 0;
         if (!req.get_sized(&bytes, &n)) {
-          put_status(rsp, CUDNN_STATUS_BAD_PARAM);
+          put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
           return true;
         }
         buf.assign(bytes, bytes + n);
@@ -253,7 +258,7 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
                            static_cast<cudnnBackendAttributeType_t>(type),
                            requested, want_count ? &produced : nullptr,
                            has_array && !buf.empty() ? buf.data() : nullptr);
-      put_status(rsp, s);
+      put_status(rsp, out, s);
       if (s == CUDNN_STATUS_SUCCESS) {
         if (want_count) rsp->put<int64_t>(produced);
         if (has_array) rsp->put_sized(buf.data(), buf.size());
@@ -268,18 +273,18 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       auto h = static_cast<cudnnHandle_t>(get_ptr(req, &ok));
       auto plan = static_cast<cudnnBackendDescriptor_t>(get_ptr(req, &ok));
       auto pack = static_cast<cudnnBackendDescriptor_t>(get_ptr(req, &ok));
-      if (!fn || !ok) { put_status(rsp, CUDNN_STATUS_BAD_PARAM); return true; }
-      put_status(rsp, fn(h, plan, pack));
+      if (!fn || !ok) { put_status(rsp, out, CUDNN_STATUS_BAD_PARAM); return true; }
+      put_status(rsp, out, fn(h, plan, pack));
       return true;
     }
 
     case API_cudnnCreateTensorDescriptor: {
       auto fn = cudnn_sym<cudnnStatus_t (*)(cudnnTensorDescriptor_t*)>(
           "cudnnCreateTensorDescriptor");
-      if (!fn) { put_status(rsp, CUDNN_STATUS_NOT_SUPPORTED); return true; }
+      if (!fn) { put_status(rsp, out, CUDNN_STATUS_NOT_SUPPORTED); return true; }
       cudnnTensorDescriptor_t d = nullptr;
       cudnnStatus_t s = fn(&d);
-      put_status(rsp, s);
+      put_status(rsp, out, s);
       if (s == CUDNN_STATUS_SUCCESS) {
         rsp->put<uint64_t>(reinterpret_cast<uint64_t>(d));
       }
@@ -289,8 +294,8 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       auto fn = cudnn_sym<cudnnStatus_t (*)(cudnnTensorDescriptor_t)>(
           "cudnnDestroyTensorDescriptor");
       auto d = static_cast<cudnnTensorDescriptor_t>(get_ptr(req, &ok));
-      if (!fn || !ok) { put_status(rsp, CUDNN_STATUS_BAD_PARAM); return true; }
-      put_status(rsp, fn(d));
+      if (!fn || !ok) { put_status(rsp, out, CUDNN_STATUS_BAD_PARAM); return true; }
+      put_status(rsp, out, fn(d));
       return true;
     }
     case API_cudnnSetTensorNdDescriptor: {
@@ -307,10 +312,10 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
           !req.get_sized(&dims, &dn) || !req.get_sized(&strides, &sn) ||
           nb <= 0 || nb > CUDNN_DIM_MAX ||
           dn != static_cast<size_t>(nb) * sizeof(int) || sn != dn) {
-        put_status(rsp, CUDNN_STATUS_BAD_PARAM);
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
         return true;
       }
-      put_status(rsp, fn(d, static_cast<cudnnDataType_t>(type), nb,
+      put_status(rsp, out, fn(d, static_cast<cudnnDataType_t>(type), nb,
                          reinterpret_cast<const int*>(dims),
                          reinterpret_cast<const int*>(strides)));
       return true;
@@ -323,7 +328,7 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       int32_t requested = 0;
       if (!fn || !ok || !req.get(&requested) || requested <= 0 ||
           requested > CUDNN_DIM_MAX) {
-        put_status(rsp, CUDNN_STATUS_BAD_PARAM);
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
         return true;
       }
       cudnnDataType_t type = CUDNN_DATA_FLOAT;
@@ -331,7 +336,7 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       std::vector<int> dims(requested, 0), strides(requested, 0);
       cudnnStatus_t s = fn(d, requested, &type, &nb, dims.data(),
                            strides.data());
-      put_status(rsp, s);
+      put_status(rsp, out, s);
       if (s == CUDNN_STATUS_SUCCESS) {
         rsp->put<int32_t>(static_cast<int32_t>(type));
         rsp->put<int32_t>(nb);
@@ -349,10 +354,10 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       auto x = static_cast<cudnnTensorDescriptor_t>(get_ptr(req, &ok));
       int32_t mode = 0;
       if (!fn || !ok || !req.get(&mode)) {
-        put_status(rsp, CUDNN_STATUS_BAD_PARAM);
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
         return true;
       }
-      put_status(rsp,
+      put_status(rsp, out,
                  fn(derived, x, static_cast<cudnnBatchNormMode_t>(mode)));
       return true;
     }
@@ -372,7 +377,7 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
           !req.get_sized(&alpha, &an) || !req.get_sized(&beta, &bn) ||
           an != width || bn != width ||
           (width != sizeof(float) && width != sizeof(double))) {
-        put_status(rsp, CUDNN_STATUS_BAD_PARAM);
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
         return true;
       }
       // Copied out of the frame so they are aligned for their type. A union
@@ -392,10 +397,10 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       void* var = get_ptr(req, &ok);
       double epsilon = 0;
       if (!ok || !req.get(&epsilon)) {
-        put_status(rsp, CUDNN_STATUS_BAD_PARAM);
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
         return true;
       }
-      put_status(rsp, fn(handle, static_cast<cudnnBatchNormMode_t>(mode), &a,
+      put_status(rsp, out, fn(handle, static_cast<cudnnBatchNormMode_t>(mode), &a,
                          &b, xDesc, x, yDesc, y, bnDesc, scale, bias, mean,
                          var, epsilon));
       return true;
@@ -403,7 +408,7 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
 
     default:
       std::fprintf(stderr, "[rgpu-server] unhandled cuDNN id %u\n", id);
-      put_status(rsp, CUDNN_STATUS_NOT_SUPPORTED);
+      put_status(rsp, out, CUDNN_STATUS_NOT_SUPPORTED);
       return true;
   }
 }

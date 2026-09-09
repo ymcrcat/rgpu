@@ -340,6 +340,13 @@ def main():
                   "sync_stream annotation; the reply may race the copy" % name,
                   file=sys.stderr)
 
+        # Hand-written on the client: take the generated server case, drop the
+        # generated stub, and count it as hand-written in the report.
+        if name in ann.HANDWRITTEN_CLIENT:
+            manual.append(name)
+            server_body += ["  " + l for l in case] + [""]
+            continue
+
         generated.append(name)
         client_body += stub + [""]
         server_body += ["  " + l for l in case] + [""]

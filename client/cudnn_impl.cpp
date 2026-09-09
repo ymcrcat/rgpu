@@ -69,12 +69,30 @@ cudnnStatus_t from_cu(CUresult r) {
 }
 
 // The status travels in the payload; the frame's result field is a CUresult.
+// This call's own status is the more precise of the two and wins, because the
+// caller may act on the difference: a cuDNN frontend treats "not supported" as
+// "try another engine" and anything else as fatal. A failed frame with a
+// successful payload is a call that was sent without waiting for a reply and
+// failed back then, which is reported here for the same reason CUDA reports
+// launch failures at the next synchronization.
 cudnnStatus_t send(uint32_t id, rgpu::Buffer& req, rgpu::Buffer* rsp) {
   CUresult r = rgpu::call(id, req, rsp);
+  int32_t status = CUDNN_STATUS_SUCCESS;
+  const bool have = rsp->get(&status);
+  if (have && status != CUDNN_STATUS_SUCCESS) {
+    return static_cast<cudnnStatus_t>(status);
+  }
   if (r != CUDA_SUCCESS) return from_cu(r);
-  int32_t status = CUDNN_STATUS_INTERNAL_ERROR;
-  if (!rsp->get(&status)) return CUDNN_STATUS_INTERNAL_ERROR;
-  return static_cast<cudnnStatus_t>(status);
+  return have ? CUDNN_STATUS_SUCCESS : CUDNN_STATUS_INTERNAL_ERROR;
+}
+
+// Sent without waiting for a reply. Only for calls that return nothing but a
+// status, and only where a failure is still caught: an attribute that fails to
+// set makes the finalize that follows it fail, and finalize does wait. That is
+// the same bargain CUDA itself makes with asynchronous launches, and it is
+// worth roughly 200 round trips per inference.
+cudnnStatus_t send_async(uint32_t id, rgpu::Buffer& req) {
+  return from_cu(rgpu::call_async(id, req));
 }
 
 void put_ptr(rgpu::Buffer& b, const void* p) {
@@ -134,7 +152,7 @@ cudnnStatus_t cudnnSetStream(cudnnHandle_t handle, cudaStream_t streamId) {
   rgpu::Buffer req, rsp;
   put_ptr(req, handle);
   put_ptr(req, streamId);
-  return send(rgpu::API_cudnnSetStream, req, &rsp);
+  return send_async(rgpu::API_cudnnSetStream, req);
 }
 
 cudnnStatus_t cudnnGetStream(cudnnHandle_t handle, cudaStream_t* streamId) {
@@ -244,7 +262,7 @@ cudnnStatus_t cudnnBackendDestroyDescriptor(
     cudnnBackendDescriptor_t descriptor) {
   rgpu::Buffer req, rsp;
   put_ptr(req, descriptor);
-  return send(rgpu::API_cudnnBackendDestroyDescriptor, req, &rsp);
+  return send_async(rgpu::API_cudnnBackendDestroyDescriptor, req);
 }
 
 cudnnStatus_t cudnnBackendInitialize(cudnnBackendDescriptor_t descriptor) {
@@ -275,7 +293,7 @@ cudnnStatus_t cudnnBackendSetAttribute(cudnnBackendDescriptor_t descriptor,
   if (arrayOfElements) {
     req.put_sized(arrayOfElements, static_cast<size_t>(elementCount) * width);
   }
-  return send(rgpu::API_cudnnBackendSetAttribute, req, &rsp);
+  return send_async(rgpu::API_cudnnBackendSetAttribute, req);
 }
 
 cudnnStatus_t cudnnBackendGetAttribute(cudnnBackendDescriptor_t descriptor,
@@ -325,7 +343,7 @@ cudnnStatus_t cudnnBackendExecute(cudnnHandle_t handle,
   put_ptr(req, handle);
   put_ptr(req, executionPlan);
   put_ptr(req, variantPack);
-  return send(rgpu::API_cudnnBackendExecute, req, &rsp);
+  return send_async(rgpu::API_cudnnBackendExecute, req);
 }
 
 // --- the legacy descriptor API ---------------------------------------------
@@ -348,7 +366,7 @@ cudnnStatus_t cudnnCreateTensorDescriptor(cudnnTensorDescriptor_t* desc) {
 cudnnStatus_t cudnnDestroyTensorDescriptor(cudnnTensorDescriptor_t desc) {
   rgpu::Buffer req, rsp;
   put_ptr(req, desc);
-  cudnnStatus_t s = send(rgpu::API_cudnnDestroyTensorDescriptor, req, &rsp);
+  cudnnStatus_t s = send_async(rgpu::API_cudnnDestroyTensorDescriptor, req);
   forget_type(desc);
   return s;
 }
@@ -366,7 +384,7 @@ cudnnStatus_t cudnnSetTensorNdDescriptor(cudnnTensorDescriptor_t desc,
   req.put<int32_t>(nbDims);
   req.put_sized(dimA, nbDims * sizeof(int));
   req.put_sized(strideA, nbDims * sizeof(int));
-  cudnnStatus_t s = send(rgpu::API_cudnnSetTensorNdDescriptor, req, &rsp);
+  cudnnStatus_t s = send_async(rgpu::API_cudnnSetTensorNdDescriptor, req);
   if (s == CUDNN_STATUS_SUCCESS) remember_type(desc, dataType);
   return s;
 }
@@ -442,7 +460,7 @@ cudnnStatus_t cudnnBatchNormalizationForwardInference(
   put_ptr(req, estimatedMean);
   put_ptr(req, estimatedVariance);
   req.put<double>(epsilon);
-  return send(rgpu::API_cudnnBatchNormalizationForwardInference, req, &rsp);
+  return send_async(rgpu::API_cudnnBatchNormalizationForwardInference, req);
 }
 
 }  // extern "C"

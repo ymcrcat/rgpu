@@ -63,11 +63,14 @@ int main() {
                                  CUDNN_TYPE_DATA_TYPE, 1, &dtype));
 
   // A wrong dimension must be rejected, or the checks above prove nothing: a
-  // server that accepted anything would pass them too.
+  // server that accepted anything would pass them too. Setting an attribute
+  // does not wait for a reply, so the rejection arrives at the next call that
+  // does. Finalize is that call, which is also why finalize still waits.
   const int64_t wrong[4] = {1, 3, 224, 225};
-  if (cudnnBackendSetAttribute(tensor, CUDNN_ATTR_TENSOR_DIMENSIONS,
-                               CUDNN_TYPE_INT64, 4,
-                               wrong) == CUDNN_STATUS_SUCCESS) {
+  cudnnStatus_t set = cudnnBackendSetAttribute(
+      tensor, CUDNN_ATTR_TENSOR_DIMENSIONS, CUDNN_TYPE_INT64, 4, wrong);
+  cudnnStatus_t later = cudnnBackendFinalize(tensor);
+  if (set == CUDNN_STATUS_SUCCESS && later == CUDNN_STATUS_SUCCESS) {
     std::fprintf(stderr, "FAIL: wrong dimensions were accepted\n");
     g_failures++;
   }

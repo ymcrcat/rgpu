@@ -246,6 +246,125 @@ CUresult cuGetProcAddress(const char* symbol, void** pfn, int cudaVersion,
   return cuGetProcAddress_v2(symbol, pfn, cudaVersion, flags, nullptr);
 }
 
+// --- the primary context ---------------------------------------------------
+//
+// PyTorch asks whether a device's primary context exists before a great many
+// operations: 289 times per ResNet-18 inference, measured, which was 45% of
+// every round trip the shim made. The answer only changes when the primary
+// context is retained, released or reset, and every one of those goes through
+// here, so while we hold a reference the answer is ours to give.
+//
+// ponytail: the cache is only trusted while our own retain count is above
+// zero. Another client of the same server could change the state underneath
+// us otherwise, and one process per server is not a promise this makes.
+
+namespace {
+
+struct PrimaryCtx {
+  int retained = 0;        // our own references, not the driver's
+  unsigned int flags = 0;
+  bool flags_known = false;
+};
+
+std::mutex g_primary_mu;
+std::map<CUdevice, PrimaryCtx> g_primary;
+
+}  // namespace
+
+CUresult cuDevicePrimaryCtxRetain(CUcontext* pctx, CUdevice dev) {
+  rgpu::Buffer req, rsp;
+  req.put<uint8_t>(pctx ? 1 : 0);
+  req.put<CUdevice>(dev);
+  CUresult r = rgpu::call(rgpu::API_cuDevicePrimaryCtxRetain, req, &rsp);
+  if (r != CUDA_SUCCESS) return r;
+  if (pctx) {
+    uint64_t h = 0;
+    if (!rsp.get(&h)) return CUDA_ERROR_UNKNOWN;
+    *pctx = reinterpret_cast<CUcontext>(h);
+  }
+  std::lock_guard<std::mutex> lk(g_primary_mu);
+  g_primary[dev].retained++;
+  return r;
+}
+
+CUresult cuDevicePrimaryCtxRelease_v2(CUdevice dev) {
+  rgpu::Buffer req, rsp;
+  req.put<CUdevice>(dev);
+  CUresult r = rgpu::call(rgpu::API_cuDevicePrimaryCtxRelease_v2, req, &rsp);
+  {
+    std::lock_guard<std::mutex> lk(g_primary_mu);
+    auto& p = g_primary[dev];
+    if (p.retained > 0) p.retained--;
+    if (p.retained == 0) p.flags_known = false;
+  }
+  return r;
+}
+
+CUresult cuDevicePrimaryCtxReset_v2(CUdevice dev) {
+  rgpu::Buffer req, rsp;
+  req.put<CUdevice>(dev);
+  CUresult r = rgpu::call(rgpu::API_cuDevicePrimaryCtxReset_v2, req, &rsp);
+  {
+    std::lock_guard<std::mutex> lk(g_primary_mu);
+    g_primary[dev] = PrimaryCtx{};
+  }
+  return r;
+}
+
+CUresult cuDevicePrimaryCtxSetFlags_v2(CUdevice dev, unsigned int flags) {
+  rgpu::Buffer req, rsp;
+  req.put<CUdevice>(dev);
+  req.put<unsigned int>(flags);
+  CUresult r = rgpu::call(rgpu::API_cuDevicePrimaryCtxSetFlags_v2, req, &rsp);
+  {
+    std::lock_guard<std::mutex> lk(g_primary_mu);
+    auto& p = g_primary[dev];
+    if (r == CUDA_SUCCESS) {
+      p.flags = flags;
+      p.flags_known = true;
+    } else {
+      p.flags_known = false;
+    }
+  }
+  return r;
+}
+
+CUresult cuDevicePrimaryCtxGetState(CUdevice dev, unsigned int* flags,
+                                    int* active) {
+  {
+    std::lock_guard<std::mutex> lk(g_primary_mu);
+    auto it = g_primary.find(dev);
+    // Holding a reference means the context is active; that much needs no
+    // asking. The flags still do, once, unless we set them ourselves.
+    if (it != g_primary.end() && it->second.retained > 0 &&
+        (!flags || it->second.flags_known)) {
+      if (flags) *flags = it->second.flags;
+      if (active) *active = 1;
+      return CUDA_SUCCESS;
+    }
+  }
+
+  rgpu::Buffer req, rsp;
+  req.put<CUdevice>(dev);
+  req.put<uint8_t>(flags ? 1 : 0);
+  req.put<uint8_t>(active ? 1 : 0);
+  CUresult r = rgpu::call(rgpu::API_cuDevicePrimaryCtxGetState, req, &rsp);
+  if (r != CUDA_SUCCESS) return r;
+  unsigned int got_flags = 0;
+  int got_active = 0;
+  if (flags && !rsp.get(&got_flags)) return CUDA_ERROR_UNKNOWN;
+  if (active && !rsp.get(&got_active)) return CUDA_ERROR_UNKNOWN;
+  if (flags) *flags = got_flags;
+  if (active) *active = got_active;
+  if (flags) {
+    std::lock_guard<std::mutex> lk(g_primary_mu);
+    auto& p = g_primary[dev];
+    p.flags = got_flags;
+    p.flags_known = true;
+  }
+  return r;
+}
+
 // Error strings are static data in the real driver; we answer locally so the
 // caller gets a valid pointer without a round trip.
 CUresult cuGetErrorString(CUresult error, const char** pStr) {

@@ -56,6 +56,21 @@ HANDWRITTEN = {
     "cuGetExportTable",
 }
 
+# Hand-written on the client only. The server side is still generated, because
+# what these do differently is answer locally where they can; when they do go
+# to the server they go as the ordinary call.
+# The primary context's state is answered from a client-side cache while we
+# hold a reference to it. PyTorch asks for it hundreds of times per inference,
+# and it was 45% of all round trips before this. Retain, release, reset and
+# set-flags come along because they are what changes the answer.
+HANDWRITTEN_CLIENT = {
+    "cuDevicePrimaryCtxGetState",
+    "cuDevicePrimaryCtxRetain",
+    "cuDevicePrimaryCtxRelease_v2",
+    "cuDevicePrimaryCtxReset_v2",
+    "cuDevicePrimaryCtxSetFlags_v2",
+}
+
 # Explicitly refused, with the reason surfaced in the log. These cannot work
 # across a network and failing loudly beats corrupting silently.
 UNSUPPORTED = {
