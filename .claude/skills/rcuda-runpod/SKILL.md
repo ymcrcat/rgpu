@@ -132,6 +132,22 @@ NVCC=/usr/local/cuda/bin/nvcc ./scripts/build_fatbin.sh
 ./build/bench 2000 build/vecadd.fatbin      # launch numbers need this argument
 ```
 
+**A pod can stay RUNNING forever without ever getting a machine.** Three in a
+row did this on 2026-09-09, minutes after two identical ones had worked. The
+tell is in the API rather than in `status`: no `publicIp`, no `portMappings`,
+and `runtime` false.
+
+```sh
+curl -s -H "Authorization: Bearer $TOKEN" https://rest.runpod.io/v1/pods \
+  | python3 -c "import json,sys; [print(p['id'], p.get('publicIp'), bool(p.get('runtime'))) for p in json.load(sys.stdin)]"
+```
+
+Widening the GPU list does not help, because the pod is not waiting on a GPU
+type; the platform has simply not placed it. Give it about two minutes, then
+delete and try again, and if a second one does the same, stop and come back
+later rather than paying to wait. There is no gpuTypes endpoint in the REST v1
+API to check capacity with, so this is the only signal.
+
 **A new pod reuses an old pod's address.** RunPod hands out host and port
 pairs from a pool, so ssh refuses with "Host key verification failed" on a pod
 that is perfectly healthy. Drop the stale entry and take the new key:
