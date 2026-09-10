@@ -178,7 +178,15 @@ and `scripts/build_client.sh` then fails with a daemon socket error; reopen it
 and wait. The 1Password session times out and `op read` prints an `[ERROR]`
 string to stdout rather than failing, which reaches the API as a malformed
 token; if a runpod command behaves strangely, check the key looks like a key
-before debugging anything else.
+before debugging anything else. This is worst when it happens on the way out:
+a delete that fails this way leaves the pod billing, so always re-check the
+pod list after any command that printed "Malformed Bearer token". Two accounts
+are configured on this machine, so the signin has to name one, and a bare
+`op signin` fails with "multiple accounts found":
+
+```sh
+op signin --account my.1password.com   # the Personal vault lives here
+```
 
 ## Choosing hardware
 
