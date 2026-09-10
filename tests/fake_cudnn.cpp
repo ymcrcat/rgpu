@@ -19,6 +19,13 @@ void* const kDevicePtr = reinterpret_cast<void*>(0xDEC1CEull);
 constexpr int64_t kUid = 0x5150;
 const int64_t kGetBack[3] = {11, 22, 33};
 
+// What cudnnBackendCreateDescriptor below hands out for an operation, which is
+// what an attribute array of descriptors has to contain by the time it gets
+// here.
+void* const kOpDescriptor = reinterpret_cast<void*>(
+    0xDE5C0000ull +
+    static_cast<unsigned>(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR));
+
 }  // namespace
 
 extern "C" {
@@ -94,6 +101,18 @@ cudnnStatus_t cudnnBackendSetAttribute(cudnnBackendDescriptor_t d,
     return got == kUid ? CUDNN_STATUS_SUCCESS : CUDNN_STATUS_BAD_PARAM;
   }
 
+  // An array whose elements are descriptors. The client mints those handles
+  // itself, so what arrives here must be the descriptor this library handed
+  // out, not the client's handle for it.
+  if (name == CUDNN_ATTR_OPERATIONGRAPH_OPS) {
+    if (type != CUDNN_TYPE_BACKEND_DESCRIPTOR || count != 1) {
+      return CUDNN_STATUS_BAD_PARAM;
+    }
+    void* got = nullptr;
+    std::memcpy(&got, array, sizeof(got));
+    return got == kOpDescriptor ? CUDNN_STATUS_SUCCESS : CUDNN_STATUS_BAD_PARAM;
+  }
+
   // A four-byte enumeration, to cover the other width.
   if (name == CUDNN_ATTR_TENSOR_DATA_TYPE) {
     if (type != CUDNN_TYPE_DATA_TYPE || count != 1) return CUDNN_STATUS_BAD_PARAM;
@@ -112,6 +131,21 @@ cudnnStatus_t cudnnBackendGetAttribute(cudnnBackendDescriptor_t d,
                                        int64_t requested, int64_t* count,
                                        void* array) {
   if (!d) return CUDNN_STATUS_BAD_PARAM;
+
+  // Reading descriptors back: cuDNN fills the caller's own descriptors, so
+  // this checks it was given real ones and leaves them alone. The client
+  // should still see the handles it minted.
+  if (name == CUDNN_ATTR_OPERATIONGRAPH_OPS) {
+    if (type != CUDNN_TYPE_BACKEND_DESCRIPTOR || requested < 1 || !array) {
+      return CUDNN_STATUS_BAD_PARAM;
+    }
+    void* got = nullptr;
+    std::memcpy(&got, array, sizeof(got));
+    if (got != kOpDescriptor) return CUDNN_STATUS_BAD_PARAM;
+    if (count) *count = 1;
+    return CUDNN_STATUS_SUCCESS;
+  }
+
   if (name != CUDNN_ATTR_TENSOR_DIMENSIONS || type != CUDNN_TYPE_INT64) {
     return CUDNN_STATUS_BAD_PARAM;
   }

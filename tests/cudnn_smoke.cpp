@@ -108,6 +108,29 @@ int main() {
                                      &plan));
   CHECK(cudnnBackendExecute(h, plan, pack));
 
+  // Descriptor handles are minted on the client, so an attribute whose
+  // elements are descriptors has to be translated on the way out and left
+  // alone on the way back. The server's fake rejects anything but its own
+  // descriptor, and this end checks it gets its own handle back.
+  cudnnBackendDescriptor_t graph = nullptr, op = nullptr;
+  CHECK(cudnnBackendCreateDescriptor(CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR,
+                                     &graph));
+  CHECK(cudnnBackendCreateDescriptor(
+      CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR, &op));
+  CHECK(cudnnBackendSetAttribute(graph, CUDNN_ATTR_OPERATIONGRAPH_OPS,
+                                 CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &op));
+  cudnnBackendDescriptor_t ops_back[1] = {op};
+  int64_t ops_count = 0;
+  CHECK(cudnnBackendGetAttribute(graph, CUDNN_ATTR_OPERATIONGRAPH_OPS,
+                                 CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &ops_count,
+                                 ops_back));
+  if (ops_count != 1 || ops_back[0] != op) {
+    std::fprintf(stderr, "FAIL: descriptor handle did not survive the wire\n");
+    g_failures++;
+  }
+  CHECK(cudnnBackendDestroyDescriptor(op));
+  CHECK(cudnnBackendDestroyDescriptor(graph));
+
   // The legacy path, which is how batch normalisation still reaches cuDNN.
   cudnnTensorDescriptor_t td = nullptr;
   CHECK(cudnnCreateTensorDescriptor(&td));

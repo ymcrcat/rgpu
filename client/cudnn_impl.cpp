@@ -17,6 +17,7 @@
 // Definitions here are strong and override the weak, logging ones in
 // client/generated/cudnn_stubs.cpp.
 
+#include <atomic>
 #include <cstring>
 #include <mutex>
 #include <unordered_map>
@@ -93,6 +94,24 @@ cudnnStatus_t send(uint32_t id, rgpu::Buffer& req, rgpu::Buffer* rsp) {
 // worth roughly 200 round trips per inference.
 cudnnStatus_t send_async(uint32_t id, rgpu::Buffer& req) {
   return from_cu(rgpu::call_async(id, req));
+}
+
+// A descriptor handle minted here instead of asked for.
+//
+// Creating a descriptor was a round trip purely because the caller needed a
+// value back, 60 per inference. It does not have to be the server's value:
+// the client picks one, tells the server what it picked, and the server maps
+// it to the real descriptor. The call then needs no reply.
+//
+// The tag makes these unmistakable, so a value that was never minted, or that
+// belongs to a connection that has gone, is a clear error on the server rather
+// than a pointer it might dereference. The counter is per process and the map
+// is per connection, so two clients cannot collide.
+constexpr uint64_t kHandleTag = 0x52475055ull << 32;  // "RGPU"
+std::atomic<uint32_t> g_next_handle{1};
+
+void* mint_handle() {
+  return reinterpret_cast<void*>(kHandleTag | g_next_handle.fetch_add(1));
 }
 
 void put_ptr(rgpu::Buffer& b, const void* p) {
@@ -248,13 +267,13 @@ cudnnStatus_t cudnnBackendCreateDescriptor(
     cudnnBackendDescriptorType_t descriptorType,
     cudnnBackendDescriptor_t* descriptor) {
   if (!descriptor) return CUDNN_STATUS_BAD_PARAM;
-  rgpu::Buffer req, rsp;
+  void* h = mint_handle();
+  rgpu::Buffer req;
   req.put<int32_t>(static_cast<int32_t>(descriptorType));
-  cudnnStatus_t s = send(rgpu::API_cudnnBackendCreateDescriptor, req, &rsp);
+  put_ptr(req, h);
+  cudnnStatus_t s = send_async(rgpu::API_cudnnBackendCreateDescriptor, req);
   if (s != CUDNN_STATUS_SUCCESS) return s;
-  uint64_t d = 0;
-  if (!rsp.get(&d)) return CUDNN_STATUS_INTERNAL_ERROR;
-  *descriptor = reinterpret_cast<cudnnBackendDescriptor_t>(d);
+  *descriptor = static_cast<cudnnBackendDescriptor_t>(h);
   return s;
 }
 
@@ -354,12 +373,12 @@ cudnnStatus_t cudnnBackendExecute(cudnnHandle_t handle,
 
 cudnnStatus_t cudnnCreateTensorDescriptor(cudnnTensorDescriptor_t* desc) {
   if (!desc) return CUDNN_STATUS_BAD_PARAM;
-  rgpu::Buffer req, rsp;
-  cudnnStatus_t s = send(rgpu::API_cudnnCreateTensorDescriptor, req, &rsp);
+  void* h = mint_handle();
+  rgpu::Buffer req;
+  put_ptr(req, h);
+  cudnnStatus_t s = send_async(rgpu::API_cudnnCreateTensorDescriptor, req);
   if (s != CUDNN_STATUS_SUCCESS) return s;
-  uint64_t v = 0;
-  if (!rsp.get(&v)) return CUDNN_STATUS_INTERNAL_ERROR;
-  *desc = reinterpret_cast<cudnnTensorDescriptor_t>(v);
+  *desc = static_cast<cudnnTensorDescriptor_t>(h);
   return s;
 }
 

@@ -132,21 +132,23 @@ NVCC=/usr/local/cuda/bin/nvcc ./scripts/build_fatbin.sh
 ./build/bench 2000 build/vecadd.fatbin      # launch numbers need this argument
 ```
 
-**A pod can stay RUNNING forever without ever getting a machine.** Three in a
-row did this on 2026-09-09, minutes after two identical ones had worked. The
-tell is in the API rather than in `status`: no `publicIp`, no `portMappings`,
-and `runtime` false.
+**A pod that stays RUNNING but never gets a machine means the account is out
+of money.** It does not say so. `status` shows RUNNING, and the API shows no
+`publicIp`, no `portMappings` and `runtime` false, which looks exactly like a
+slow start. The message only appears if you try to create one by hand:
 
 ```sh
-curl -s -H "Authorization: Bearer $TOKEN" https://rest.runpod.io/v1/pods \
-  | python3 -c "import json,sys; [print(p['id'], p.get('publicIp'), bool(p.get('runtime'))) for p in json.load(sys.stdin)]"
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d @body.json https://rest.runpod.io/v1/pods
+# {"error":"create pod: Your account balance is too low to rent a pod. ..."}
 ```
 
-Widening the GPU list does not help, because the pod is not waiting on a GPU
-type; the platform has simply not placed it. Give it about two minutes, then
-delete and try again, and if a second one does the same, stop and come back
-later rather than paying to wait. There is no gpuTypes endpoint in the REST v1
-API to check capacity with, so this is the only signal.
+`create` in the script reports this as "creation did not return an id", so
+that message means check the balance before suspecting the platform. There is
+no balance endpoint in the REST v1 API; the console is the place to look, and
+adding funds is the only fix. Three pods in a row did this on 2026-09-09 and
+were blamed on placement; the real cause was a pod left running overnight
+after a failed delete, which drained the account.
 
 **A new pod reuses an old pod's address.** RunPod hands out host and port
 pairs from a pool, so ssh refuses with "Host key verification failed" on a pod

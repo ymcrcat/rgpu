@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <unordered_map>
 #include <vector>
 
 #include <cuda.h>
@@ -56,13 +57,62 @@ void put_status(Buffer* rsp, CUresult* out, cudnnStatus_t s) {
   if (s != CUDNN_STATUS_SUCCESS) *out = CUDA_ERROR_UNKNOWN;
 }
 
-void* get_ptr(Buffer& req, bool* ok) {
-  uint64_t v = 0;
-  if (!req.get(&v)) {
+// Descriptor handles the client minted for itself, mapped to the descriptors
+// they stand for. One map per connection, because it is one thread per
+// connection and the client's counter is only unique within its own process:
+// two clients minting the same value must not find each other's descriptors.
+constexpr uint64_t kHandleTag = 0x52475055ull << 32;  // "RGPU"
+
+bool minted(uint64_t v) { return (v >> 32) == (kHandleTag >> 32); }
+
+thread_local std::unordered_map<uint64_t, void*> t_handles;
+
+// A minted handle resolves to its descriptor; anything else is a value in this
+// process already, such as a device pointer or a cuDNN handle, and passes
+// through. A minted handle with no entry is a client bug or a stale value, and
+// is refused rather than dereferenced.
+void* resolve(uint64_t v, bool* ok) {
+  if (!minted(v)) return reinterpret_cast<void*>(v);
+  auto it = t_handles.find(v);
+  if (it == t_handles.end()) {
+    std::fprintf(stderr, "[rgpu-server] unknown cuDNN handle %llx\n",
+                 (unsigned long long)v);
     *ok = false;
     return nullptr;
   }
-  return reinterpret_cast<void*>(v);
+  return it->second;
+}
+
+uint64_t get_raw(Buffer& req, bool* ok) {
+  uint64_t v = 0;
+  if (!req.get(&v)) {
+    *ok = false;
+    return 0;
+  }
+  return v;
+}
+
+void* get_ptr(Buffer& req, bool* ok) {
+  uint64_t v = get_raw(req, ok);
+  if (!*ok) return nullptr;
+  return resolve(v, ok);
+}
+
+// An attribute array of descriptors carries minted handles, one per element,
+// which have to become real descriptors before cuDNN sees them. Returns false
+// if any of them is unknown, which would otherwise reach the library as a
+// wild pointer.
+bool resolve_descriptors(const uint8_t* in, size_t n, std::vector<uint8_t>* out) {
+  if (n % sizeof(uint64_t)) return false;
+  out->assign(in, in + n);
+  auto* v = reinterpret_cast<uint64_t*>(out->data());
+  for (size_t i = 0; i < n / sizeof(uint64_t); i++) {
+    bool ok = true;
+    void* real = resolve(v[i], &ok);
+    if (!ok) return false;
+    v[i] = reinterpret_cast<uint64_t>(real);
+  }
+  return true;
 }
 
 // Bounds an attribute array so a bad count cannot make the server allocate
@@ -171,17 +221,17 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
                                             cudnnBackendDescriptor_t*)>(
           "cudnnBackendCreateDescriptor");
       int32_t type = 0;
-      if (!fn || !req.get(&type)) {
+      uint64_t handle = 0;
+      if (!fn || !req.get(&type) || !(handle = get_raw(req, &ok), ok) ||
+          !minted(handle)) {
         put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
         return true;
       }
       cudnnBackendDescriptor_t d = nullptr;
       cudnnStatus_t s =
           fn(static_cast<cudnnBackendDescriptorType_t>(type), &d);
+      if (s == CUDNN_STATUS_SUCCESS) t_handles[handle] = d;
       put_status(rsp, out, s);
-      if (s == CUDNN_STATUS_SUCCESS) {
-        rsp->put<uint64_t>(reinterpret_cast<uint64_t>(d));
-      }
       return true;
     }
     case API_cudnnBackendDestroyDescriptor:
@@ -193,9 +243,15 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
               : (id == API_cudnnBackendInitialize ? "cudnnBackendInitialize"
                                                   : "cudnnBackendFinalize");
       auto fn = cudnn_sym<cudnnStatus_t (*)(cudnnBackendDescriptor_t)>(name);
-      auto d = static_cast<cudnnBackendDescriptor_t>(get_ptr(req, &ok));
+      uint64_t handle = get_raw(req, &ok);
+      auto d = static_cast<cudnnBackendDescriptor_t>(resolve(handle, &ok));
       if (!fn || !ok) { put_status(rsp, out, CUDNN_STATUS_BAD_PARAM); return true; }
-      put_status(rsp, out, fn(d));
+      cudnnStatus_t s = fn(d);
+      // The handle is gone whatever the library said: the client has already
+      // dropped it, so keeping the entry would only let a later stale use of
+      // that value find a destroyed descriptor.
+      if (id == API_cudnnBackendDestroyDescriptor) t_handles.erase(handle);
+      put_status(rsp, out, s);
       return true;
     }
     case API_cudnnBackendSetAttribute: {
@@ -219,6 +275,14 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       if (present && !req.get_sized(&bytes, &n)) {
         put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
         return true;
+      }
+      std::vector<uint8_t> resolved;
+      if (present && type == CUDNN_TYPE_BACKEND_DESCRIPTOR) {
+        if (!resolve_descriptors(bytes, n, &resolved)) {
+          put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
+          return true;
+        }
+        bytes = resolved.data();
       }
       put_status(rsp, out, fn(d, static_cast<cudnnBackendAttributeName_t>(name),
                          static_cast<cudnnBackendAttributeType_t>(type), count,
@@ -244,6 +308,7 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       // The caller's current contents came with the request, because for
       // descriptor arrays they are inputs that cuDNN fills in place.
       std::vector<uint8_t> buf;
+      std::vector<uint8_t> as_sent;
       if (has_array) {
         const uint8_t* bytes = nullptr;
         size_t n = 0;
@@ -251,7 +316,18 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
           put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
           return true;
         }
-        buf.assign(bytes, bytes + n);
+        as_sent.assign(bytes, bytes + n);
+        if (type == CUDNN_TYPE_BACKEND_DESCRIPTOR) {
+          // cuDNN fills the caller's own descriptors in place, so what comes
+          // back is the same set it was given. The client gets its own handles
+          // back rather than the values behind them.
+          if (!resolve_descriptors(bytes, n, &buf)) {
+            put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
+            return true;
+          }
+        } else {
+          buf.assign(bytes, bytes + n);
+        }
       }
       int64_t produced = 0;
       cudnnStatus_t s = fn(d, static_cast<cudnnBackendAttributeName_t>(name),
@@ -261,7 +337,11 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       put_status(rsp, out, s);
       if (s == CUDNN_STATUS_SUCCESS) {
         if (want_count) rsp->put<int64_t>(produced);
-        if (has_array) rsp->put_sized(buf.data(), buf.size());
+        if (has_array) {
+          const std::vector<uint8_t>& back =
+              type == CUDNN_TYPE_BACKEND_DESCRIPTOR ? as_sent : buf;
+          rsp->put_sized(back.data(), back.size());
+        }
       }
       return true;
     }
@@ -281,21 +361,26 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
     case API_cudnnCreateTensorDescriptor: {
       auto fn = cudnn_sym<cudnnStatus_t (*)(cudnnTensorDescriptor_t*)>(
           "cudnnCreateTensorDescriptor");
-      if (!fn) { put_status(rsp, out, CUDNN_STATUS_NOT_SUPPORTED); return true; }
+      uint64_t handle = get_raw(req, &ok);
+      if (!fn || !ok || !minted(handle)) {
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
+        return true;
+      }
       cudnnTensorDescriptor_t d = nullptr;
       cudnnStatus_t s = fn(&d);
+      if (s == CUDNN_STATUS_SUCCESS) t_handles[handle] = d;
       put_status(rsp, out, s);
-      if (s == CUDNN_STATUS_SUCCESS) {
-        rsp->put<uint64_t>(reinterpret_cast<uint64_t>(d));
-      }
       return true;
     }
     case API_cudnnDestroyTensorDescriptor: {
       auto fn = cudnn_sym<cudnnStatus_t (*)(cudnnTensorDescriptor_t)>(
           "cudnnDestroyTensorDescriptor");
-      auto d = static_cast<cudnnTensorDescriptor_t>(get_ptr(req, &ok));
+      uint64_t handle = get_raw(req, &ok);
+      auto d = static_cast<cudnnTensorDescriptor_t>(resolve(handle, &ok));
       if (!fn || !ok) { put_status(rsp, out, CUDNN_STATUS_BAD_PARAM); return true; }
-      put_status(rsp, out, fn(d));
+      cudnnStatus_t s = fn(d);
+      t_handles.erase(handle);
+      put_status(rsp, out, s);
       return true;
     }
     case API_cudnnSetTensorNdDescriptor: {
