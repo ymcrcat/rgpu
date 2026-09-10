@@ -34,6 +34,10 @@ std::vector<uint8_t> g_queued;
 // set. Round trips are the number that matters: on a real network each one
 // costs a full latency, so round trips per inference times the link's RTT is
 // the added time, without having to run over that link to find out.
+// Deliberately never destroyed: PyTorch's threads keep calling into the shim
+// while the process is exiting, and a std::map that has already run its
+// destructor is heap corruption rather than a wrong count. Printed from an
+// atexit handler instead, which runs before static destruction.
 struct Stats {
   uint64_t round_trips = 0;
   uint64_t async_calls = 0;
@@ -43,8 +47,7 @@ struct Stats {
   // asynchronous can be picked by evidence rather than by guess.
   std::map<uint32_t, uint64_t> by_api;
 
-  ~Stats() {
-    if (!std::getenv("RGPU_STATS")) return;
+  void report() {
     std::fprintf(stderr,
                  "[rgpu] %llu round trips, %llu one-way calls, "
                  "%.1f MiB out, %.1f MiB in\n",
@@ -60,7 +63,15 @@ struct Stats {
     }
   }
 };
-Stats g_stats;
+Stats& g_stats = *new Stats();
+
+// Registered on first use rather than unconditionally, so a process that never
+// talks to us installs nothing.
+void arm_stats_report() {
+  if (!std::getenv("RGPU_STATS")) return;
+  static std::once_flag once;
+  std::call_once(once, [] { std::atexit([] { g_stats.report(); }); });
+}
 
 // Flushed automatically once the queue reaches this size, so a long stretch of
 // asynchronous work cannot grow it without bound. Otherwise it goes out with
@@ -86,6 +97,7 @@ bool batching() {
 
 // Connects to RGPU_SERVER, "host:port", defaulting to 127.0.0.1:9713.
 bool ensure_connected_locked() {
+  arm_stats_report();
   if (g_fd >= 0) return true;
   if (g_connect_failed) return false;
 

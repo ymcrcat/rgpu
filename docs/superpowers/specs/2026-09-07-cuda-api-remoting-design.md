@@ -355,3 +355,39 @@ The first two together should take 638 to roughly 65, and they are policy and
 annotation rather than new machinery. Worth doing before any transport work:
 a shared memory transport makes each round trip cheaper, but there are 638 of
 them, and ten times fewer round trips beats a faster one.
+
+
+## Measured again, 2026-09-10: after cutting the round trips
+
+Same box, same model, after caching the primary context on the client and
+letting the status-only cuDNN calls go without waiting.
+
+| | native | before | after |
+|---|---|---|---|
+| batch 1 | 2.2-2.4 ms | 24.99 ms | 5.7-6.5 ms |
+| batch 32 | 11.27 ms | 24.58 ms | 11.30 ms |
+
+At batch 32 remoting is now free: 11.30 against 11.27 native, which is inside
+the run-to-run spread. At batch 1 it is 2.6 times native, down from 10.5.
+
+Round trips per inference went from 638 to 109, and what is left is almost
+entirely calls that have to answer with a value:
+
+| calls | what |
+|---|---|
+| 40 | `cudnnCreateTensorDescriptor` |
+| 20 | `cudnnBackendCreateDescriptor` |
+| 20 | `cudnnBackendFinalize` |
+| ~20 | cuBLAS, stream synchronisation, the rest |
+
+`cuDevicePrimaryCtxGetState` no longer appears at all.
+
+Two things this predicts. On a 0.1 ms datacentre link the added latency is
+about 11 ms per inference rather than 64 ms, so batch 32 stays practical and
+batch 1 does not. And the next round trip to remove is a handle: the create
+calls have to answer, so going further means minting handles on the client and
+mapping them on the server, which is the change the earlier note described.
+
+Finalize stays synchronous on purpose. A cuDNN frontend uses its failure to
+decide an engine is unsupported and try the next one, which is control flow
+rather than an error, and deferring it would change which kernels run.
