@@ -4,6 +4,14 @@ On this side a RemoteTensor is only metadata - a meta tensor holding shape,
 dtype and strides - plus an id naming the real tensor on the server. The id
 is kept on the meta tensor rather than on the wrapper, because compiled code
 works on the unwrapped meta tensors: rewrapping one gets its id back.
+
+Move a model to rgpu before any grad-tracking forward pass. Because this is a
+wrapper subclass, nn.Module.to("rgpu") installs parameters with
+torch.utils.swap_tensors, which refuses a parameter that something else still
+holds - and the autograd graph of an earlier forward holds exactly that. Moving
+afterwards raises "_apply(): Couldn't swap <Module>.<param>". A real CUDA device
+has no such rule; there the move happens in place. Under torch.no_grad(), or
+before the first forward, rgpu behaves the same as CUDA.
 """
 
 import itertools

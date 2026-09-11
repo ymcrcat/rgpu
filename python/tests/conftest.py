@@ -6,6 +6,8 @@ import time
 
 import pytest
 
+import rgpu  # noqa: F401  registers the "rgpu" device for every test module
+
 
 def free_port():
     with socket.socket() as s:
