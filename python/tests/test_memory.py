@@ -34,5 +34,19 @@ def test_a_long_chain_of_freed_temporaries_stays_correct():
         x = x * 1.0 + 0.0
     gc.collect()
     torch.rgpu.synchronize()
-    ids = [id_of(x._rgpu_meta)]
-    assert torch.allclose(session.get().request(wire.DOWNLOAD, ids[0]).tensor(), x.cpu())
+    tid = id_of(x._rgpu_meta)
+    assert torch.allclose(session.get().request(wire.DOWNLOAD, tid).tensor(), x.cpu())
+
+
+def test_an_op_produced_tensor_is_freed_on_the_server():
+    # Op-produced tensor (via multiplication, not factory). The critical path
+    # for nearly every real tensor goes through dispatch._wrap_outputs, which
+    # calls register(). This test verifies that op-produced tensors are freed.
+    t = torch.ones(1000, device="rgpu") * 1.0
+    tid = id_of(t._rgpu_meta)
+    assert torch.equal(session.get().request(wire.DOWNLOAD, tid).tensor(), torch.ones(1000))
+    del t
+    gc.collect()
+    torch.rgpu.synchronize()   # a safe point: the free goes out first
+    with pytest.raises(rgpu.RemoteError, match="no tensor"):
+        session.get().request(wire.DOWNLOAD, tid)
