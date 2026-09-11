@@ -13,6 +13,7 @@ looked up by it and outputs are given one.
 
 import itertools
 import logging
+import operator
 
 import torch
 from torch._dynamo.backends.common import aot_autograd
@@ -54,6 +55,17 @@ def serialize(gm):
             nodes.append(["placeholder"])
         elif n.op == "call_function":
             t = n.target
+            if t is operator.getitem:
+                # Not an op: how a graph picks one output of an op that has
+                # several, which aot_autograd writes for max_pool2d_with_indices,
+                # native_batch_norm and the rest. It travels as its own kind of
+                # node, so the server still runs nothing but aten ops.
+                src, i = n.args
+                if not isinstance(src, torch.fx.Node) or not isinstance(i, int):
+                    raise Unshippable(f"getitem with a {type(i).__name__} index")
+                nodes.append(["getitem", wire.NodeRef(index[src]), i])
+                index[n] = len(nodes) - 1
+                continue
             if not isinstance(t, torch._ops.OpOverload) or t.namespace != "aten":
                 raise Unshippable(f"{t} is not an aten op")
             nodes.append(["call", t._schema.name, t._overloadname,

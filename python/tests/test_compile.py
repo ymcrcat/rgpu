@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 import torch
 import torch.nn as nn
@@ -43,6 +45,29 @@ def test_resnet18_forward():
     assert torch.allclose(got, want, rtol=1e-4, atol=1e-4)
 
 
+def test_an_op_with_several_outputs(caplog):
+    torch.manual_seed(0)
+    model = nn.Sequential(nn.Conv2d(3, 4, 3), nn.MaxPool2d(2))   # max pool: two outputs
+    x = torch.randn(2, 3, 16, 16)
+    with caplog.at_level(logging.WARNING, logger="rgpu"), torch.no_grad():
+        want = model(x)
+        got = torch.compile(model.to("rgpu"), backend=EAGER)(x.to("rgpu")).cpu()
+    assert "eagerly" not in caplog.text
+    assert torch.allclose(got, want, atol=1e-5)
+
+
+def test_resnet18_ships_its_graph_rather_than_falling_back(caplog):
+    import torchvision.models as models
+    torch.manual_seed(0)
+    net = models.resnet18(weights=None).eval()
+    x = torch.randn(1, 3, 64, 64)
+    with caplog.at_level(logging.WARNING, logger="rgpu"), torch.no_grad():
+        want = net(x)
+        got = torch.compile(net.to("rgpu"), backend=EAGER)(x.to("rgpu")).cpu()
+    assert "eagerly" not in caplog.text
+    assert torch.allclose(got, want, rtol=1e-4, atol=1e-4)
+
+
 def test_a_compiled_training_step_matches_eager_and_waits_once():
     torch.manual_seed(0)
     make = lambda: nn.Sequential(nn.Linear(32, 64), nn.ReLU(), nn.Linear(64, 4))
@@ -75,6 +100,30 @@ def test_one_forward_and_one_backward_graph_are_shipped():
     finally:
         rc._ship = real
     assert len(shipped) == 2
+
+
+def test_a_backward_graph_over_an_op_with_several_outputs_is_shipped_too(caplog):
+    make = lambda: nn.Sequential(nn.Conv2d(3, 4, 3), nn.MaxPool2d(2), nn.Flatten(),
+                                 nn.Linear(4 * 7 * 7, 3))
+    torch.manual_seed(0)
+    ref = make()
+    torch.manual_seed(0)
+    model = make().to("rgpu")
+    x = torch.randn(2, 3, 16, 16)
+    ref(x).sum().backward()
+    shipped = []
+    import rgpu.compile as rc
+    real = rc._ship
+    rc._ship = lambda *a: shipped.append(a[0]) or real(*a)
+    try:
+        with caplog.at_level(logging.WARNING, logger="rgpu"):
+            torch.compile(model, backend=EAGER)(x.to("rgpu")).sum().backward()
+    finally:
+        rc._ship = real
+    assert "eagerly" not in caplog.text
+    assert len(shipped) == 2
+    for a, b in zip(ref.parameters(), model.parameters()):
+        assert torch.allclose(b.grad.cpu(), a.grad, atol=1e-5)
 
 
 def test_inductor_compiles_on_the_server():
