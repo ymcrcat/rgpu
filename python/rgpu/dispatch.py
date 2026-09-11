@@ -18,9 +18,21 @@ import torch
 from torch.utils._pytree import tree_flatten, tree_map
 
 from . import session, wire
-from .tensor import RemoteTensor, id_of, register
+from .tensor import RemoteTensor, id_of, meta_like, register
 
 aten = torch.ops.aten
+
+# In-place ops that change a tensor's shape or strides rather than its
+# values. A wrapper's metadata is fixed when it is made, so these would leave
+# it describing the wrong tensor. Refused, clearly, until that is handled.
+_METADATA_MUTATING = frozenset({
+    "resize_", "resize_as_", "set_", "as_strided_", "t_", "transpose_", "squeeze_",
+    "unsqueeze_", "swapaxes_", "swapdims_",
+})
+
+# Ops whose result depends on the data, but whose meta kernel says so with a
+# RuntimeError rather than NotImplementedError. They always wait.
+_ALWAYS_SYNC = frozenset({aten.equal.default})
 
 
 def meta_of(x):
@@ -106,10 +118,53 @@ def _writable_metas(func, args, kwargs):
     return metas
 
 
+def _returns_only_inputs(func):
+    returns = func._schema.returns
+    return all(r.alias_info is not None and r.alias_info.is_write for r in returns)
+
+
+def _run_sync(func, args, kwargs):
+    """The server runs it and says what came out. Output ids are the server's."""
+    if not _returns_only_inputs(func) and any(
+            r.alias_info is not None and r.alias_info.is_write for r in func._schema.returns):
+        raise NotImplementedError(
+            f"rgpu cannot run {func}: it writes to an input and returns a new tensor "
+            "whose size only the data can tell")
+    a, kw = _wire_args(args, kwargs)
+    value = session.get().request(wire.RUN_SYNC, func._schema.name, func._overloadname, a, kw)
+
+    def rebuild(v):
+        if isinstance(v, list) and v and v[0] == "__tensor__":
+            _, tid, dtype, shape, stride, offset = v
+            meta = meta_like(dtype, shape, stride, offset)
+            register(meta, tid)
+            return RemoteTensor(meta)
+        if isinstance(v, list):
+            return [rebuild(x) for x in v]
+        return v
+
+    out = rebuild(value)
+    return tuple(out) if len(func._schema.returns) > 1 else out
+
+
 def _run(func, args, kwargs):
     metas = _writable_metas(func, args, kwargs)
     before = [(m.shape, m.stride(), m.storage_offset()) for m in metas]
-    out = func(*tree_map(meta_of, args), **tree_map(meta_of, kwargs))
+    try:
+        out = func(*tree_map(meta_of, args), **tree_map(meta_of, kwargs))
+    except NotImplementedError:
+        if not _returns_only_inputs(func):
+            return _run_sync(func, args, kwargs)
+        # No meta kernel, but nothing new comes out, so there is no shape to
+        # infer: send it and hand back the inputs it wrote to.
+        returns = func._schema.returns
+        results = [_written_input(func, args, kwargs, r) for r in returns]
+        a, kw = _wire_args(args, kwargs)
+        out_ids = [None] * sum(len(tree_flatten(r)[0]) for r in results)
+        session.get().post(wire.RUN, func._schema.name, func._overloadname, a, kw, out_ids)
+        if not returns:
+            return None
+        return results[0] if len(results) == 1 else tuple(results)
     changed = False
     for m, (shape, stride, offset) in zip(metas, before):
         if m.shape != shape or m.stride() != stride or m.storage_offset() != offset:
@@ -126,6 +181,12 @@ def _run(func, args, kwargs):
 
 
 def handle(func, args, kwargs):
+    base = func._schema.name.split("::", 1)[1]
+    if base in _METADATA_MUTATING:
+        raise NotImplementedError(
+            f"rgpu cannot run {func} yet: it changes a tensor's shape in place")
+    if func in _ALWAYS_SYNC:
+        return _run_sync(func, args, kwargs)
     if func is aten._local_scalar_dense.default:
         return _download(args[0]).item()
     if func is aten._to_copy.default:
