@@ -54,6 +54,9 @@ HANDWRITTEN = {
     # a wire as a pointer. The server copies the array out and the client keeps
     # it for as long as the driver would have.
     "cuStreamGetCaptureInfo_v2",
+    # Its count is the caller's capacity on the way in and the number written
+    # on the way out, which the generator cannot express.
+    "cuGraphGetNodes",
     # Undocumented table of internal driver function pointers. cudart asks for
     # it immediately after cuInit. Hand-written so we can log which table is
     # wanted and control exactly what we answer.

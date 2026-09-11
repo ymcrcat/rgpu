@@ -368,6 +368,30 @@ CUresult cuStreamGetCaptureInfo_v2(CUstream hStream,
   return CUDA_SUCCESS;
 }
 
+// The count here is the caller's capacity going in and the number written
+// coming out, so the generated form was wrong in a quiet way: it would have
+// reported no nodes rather than failing.
+CUresult cuGraphGetNodes(CUgraph hGraph, CUgraphNode* nodes, size_t* numNodes) {
+  if (nodes && !numNodes) return CUDA_ERROR_INVALID_VALUE;
+  rgpu::Buffer req, rsp;
+  req.put<uint64_t>(reinterpret_cast<uint64_t>(hGraph));
+  req.put<uint8_t>(nodes ? 1 : 0);
+  req.put<uint64_t>(nodes ? static_cast<uint64_t>(*numNodes) : 0);
+  CUresult r = rgpu::call(rgpu::API_rgpu_graph_nodes, req, &rsp);
+  if (r != CUDA_SUCCESS) return r;
+  uint64_t n = 0;
+  if (!rsp.get(&n)) return CUDA_ERROR_UNKNOWN;
+  if (nodes) {
+    const uint8_t* bytes = nullptr;
+    size_t len = 0;
+    if (!rsp.get_sized(&bytes, &len)) return CUDA_ERROR_UNKNOWN;
+    const size_t room = *numNodes * sizeof(CUgraphNode);
+    std::memcpy(nodes, bytes, len < room ? len : room);
+  }
+  if (numNodes) *numNodes = static_cast<size_t>(n);
+  return CUDA_SUCCESS;
+}
+
 // --- the primary context ---------------------------------------------------
 //
 // PyTorch asks whether a device's primary context exists before a great many

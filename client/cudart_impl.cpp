@@ -1068,6 +1068,15 @@ cudaError_t cudaGraphUpload(cudaGraphExec_t graphExec, cudaStream_t stream) {
                                  reinterpret_cast<CUstream>(stream)));
 }
 
+cudaError_t cudaGraphGetNodes(cudaGraph_t graph, cudaGraphNode_t* nodes,
+                              size_t* numNodes) {
+  CUresult r = ensure_context();
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  return record_cu(cuGraphGetNodes(reinterpret_cast<CUgraph>(graph),
+                                   reinterpret_cast<CUgraphNode*>(nodes),
+                                   numNodes));
+}
+
 cudaError_t cudaGraphDestroy(cudaGraph_t graph) {
   CUresult r = ensure_context();
   if (r != CUDA_SUCCESS) return record_cu(r);

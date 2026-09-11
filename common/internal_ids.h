@@ -21,6 +21,11 @@ enum InternalId : uint32_t {
   // outputs is a pointer to an array the driver owns, which has no meaning on
   // the other side of a wire. The server copies the array out instead.
   API_rgpu_capture_info = kInternalBase + 4,
+  // cuGraphGetNodes. Its count parameter is both the caller's capacity and the
+  // number written, which the generator has no way to express: it treated the
+  // array as a single handle and never sent the capacity, so the call would
+  // have quietly reported no nodes at all.
+  API_rgpu_graph_nodes = kInternalBase + 5,
 };
 
 }  // namespace rgpu

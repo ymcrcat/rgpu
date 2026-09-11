@@ -391,3 +391,46 @@ mapping them on the server, which is the change the earlier note described.
 Finalize stays synchronous on purpose. A cuDNN frontend uses its failure to
 decide an engine is unsupported and try the next one, which is control flow
 rather than an error, and deferring it would change which kernels run.
+
+
+## torch.compile, 2026-09-11: the overhead goes away entirely
+
+torch.compile needed almost nothing. Inductor's kernels reach the GPU through
+the same driver calls this already forwards - Triton emits PTX, ptxas makes a
+cubin on the client, then it is `cuModuleLoadData` and `cuLaunchKernel` - so
+four of the five modes tested passed against eager on the first attempt. Only
+`reduce-overhead` failed, for want of stream capture.
+
+Capture turned out to need no new thinking. It happens on the server, and our
+calls arrive there in the order the application made them, on the stream it
+named, so the graph the driver builds is the graph the application described.
+Nothing in the shim has to understand what is being captured.
+
+ResNet-18, batch 1, on an RTX A4000:
+
+| | native | remoted | round trips per inference |
+|---|---|---|---|
+| eager | 1.89 ms | 3.97 ms | 49 |
+| torch.compile | 1.50 ms | 4.51 ms | 86 |
+| torch.compile, reduce-overhead | 1.18 ms | **1.18 ms** | **2** |
+
+With graphs the remoting overhead is not reduced, it is gone: the remoted
+figure matches native to the hundredth of a millisecond, because an iteration
+is one replay rather than several hundred calls. This is the answer to the
+batch-size question as well. Batch 32 hid the overhead behind compute; graphs
+remove it, so batch 1 is free too.
+
+Plain `torch.compile` without graphs is *worse* than eager over the wire, 86
+round trips against 49, even though it runs fewer kernels. Triton's launcher
+asks the driver for the device pointer behind every kernel argument on every
+launch, which was 144 round trips per inference before the client started
+answering from its own allocation table, and is most of what remains.
+
+### A quiet bug the generator would have shipped
+
+`cuGraphGetNodes` takes a count that is the caller's capacity going in and the
+number written coming out. The generator has no way to express that: it
+classified the array as a single handle and never sent the capacity, so the
+call would have reported zero nodes rather than failing. It is hand-written
+now, but the shape is not unique to it, and the others of that shape should be
+audited before something depends on one.

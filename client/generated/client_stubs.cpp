@@ -1224,20 +1224,6 @@ extern "C" CUresult cuGraphGetEdges_v2(CUgraph hGraph, CUgraphNode *from, CUgrap
   return rgpu::unimplemented("cuGraphGetEdges_v2", "struct-pointer:struct CUgraphEdgeData_st");
 }
 
-extern "C" CUresult cuGraphGetNodes(CUgraph hGraph, CUgraphNode *nodes, size_t *numNodes) {
-  rgpu::Buffer req;
-  req.put<uint64_t>(reinterpret_cast<uint64_t>(hGraph));
-  req.put<uint8_t>(nodes ? 1 : 0);
-  req.put<uint8_t>(numNodes ? 1 : 0);
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuGraphGetNodes, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  if (nodes) { uint64_t h_; if (!rsp.get(&h_)) return CUDA_ERROR_UNKNOWN;
-            *nodes = reinterpret_cast<CUgraphNode>(h_); }
-  if (numNodes && !rsp.get(numNodes)) return CUDA_ERROR_UNKNOWN;
-  return r_;
-}
-
 extern "C" CUresult cuGraphGetRootNodes(CUgraph hGraph, CUgraphNode *rootNodes, size_t *numRootNodes) {
   rgpu::Buffer req;
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hGraph));

@@ -140,6 +140,28 @@ CUresult handle_capture_info(Buffer& req, Buffer* rsp) {
   return CUDA_SUCCESS;
 }
 
+// cuGraphGetNodes, with the array sized by the caller's capacity. A capacity
+// of zero is the documented way to ask how many there are.
+CUresult handle_graph_nodes(Buffer& req, Buffer* rsp) {
+  uint64_t graph_v = 0, capacity = 0;
+  uint8_t want_nodes = 0;
+  if (!req.get(&graph_v) || !req.get(&want_nodes) || !req.get(&capacity)) {
+    return CUDA_ERROR_INVALID_VALUE;
+  }
+  auto graph = reinterpret_cast<CUgraph>(graph_v);
+
+  std::vector<CUgraphNode> nodes(want_nodes ? capacity : 0);
+  size_t n = nodes.size();
+  CUresult r = cuGraphGetNodes(graph, want_nodes ? nodes.data() : nullptr, &n);
+  if (r != CUDA_SUCCESS) return r;
+  rsp->put<uint64_t>(static_cast<uint64_t>(n));
+  if (want_nodes) {
+    rsp->put_sized(nodes.data(),
+                   (n < nodes.size() ? n : nodes.size()) * sizeof(CUgraphNode));
+  }
+  return CUDA_SUCCESS;
+}
+
 CUresult handle_hello(Buffer& req, Buffer* rsp) {
   (void)req;
   int version = 0;
@@ -154,6 +176,7 @@ bool dispatch_internal(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
     case API_rgpu_launch: *out = handle_launch(req, rsp); return true;
     case API_rgpu_hello: *out = handle_hello(req, rsp); return true;
     case API_rgpu_capture_info: *out = handle_capture_info(req, rsp); return true;
+    case API_rgpu_graph_nodes: *out = handle_graph_nodes(req, rsp); return true;
     default: return false;
   }
 }

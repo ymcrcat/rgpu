@@ -1045,21 +1045,6 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
     *out = r_; return true;
   }
 
-  case rgpu::API_cuGraphGetNodes: {
-    uint64_t u_hGraph{}; if (!req.get(&u_hGraph)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    CUgraph v_hGraph = reinterpret_cast<CUgraph>(u_hGraph);
-    uint8_t has_nodes{}; if (!req.get(&has_nodes)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    CUgraphNode v_nodes{};
-    uint8_t has_numNodes{}; if (!req.get(&has_numNodes)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    size_t v_numNodes{};
-    static auto fn_ = reinterpret_cast<decltype(&::cuGraphGetNodes)>(rgpu::driver_sym("cuGraphGetNodes"));
-    if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
-    CUresult r_ = fn_(v_hGraph, has_nodes ? &v_nodes : nullptr, has_numNodes ? &v_numNodes : nullptr);
-    if (has_nodes) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_nodes));
-    if (has_numNodes) rsp->put(v_numNodes);
-    *out = r_; return true;
-  }
-
   case rgpu::API_cuGraphGetRootNodes: {
     uint64_t u_hGraph{}; if (!req.get(&u_hGraph)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraph v_hGraph = reinterpret_cast<CUgraph>(u_hGraph);
