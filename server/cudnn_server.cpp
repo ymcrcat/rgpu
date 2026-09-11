@@ -15,6 +15,7 @@
 #include <cudnn.h>
 
 #include "common/cudnn_ids.h"
+#include "common/cudnn_sizes.h"
 #include "common/wire.h"
 
 namespace rgpu {
@@ -276,6 +277,14 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
         put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
         return true;
       }
+      // cuDNN reads count elements of the type's width. The bytes that
+      // arrived have to be exactly that, or it reads past them.
+      if (present && n != static_cast<size_t>(count) *
+                              rgpu::cudnn_element_size(
+                                  static_cast<cudnnBackendAttributeType_t>(type))) {
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
+        return true;
+      }
       std::vector<uint8_t> resolved;
       if (present && type == CUDNN_TYPE_BACKEND_DESCRIPTOR) {
         if (!resolve_descriptors(bytes, n, &resolved)) {
@@ -313,6 +322,14 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
         const uint8_t* bytes = nullptr;
         size_t n = 0;
         if (!req.get_sized(&bytes, &n)) {
+          put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
+          return true;
+        }
+        // cuDNN writes up to the requested count of elements into this
+        // buffer, so it has to have room for exactly that many.
+        if (n != static_cast<size_t>(requested) *
+                     rgpu::cudnn_element_size(
+                         static_cast<cudnnBackendAttributeType_t>(type))) {
           put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
           return true;
         }

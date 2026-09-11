@@ -231,12 +231,25 @@ def emit_client_unsupported(f, why):
 # server side
 # --------------------------------------------------------------------------
 
+def _server_expr(expr, params):
+    """A client-side size expression, rewritten over the server's decoded values."""
+    names = {p["name"] for p in params}
+    return re.sub(r"\b([A-Za-z_]\w*)\b",
+                  lambda m: "v_" + m.group(1) if m.group(1) in names else m.group(1),
+                  expr)
+
+
 def emit_server_case(f, plans, meta=None):
     name = f["name"]
     meta = meta or {}
     L = ["case rgpu::API_%s: {" % name]
     args = []
     post = []
+    # Sizes the client claimed, to be checked against the size the driver
+    # will really use once every parameter has been decoded. A buffer sized
+    # by one field while the driver is told another is how a request used to
+    # make the driver write past a buffer on the server.
+    checks = []
     for p, plan in zip(f["params"], plans):
         n, m = p["name"], plan["mode"]
         v = "v_" + n
@@ -276,16 +289,26 @@ def emit_server_case(f, plans, meta=None):
             L.append("  const uint8_t* b_%s = nullptr; size_t n_%s = 0;" % (n, n))
             L.append("  if (has_%s && !req.get_sized(&b_%s, &n_%s)) return CUDA_ERROR_INVALID_VALUE;" % (n, n, n))
             args.append("has_%s ? (%s)b_%s : nullptr" % (n, p["type"], n))
+            if m == "in_buffer":
+                checks.append("  if (has_%s && (size_t)(%s) != n_%s) return CUDA_ERROR_INVALID_VALUE;"
+                              % (n, _server_expr(plan["size"], f["params"]), n))
         elif m == "out_buffer":
             L.append("  uint8_t has_%s{}; uint64_t n_%s{};" % (n, n))
             L.append("  if (!req.get(&has_%s) || !req.get(&n_%s)) return CUDA_ERROR_INVALID_VALUE;" % (n, n))
-            L.append("  std::vector<uint8_t> b_%s(has_%s ? n_%s : 0);" % (n, n, n))
+            # Allocated only after the size is checked, below: a claimed size
+            # is not a reason to allocate anything.
+            L.append("  std::vector<uint8_t> b_%s;" % n)
+            checks.append("  if (has_%s && ((size_t)(%s) != n_%s || n_%s == 0)) return CUDA_ERROR_INVALID_VALUE;"
+                          % (n, _server_expr(plan["size"], f["params"]), n, n))
+            checks.append("  if (has_%s) b_%s.resize(n_%s);" % (n, n, n))
             args.append("has_%s ? (%s)b_%s.data() : nullptr" % (n, p["type"], n))
             post.append("  if (has_%s) rsp->put_sized(b_%s.data(), b_%s.size());" % (n, n, n))
         elif m == "ignore":
             args.append("nullptr")
         else:
             raise Unmarshalable(m)
+
+    L += checks
 
     # Resolve on first use rather than linking directly, so an entry point the
     # host driver lacks costs one unsupported call instead of stopping the
@@ -438,6 +461,7 @@ def main():
           "#include <cuda.h>", "",
           "#include \"common/generated/api_ids.h\"", "#include \"common/wire.h\"",
           "#include \"server/driver_syms.h\"",
+          "#include \"common/sizes.h\"",
           "",
           "namespace rgpu {",
           "// Returns true if `id` was handled. Hand-written handlers get first",

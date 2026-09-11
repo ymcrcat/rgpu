@@ -28,41 +28,18 @@
 
 #include "client/rpc.h"
 #include "common/cudnn_ids.h"
+#include "common/cudnn_sizes.h"
 
 namespace {
 
 // Width of one element of an attribute array. Getting this wrong would send
 // the wrong number of bytes, so the unknown case refuses rather than guesses.
 size_t element_size(cudnnBackendAttributeType_t t) {
-  switch (t) {
-    case CUDNN_TYPE_INT64:
-    case CUDNN_TYPE_DOUBLE:
-      return 8;
-    // A handle, a device pointer and a descriptor are all pointer-sized values
-    // belonging to the server. Copying the bytes is exactly right.
-    case CUDNN_TYPE_VOID_PTR:
-    case CUDNN_TYPE_HANDLE:
-    case CUDNN_TYPE_BACKEND_DESCRIPTOR:
-      return sizeof(void*);
-    case CUDNN_TYPE_FLOAT:
-    case CUDNN_TYPE_INT32:
-      return 4;
-    case CUDNN_TYPE_BOOLEAN:
-      return sizeof(bool);
-    case CUDNN_TYPE_CHAR:
-      return 1;
-    case CUDNN_TYPE_FRACTION:
-      return sizeof(cudnnFraction_t);
-    default:
-      // Every remaining type is an enumeration, which is int-sized. Listing
-      // them all would be a maintenance burden for no gain, but an unexpected
-      // value is worth saying out loud.
-      if (t < CUDNN_TYPE_HANDLE || t > CUDNN_TYPE_TENSOR_REORDERING_MODE) {
-        rgpu::log("unknown cuDNN attribute type %d; assuming an enumeration",
-                  static_cast<int>(t));
-      }
-      return sizeof(int);
+  if (!rgpu::cudnn_type_known(t)) {
+    rgpu::log("unknown cuDNN attribute type %d; assuming an enumeration",
+              static_cast<int>(t));
   }
+  return rgpu::cudnn_element_size(t);
 }
 
 cudnnStatus_t from_cu(CUresult r) {

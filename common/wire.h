@@ -152,7 +152,9 @@ class Buffer {
 
  private:
   bool take(size_t n) {
-    if (!ok_ || read_ + n > data_.size()) {
+    // Compared against what is left rather than added to the read position:
+    // a length near 2^64 from the wire would wrap that sum and pass.
+    if (!ok_ || n > data_.size() - read_) {
       ok_ = false;
       return false;
     }

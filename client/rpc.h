@@ -1,6 +1,8 @@
 // Client-side RPC entry points used by the generated stubs.
 #pragma once
 
+#include "common/sizes.h"
+
 #include <cstddef>
 #include <cstdint>
 
@@ -41,7 +43,6 @@ size_t image_size(const void* image);
 // API takes a bare void* whose meaning depends on the attribute, so the
 // generated stub asks this how many bytes to expect. Returns 0 for an
 // attribute we do not know, which the caller reports as invalid.
-size_t pointer_attr_size(unsigned int attribute);
 
 // Same idea as unimplemented(), for CUDA runtime entry points we have not
 // translated to driver calls yet.

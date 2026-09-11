@@ -16,6 +16,8 @@
 #include <chrono>
 #include <condition_variable>
 #include <map>
+#include <new>
+#include <stdexcept>
 #include <thread>
 #include <vector>
 
@@ -154,6 +156,18 @@ CUresult handle_graph_nodes(Buffer& req, Buffer* rsp) {
   }
   auto graph = reinterpret_cast<CUgraph>(graph_v);
 
+  // The capacity is the client's word, so it is not what gets allocated:
+  // a huge one used to throw here and take every session down with it. The
+  // graph's real node count bounds it.
+  constexpr uint64_t kMaxGraphNodes = 1ull << 24;
+  if (capacity > kMaxGraphNodes) return CUDA_ERROR_INVALID_VALUE;
+  if (want_nodes && capacity > 0) {
+    size_t real = 0;
+    CUresult r = cuGraphGetNodes(graph, nullptr, &real);
+    if (r != CUDA_SUCCESS) return r;
+    if (capacity > real) capacity = real;
+  }
+
   std::vector<CUgraphNode> nodes(want_nodes ? capacity : 0);
   size_t n = nodes.size();
   CUresult r = cuGraphGetNodes(graph, want_nodes ? nodes.data() : nullptr, &n);
@@ -259,7 +273,15 @@ void serve(int fd, const std::shared_ptr<Session>& session) {
   for (;;) {
     ReqHeader h{};
     std::vector<uint8_t> payload;
-    if (!recv_frame(fd, kMagicReq, &h, &payload)) break;
+    // The header's length is the client's word too; a frame declaring more
+    // than can be allocated ends this connection, not the server.
+    bool received = false;
+    try {
+      received = recv_frame(fd, kMagicReq, &h, &payload);
+    } catch (const std::bad_alloc&) {
+      logf("a frame declared more bytes than could be allocated; closing it");
+    }
+    if (!received) break;
 
     // A deliberate break, for the test that proves a real one is survivable.
     // Counted in frames read, so it lands in the middle of a conversation.
@@ -278,13 +300,28 @@ void serve(int fd, const std::shared_ptr<Session>& session) {
     Buffer rsp;
     CUresult result = CUDA_ERROR_NOT_SUPPORTED;
 
-    const bool handled =
-        dispatch_internal(h.api_id, req, &rsp, &result) ||
-        (dispatch_cublas && dispatch_cublas(h.api_id, req, &rsp, &result)) ||
-        (dispatch_cublaslt &&
-         dispatch_cublaslt(h.api_id, req, &rsp, &result)) ||
-        (dispatch_cudnn && dispatch_cudnn(h.api_id, req, &rsp, &result)) ||
-        dispatch_generated(h.api_id, req, &rsp, &result);
+    bool handled = false;
+    try {
+      handled =
+          dispatch_internal(h.api_id, req, &rsp, &result) ||
+          (dispatch_cublas && dispatch_cublas(h.api_id, req, &rsp, &result)) ||
+          (dispatch_cublaslt &&
+           dispatch_cublaslt(h.api_id, req, &rsp, &result)) ||
+          (dispatch_cudnn && dispatch_cudnn(h.api_id, req, &rsp, &result)) ||
+          dispatch_generated(h.api_id, req, &rsp, &result);
+    } catch (const std::bad_alloc&) {
+      // A request asking for more memory than there is. An error for this
+      // call, not a reason to end the process and every session in it.
+      handled = true;
+      result = CUDA_ERROR_OUT_OF_MEMORY;
+      rsp = Buffer();
+      logf("%s asked for more memory than could be allocated", api_name(h.api_id));
+    } catch (const std::exception& e) {
+      handled = true;
+      result = CUDA_ERROR_UNKNOWN;
+      rsp = Buffer();
+      logf("%s failed: %s", api_name(h.api_id), e.what());
+    }
     if (!handled) {
       logf("unknown api id %u (%s)", h.api_id, api_name(h.api_id));
       result = CUDA_ERROR_NOT_SUPPORTED;

@@ -9,6 +9,7 @@
 #include "common/generated/api_ids.h"
 #include "common/wire.h"
 #include "server/driver_syms.h"
+#include "common/sizes.h"
 
 namespace rgpu {
 // Returns true if `id` was handled. Hand-written handlers get first
@@ -442,10 +443,12 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   case rgpu::API_cuDeviceGetLuid: {
     uint8_t has_luid{}; uint64_t n_luid{};
     if (!req.get(&has_luid) || !req.get(&n_luid)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    std::vector<uint8_t> b_luid(has_luid ? n_luid : 0);
+    std::vector<uint8_t> b_luid;
     uint8_t has_deviceNodeMask{}; if (!req.get(&has_deviceNodeMask)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     unsigned int v_deviceNodeMask{};
     CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    if (has_luid && ((size_t)(8) != n_luid || n_luid == 0)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    if (has_luid) b_luid.resize(n_luid);
     static auto fn_ = reinterpret_cast<decltype(&::cuDeviceGetLuid)>(rgpu::driver_sym("cuDeviceGetLuid"));
     if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
     CUresult r_ = fn_(has_luid ? (char *)b_luid.data() : nullptr, has_deviceNodeMask ? &v_deviceNodeMask : nullptr, v_dev);
@@ -468,9 +471,11 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   case rgpu::API_cuDeviceGetName: {
     uint8_t has_name{}; uint64_t n_name{};
     if (!req.get(&has_name) || !req.get(&n_name)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    std::vector<uint8_t> b_name(has_name ? n_name : 0);
+    std::vector<uint8_t> b_name;
     int v_len{}; if (!req.get(&v_len)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUdevice v_dev{}; if (!req.get(&v_dev)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    if (has_name && ((size_t)(v_len) != n_name || n_name == 0)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    if (has_name) b_name.resize(n_name);
     static auto fn_ = reinterpret_cast<decltype(&::cuDeviceGetName)>(rgpu::driver_sym("cuDeviceGetName"));
     if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
     CUresult r_ = fn_(has_name ? (char *)b_name.data() : nullptr, v_len, v_dev);
@@ -1835,11 +1840,13 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   case rgpu::API_cuMemcpyDtoHAsync_v2: {
     uint8_t has_dstHost{}; uint64_t n_dstHost{};
     if (!req.get(&has_dstHost) || !req.get(&n_dstHost)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    std::vector<uint8_t> b_dstHost(has_dstHost ? n_dstHost : 0);
+    std::vector<uint8_t> b_dstHost;
     CUdeviceptr v_srcDevice{}; if (!req.get(&v_srcDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
+    if (has_dstHost && ((size_t)(v_ByteCount) != n_dstHost || n_dstHost == 0)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    if (has_dstHost) b_dstHost.resize(n_dstHost);
     static auto fn_ = reinterpret_cast<decltype(&::cuMemcpyDtoHAsync_v2)>(rgpu::driver_sym("cuMemcpyDtoHAsync_v2"));
     if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
     CUresult r_ = fn_(has_dstHost ? (void *)b_dstHost.data() : nullptr, v_srcDevice, v_ByteCount, v_hStream);
@@ -1852,9 +1859,11 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   case rgpu::API_cuMemcpyDtoH_v2: {
     uint8_t has_dstHost{}; uint64_t n_dstHost{};
     if (!req.get(&has_dstHost) || !req.get(&n_dstHost)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    std::vector<uint8_t> b_dstHost(has_dstHost ? n_dstHost : 0);
+    std::vector<uint8_t> b_dstHost;
     CUdeviceptr v_srcDevice{}; if (!req.get(&v_srcDevice)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    if (has_dstHost && ((size_t)(v_ByteCount) != n_dstHost || n_dstHost == 0)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    if (has_dstHost) b_dstHost.resize(n_dstHost);
     static auto fn_ = reinterpret_cast<decltype(&::cuMemcpyDtoH_v2)>(rgpu::driver_sym("cuMemcpyDtoH_v2"));
     if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
     CUresult r_ = fn_(has_dstHost ? (void *)b_dstHost.data() : nullptr, v_srcDevice, v_ByteCount);
@@ -1870,6 +1879,7 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
     size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
+    if (has_srcHost && (size_t)(v_ByteCount) != n_srcHost) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     static auto fn_ = reinterpret_cast<decltype(&::cuMemcpyHtoDAsync_v2)>(rgpu::driver_sym("cuMemcpyHtoDAsync_v2"));
     if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
     CUresult r_ = fn_(v_dstDevice, has_srcHost ? (const void *)b_srcHost : nullptr, v_ByteCount, v_hStream);
@@ -1882,6 +1892,7 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
     const uint8_t* b_srcHost = nullptr; size_t n_srcHost = 0;
     if (has_srcHost && !req.get_sized(&b_srcHost, &n_srcHost)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     size_t v_ByteCount{}; if (!req.get(&v_ByteCount)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    if (has_srcHost && (size_t)(v_ByteCount) != n_srcHost) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     static auto fn_ = reinterpret_cast<decltype(&::cuMemcpyHtoD_v2)>(rgpu::driver_sym("cuMemcpyHtoD_v2"));
     if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
     CUresult r_ = fn_(v_dstDevice, has_srcHost ? (const void *)b_srcHost : nullptr, v_ByteCount);
@@ -2347,9 +2358,11 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
   case rgpu::API_cuPointerGetAttribute: {
     uint8_t has_data{}; uint64_t n_data{};
     if (!req.get(&has_data) || !req.get(&n_data)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    std::vector<uint8_t> b_data(has_data ? n_data : 0);
+    std::vector<uint8_t> b_data;
     CUpointer_attribute v_attribute{}; if (!req.get(&v_attribute)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUdeviceptr v_ptr{}; if (!req.get(&v_ptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    if (has_data && ((size_t)(rgpu::pointer_attr_size(v_attribute)) != n_data || n_data == 0)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    if (has_data) b_data.resize(n_data);
     static auto fn_ = reinterpret_cast<decltype(&::cuPointerGetAttribute)>(rgpu::driver_sym("cuPointerGetAttribute"));
     if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
     CUresult r_ = fn_(has_data ? (void *)b_data.data() : nullptr, v_attribute, v_ptr);

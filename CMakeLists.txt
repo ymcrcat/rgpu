@@ -229,6 +229,10 @@ if(TARGET rgpu_cudnn)
   target_link_libraries(cudnn_smoke PRIVATE rgpu_cudnn rgpu_client)
 endif()
 
+# Sends the server requests a well-behaved client never would.
+add_executable(hostile_smoke tests/hostile_smoke.cpp)
+target_link_libraries(hostile_smoke PRIVATE rgpu_client)
+
 # Checks that a dropped connection does not lose the session.
 add_executable(reconnect_smoke tests/reconnect_smoke.cpp)
 target_link_libraries(reconnect_smoke PRIVATE rgpu_client)

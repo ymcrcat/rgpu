@@ -311,6 +311,13 @@ CUresult cuPointerGetAttribute(void* data, CUpointer_attribute attribute,
   // Same frame the generated stub sent: the output buffer's presence and
   // size, then the attribute and the pointer.
   const uint64_t size = rgpu::pointer_attr_size(attribute);
+  if (size == 0) {
+    // P2P tokens and mempool handles among others: refused, rather than
+    // guessing a size and moving the wrong number of bytes.
+    rgpu::log("unknown pointer attribute %u; refusing rather than guessing a size",
+              static_cast<unsigned>(attribute));
+    return CUDA_ERROR_INVALID_VALUE;
+  }
   rgpu::Buffer req, rsp;
   req.put<uint8_t>(1);
   req.put<uint64_t>(size);

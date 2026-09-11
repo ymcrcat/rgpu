@@ -13,6 +13,9 @@
 
 #include <cudnn.h>
 
+#include "client/rpc.h"
+#include "common/cudnn_ids.h"
+
 static int g_failures = 0;
 
 #define CHECK(call)                                                        \
@@ -168,6 +171,47 @@ int main() {
   CHECK(cudnnBackendDestroyDescriptor(pack));
   CHECK(cudnnBackendDestroyDescriptor(tensor));
   CHECK(cudnnDestroy(h));
+
+  // Requests whose count disagrees with the bytes sent, built by hand
+  // because the library never sends one. cuDNN reads or writes count times
+  // the element size, so a count larger than the bytes on the wire made it
+  // run past the server's buffer. Attributes the fake does not check itself,
+  // so a refusal can only have come from the server.
+  cudnnBackendDescriptor_t victim = nullptr;
+  CHECK(cudnnBackendCreateDescriptor(CUDNN_BACKEND_TENSOR_DESCRIPTOR, &victim));
+  const int64_t eight_bytes = 0;
+  {
+    rgpu::Buffer req, rsp;
+    req.put<uint64_t>(reinterpret_cast<uint64_t>(victim));
+    req.put<int32_t>(CUDNN_ATTR_TENSOR_STRIDES);
+    req.put<int32_t>(CUDNN_TYPE_INT64);
+    req.put<int64_t>(1000);             // a thousand elements...
+    req.put<uint8_t>(1);
+    req.put_sized(&eight_bytes, 8);     // ...in eight bytes
+    rgpu::call(rgpu::API_cudnnBackendSetAttribute, req, &rsp);
+    int32_t status = -1;
+    if (!rsp.get(&status) || status != CUDNN_STATUS_BAD_PARAM) {
+      std::fprintf(stderr, "FAIL: an attribute count past the bytes sent was accepted\n");
+      g_failures++;
+    }
+  }
+  {
+    rgpu::Buffer req, rsp;
+    req.put<uint64_t>(reinterpret_cast<uint64_t>(victim));
+    req.put<int32_t>(CUDNN_ATTR_TENSOR_DIMENSIONS);
+    req.put<int32_t>(CUDNN_TYPE_INT64);
+    req.put<int64_t>(1000);             // room for a thousand, it says...
+    req.put<uint8_t>(1);                // wants the count
+    req.put<uint8_t>(1);                // and the values
+    req.put_sized(&eight_bytes, 8);     // ...in eight bytes
+    rgpu::call(rgpu::API_cudnnBackendGetAttribute, req, &rsp);
+    int32_t status = -1;
+    if (!rsp.get(&status) || status != CUDNN_STATUS_BAD_PARAM) {
+      std::fprintf(stderr, "FAIL: a read-back with less room than it claimed was accepted\n");
+      g_failures++;
+    }
+  }
+  CHECK(cudnnBackendDestroyDescriptor(victim));
 
   if (g_failures) {
     std::printf("\nFAILED: %d check(s)\n", g_failures);

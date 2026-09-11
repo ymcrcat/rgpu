@@ -1,6 +1,10 @@
 // Round-trip check for the wire serializer. Runs anywhere, no CUDA needed.
 //   c++ -std=c++17 -I.. tests/test_wire.cpp -o /tmp/test_wire && /tmp/test_wire
+// The build is RelWithDebInfo, which defines NDEBUG and so turns every
+// assert into nothing. Undefined here, or this test checks nothing at all.
+#undef NDEBUG
 #include <cassert>
+#include <cstdint>
 #include <cstdio>
 
 #include "common/wire.h"
@@ -55,6 +59,18 @@ int main() {
   // An empty buffer is safely readable and immediately not-ok.
   Buffer empty;
   assert(!empty.get(&u32));
+
+  // A length field near 2^64 must be refused. The bounds check used to add
+  // it to the read position, which wraps around, so the check passed and the
+  // caller got a pointer with a length far past the end of the frame.
+  Buffer hostile;
+  hostile.put<uint64_t>(UINT64_MAX - 4);
+  hostile.put<uint32_t>(0);
+  Buffer h(hostile.data());
+  const uint8_t* evil = nullptr;
+  size_t evil_n = 0;
+  assert(!h.get_sized(&evil, &evil_n));
+  assert(!h.ok());
 
   std::printf("wire round-trip OK\n");
   return 0;
