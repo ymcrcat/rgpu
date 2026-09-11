@@ -50,7 +50,7 @@ def test_host_of_non_contiguous_and_empty():
     assert roundtrip(wire.Host.of(torch.empty(0, 3))).tensor().shape == (0, 3)
 
 
-@pytest.mark.parametrize("value", [object(), {1, 2}, 1j, torch.zeros(1), 2**64])
+@pytest.mark.parametrize("value", [object(), {1: 2}, {1, 2}, 1j, torch.zeros(1), 2**64])
 def test_unsupported_values_raise_where_encoded(value):
     with pytest.raises(wire.EncodeError):
         wire.encode(value)
@@ -63,6 +63,7 @@ def test_unsupported_values_raise_where_encoded(value):
     b"L" + struct.pack("<I", 1 << 30),        # list too long
     b"L\x01\x00\x00\x00" * 100 + b"N",        # nested too deeply
     b"Y" + struct.pack("<I", 5) + b"torch",   # not a dtype
+    b"K" + struct.pack("<I", 1) + struct.pack("<I", 5),  # K frame with truncated key
 ])
 def test_malformed_frames_raise(data):
     with pytest.raises(wire.DecodeError):

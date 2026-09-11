@@ -4,6 +4,7 @@ Frames are length-prefixed. Inside a frame, values use a small tagged
 encoding that can carry only these types:
 
   None, bool, int, float, str, bytes, list (tuples arrive as lists),
+  dict with str keys (op kwargs),
   torch.dtype, torch.layout, torch.memory_format,
   Dev     - a device by name; the server decides what "rgpu" means
   Ref     - a tensor held by the server, by id
@@ -203,9 +204,12 @@ def _enc(v, out, depth):
     elif isinstance(v, torch.memory_format):
         _put_str(b"M", str(v), out)
     elif isinstance(v, dict):
+        if not all(isinstance(k, str) for k in v.keys()):
+            raise EncodeError("dict keys must be strings")
         out += b"K" + struct.pack("<I", len(v))
         for k, val in v.items():
-            _enc(k, out, depth + 1)
+            b = k.encode()
+            out += struct.pack("<I", len(b)) + b
             _enc(val, out, depth + 1)
     else:
         raise EncodeError(f"cannot send a {type(v).__name__} to the server")
@@ -301,7 +305,7 @@ def _dec(r, depth):
         n = r.unpack("<I")
         if n > MAX_ITEMS:
             raise DecodeError("dict too large")
-        return {_dec(r, depth + 1): _dec(r, depth + 1) for _ in range(n)}
+        return {r.string(): _dec(r, depth + 1) for _ in range(n)}
     raise DecodeError(f"unknown tag {tag!r}")
 
 
