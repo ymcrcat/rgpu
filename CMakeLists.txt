@@ -229,6 +229,10 @@ if(TARGET rgpu_cudnn)
   target_link_libraries(cudnn_smoke PRIVATE rgpu_cudnn rgpu_client)
 endif()
 
+# Checks that a dropped connection does not lose the session.
+add_executable(reconnect_smoke tests/reconnect_smoke.cpp)
+target_link_libraries(reconnect_smoke PRIVATE rgpu_client)
+
 # Checks the CUDA graph path, which is what torch.compile's reduce-overhead
 # mode uses. Linked against our runtime shim, since that is where the
 # translation lives.

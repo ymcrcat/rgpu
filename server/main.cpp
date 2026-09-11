@@ -12,6 +12,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <map>
 #include <thread>
 #include <vector>
 
@@ -196,9 +200,53 @@ bool dispatch_internal(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
   }
 }
 
+// --- sessions -------------------------------------------------------------
+//
+// A session is a client process; a connection is one attempt by it to reach
+// us. They are not the same thing, and the difference is what makes a dropped
+// connection survivable: when a connection goes, the session waits rather than
+// dying, and the next connection carrying the same id is handed to the very
+// thread that was serving it.
+//
+// It has to be the same thread. The current CUDA context is thread state, and
+// so is the map of the client's minted cuDNN handles. Handing the socket back
+// to the thread that owns them means everything the client is holding - device
+// pointers, modules, descriptors - is still valid, because nothing was ever
+// torn down.
+
+struct Session {
+  std::mutex mu;
+  std::condition_variable cv;
+  int fd = -1;                 // the current connection, -1 while waiting
+  bool finished = false;       // the serving thread has given up and gone
+  uint32_t last_req = 0;       // last request this session actually completed
+  // The most recent reply, kept in case the connection died between running
+  // the call and answering it. Without this the client has a request that was
+  // executed and never answered: resending it would run it twice, and not
+  // resending it would wait forever.
+  uint32_t last_reply_id = 0;
+  std::vector<uint8_t> last_reply;
+};
+
+using SessionKey = std::pair<uint64_t, uint64_t>;
+
+std::mutex g_sessions_mu;
+std::map<SessionKey, std::shared_ptr<Session>> g_sessions;
+
+// How long a session waits for its client to come back. Long enough to outlast
+// a lost route or a tunnel restarting, short enough that a client that is
+// genuinely gone does not hold a GPU forever.
+int session_grace_seconds() {
+  const char* v = std::getenv("RGPU_SESSION_GRACE");
+  int n = v ? std::atoi(v) : 120;
+  return n > 0 ? n : 120;
+}
+
 // --- connection handling --------------------------------------------------
 
-void serve(int fd) {
+void serve_session(std::shared_ptr<Session> session, SessionKey key);
+
+void serve(int fd, const std::shared_ptr<Session>& session) {
   tune_socket(fd);
   // A call sent without expecting a reply has nowhere to report a failure, so
   // we hold the first one and hand it to the next call that does reply. CUDA
@@ -212,6 +260,19 @@ void serve(int fd) {
     ReqHeader h{};
     std::vector<uint8_t> payload;
     if (!recv_frame(fd, kMagicReq, &h, &payload)) break;
+
+    // A deliberate break, for the test that proves a real one is survivable.
+    // Counted in frames read, so it lands in the middle of a conversation.
+    static const int drop_after = [] {
+      const char* v = std::getenv("RGPU_DROP_AFTER");
+      return v ? std::atoi(v) : 0;
+    }();
+    static std::atomic<int> frames_seen{0};
+    if (drop_after > 0 && frames_seen.fetch_add(1) + 1 == drop_after) {
+      logf("dropping the connection after %d frames (RGPU_DROP_AFTER)",
+           drop_after);
+      break;
+    }
 
     Buffer req(std::move(payload));
     Buffer rsp;
@@ -240,6 +301,10 @@ void serve(int fd) {
     }
 
     if (h.flags & kFlagNoReply) {
+      {
+        std::lock_guard<std::mutex> lk(session->mu);
+        session->last_req = h.req_id;
+      }
       if (result != CUDA_SUCCESS && pending_async == CUDA_SUCCESS) {
         pending_async = result;
         // Always logged: an application that ignores the next return value
@@ -255,15 +320,140 @@ void serve(int fd) {
       pending_async = CUDA_SUCCESS;
     }
 
+    {
+      std::lock_guard<std::mutex> lk(session->mu);
+      session->last_req = h.req_id;
+    }
+
     RspHeader rh{};
     rh.magic = kMagicRsp;
     rh.req_id = h.req_id;
     rh.result = static_cast<int32_t>(result);
     rh.payload_len = static_cast<uint32_t>(rsp.size());
+    {
+      const auto* rb = reinterpret_cast<const uint8_t*>(&rh);
+      std::lock_guard<std::mutex> lk(session->mu);
+      session->last_reply_id = h.req_id;
+      session->last_reply.assign(rb, rb + sizeof(rh));
+      session->last_reply.insert(session->last_reply.end(), rsp.data().begin(),
+                                 rsp.data().end());
+    }
     if (!send_frame(fd, rh, rsp)) break;
   }
   ::close(fd);
-  logf("client disconnected");
+  logf("connection closed");
+}
+
+// Serves one session across however many connections it takes. Between them
+// the thread waits, holding everything the client owns.
+void serve_session(std::shared_ptr<Session> session, SessionKey key) {
+  for (;;) {
+    int fd = -1;
+    {
+      std::unique_lock<std::mutex> lk(session->mu);
+      if (session->fd < 0) {
+        const auto grace = std::chrono::seconds(session_grace_seconds());
+        if (!session->cv.wait_for(lk, grace,
+                                  [&] { return session->fd >= 0; })) {
+          // Nobody came back. Everything this session holds goes with it.
+          session->finished = true;
+          break;
+        }
+      }
+      fd = session->fd;
+    }
+
+    serve(fd, session);
+
+    std::lock_guard<std::mutex> lk(session->mu);
+    if (session->fd == fd) session->fd = -1;
+    logf("session %llx waiting up to %ds for the client to come back",
+         (unsigned long long)key.first, session_grace_seconds());
+  }
+
+  {
+    std::lock_guard<std::mutex> lk(g_sessions_mu);
+    g_sessions.erase(key);
+  }
+  logf("session %llx expired; its GPU state is gone",
+       (unsigned long long)key.first);
+}
+
+// Reads the handshake and either starts a session or hands the connection to
+// the thread already serving one.
+void accept_connection(int fd) {
+  Handshake hello{};
+  if (!read_exact(fd, &hello, sizeof(hello)) || hello.magic != kMagicHello) {
+    logf("connection did not begin with a handshake; closing");
+    ::close(fd);
+    return;
+  }
+  if (hello.version != kProtocolVersion) {
+    logf("client speaks protocol %u, this server speaks %u; closing",
+         hello.version, kProtocolVersion);
+    ::close(fd);
+    return;
+  }
+
+  const SessionKey key{hello.session_hi, hello.session_lo};
+  std::shared_ptr<Session> session;
+  bool resumed = false;
+  {
+    std::lock_guard<std::mutex> lk(g_sessions_mu);
+    auto it = g_sessions.find(key);
+    if (it != g_sessions.end()) {
+      std::lock_guard<std::mutex> slk(it->second->mu);
+      if (!it->second->finished) {
+        session = it->second;
+        resumed = true;
+      }
+    }
+    if (!session) {
+      session = std::make_shared<Session>();
+      g_sessions[key] = session;
+    }
+  }
+
+  HandshakeReply reply{};
+  reply.magic = kMagicHello;
+  reply.version = kProtocolVersion;
+  {
+    std::lock_guard<std::mutex> lk(session->mu);
+    reply.resumed = resumed ? 1u : 0u;
+    reply.last_req_id = session->last_req;
+  }
+  if (!write_exact(fd, &reply, sizeof(reply))) {
+    ::close(fd);
+    return;
+  }
+
+  if (resumed) {
+    logf("session %llx resumed; %u requests completed before the break",
+         (unsigned long long)key.first, reply.last_req_id);
+    std::lock_guard<std::mutex> lk(session->mu);
+    // A reply the client never received. It is safe to send again and it is
+    // the only way that request can be answered, because running it a second
+    // time would not be the same thing.
+    if (session->last_reply_id > hello.last_req_id &&
+        !session->last_reply.empty()) {
+      if (!write_exact(fd, session->last_reply.data(),
+                       session->last_reply.size())) {
+        ::close(fd);
+        return;
+      }
+      logf("  resent the reply to request %u", session->last_reply_id);
+    }
+    session->fd = fd;
+    session->cv.notify_all();
+    return;
+  }
+
+  logf("session %llx started", (unsigned long long)key.first);
+  {
+    std::lock_guard<std::mutex> lk(session->mu);
+    session->fd = fd;
+  }
+  std::thread(serve_session, session, key).detach();
 }
 
 }  // namespace
@@ -330,7 +520,7 @@ int main(int argc, char** argv) {
       break;
     }
     rgpu::logf("client connected");
-    std::thread(rgpu::serve, fd).detach();
+    std::thread(rgpu::accept_connection, fd).detach();
   }
   return 0;
 }

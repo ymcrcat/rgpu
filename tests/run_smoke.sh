@@ -47,6 +47,26 @@ if [[ -x "$BUILD/cudnn_smoke" ]]; then
     "$BUILD/cudnn_smoke" || rc=1
 fi
 
+# A server that breaks the connection partway through, to show the client can
+# pick the session back up. Its own server, since the drop is a server-wide
+# setting and the other tests want a connection that stays up.
+if [[ -x "$BUILD/reconnect_smoke" ]]; then
+  echo
+  DROP_PORT=$((PORT + 1))
+  RGPU_DROP_AFTER=12 RGPU_SESSION_GRACE=30 "$BUILD/rgpu-server-fake" "$DROP_PORT" &
+  DROP_SRV=$!
+  for _ in $(seq 1 50); do
+    if (exec 3<>/dev/tcp/127.0.0.1/"$DROP_PORT") 2>/dev/null; then
+      exec 3<&- 3>&-
+      break
+    fi
+    sleep 0.1
+  done
+  LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$DROP_PORT" \
+    "$BUILD/reconnect_smoke" || rc=1
+  kill $DROP_SRV 2>/dev/null
+fi
+
 # The runtime API path, if it was built. Our libcudart must come first so the
 # loader picks it over any stock one.
 if [[ -x "$BUILD/cudart_smoke" ]]; then

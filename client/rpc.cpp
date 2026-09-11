@@ -10,7 +10,11 @@
 #include <cstdlib>
 #include <cstring>
 #include <map>
+#include <chrono>
+#include <deque>
 #include <mutex>
+#include <random>
+#include <thread>
 #include <set>
 #include <string>
 
@@ -24,6 +28,8 @@ std::mutex g_mu;          // guards the socket, the counter and the send queue
 int g_fd = -1;
 uint32_t g_next_req = 1;
 bool g_connect_failed = false;
+uint32_t g_last_reply = 0;   // last request id we have seen a reply for
+bool g_had_session = false;  // we have talked to this server before
 
 // Frames queued by call_async and not yet written. Holding them lets a run of
 // launches leave the client in one write instead of one per call, and lets
@@ -88,6 +94,51 @@ bool verbose() {
   return v;
 }
 
+// This client process, as the server knows it. A connection is one attempt to
+// reach the server; the session is what holds the GPU state, and it outlives
+// any particular connection.
+struct SessionId {
+  uint64_t hi = 0;
+  uint64_t lo = 0;
+};
+
+SessionId make_session_id() {
+  std::random_device rd;
+  std::uniform_int_distribution<uint64_t> dist;
+  std::mt19937_64 gen(((uint64_t)rd() << 32) ^ rd() ^
+                      (uint64_t)::getpid() ^
+                      (uint64_t)std::chrono::steady_clock::now()
+                          .time_since_epoch()
+                          .count());
+  return SessionId{dist(gen), dist(gen)};
+}
+
+const SessionId g_session = make_session_id();
+
+// Frames written but not yet known to have reached the server. A reply
+// acknowledges every frame up to its own id, because the server works through
+// them in order, so this holds the batch since the last reply and nothing
+// more. After a reconnect it is what gets sent again.
+struct SentFrame {
+  uint32_t req_id;
+  std::vector<uint8_t> bytes;
+};
+std::deque<SentFrame> g_unacked;
+size_t g_unacked_bytes = 0;
+
+// A module image is megabytes, and holding several of them to replay would
+// cost more than the recovery is worth. Past this the session is declared
+// unrecoverable rather than quietly using unbounded memory.
+constexpr size_t kMaxUnackedBytes = 64u << 20;
+bool g_replay_possible = true;
+
+void forget_acked_locked(uint32_t up_to) {
+  while (!g_unacked.empty() && g_unacked.front().req_id <= up_to) {
+    g_unacked_bytes -= g_unacked.front().bytes.size();
+    g_unacked.pop_front();
+  }
+}
+
 // Batching is on by default. RGPU_BATCH=0 makes every call a round trip,
 // which is slower but makes a failing call report itself where it happened.
 bool batching() {
@@ -139,21 +190,101 @@ bool ensure_connected_locked() {
     return false;
   }
   tune_socket(fd);
+
+  // Say who we are. The server either starts a session or gives us back the
+  // one we had, with everything in it still alive.
+  Handshake hello{};
+  hello.magic = kMagicHello;
+  hello.version = kProtocolVersion;
+  hello.session_hi = g_session.hi;
+  hello.session_lo = g_session.lo;
+  hello.last_req_id = g_last_reply;
+  HandshakeReply reply{};
+  if (!write_exact(fd, &hello, sizeof(hello)) ||
+      !read_exact(fd, &reply, sizeof(reply)) ||
+      reply.magic != kMagicHello) {
+    log("handshake with %s failed", spec.c_str());
+    ::close(fd);
+    g_connect_failed = true;
+    return false;
+  }
+  if (reply.version != kProtocolVersion) {
+    log("server speaks protocol %u, this client speaks %u", reply.version,
+        kProtocolVersion);
+    ::close(fd);
+    g_connect_failed = true;
+    return false;
+  }
+
+  if (g_had_session && !reply.resumed) {
+    // The session is gone rather than merely unreachable: every device
+    // pointer and handle the application is holding refers to nothing.
+    log("the server no longer has our session; GPU state is gone");
+    ::close(fd);
+    g_connect_failed = true;
+    return false;
+  }
+
   g_fd = fd;
-  if (verbose()) log("connected to %s", spec.c_str());
+  g_had_session = true;
+  if (reply.resumed) {
+    // Anything the server already finished must not be sent twice, and
+    // everything still queued to be written is in the replay buffer already.
+    forget_acked_locked(reply.last_req_id);
+    g_queued.clear();
+    log("reconnected to %s and resumed; %zu call(s) to send again",
+        spec.c_str(), g_unacked.size());
+    for (const auto& f : g_unacked) {
+      if (!write_exact(g_fd, f.bytes.data(), f.bytes.size())) {
+        ::close(g_fd);
+        g_fd = -1;
+        return false;
+      }
+    }
+  } else if (verbose()) {
+    log("connected to %s", spec.c_str());
+  }
   return true;
 }
 
+// Waits for the server to come back, for as long as the session is likely to
+// be kept there. Reconnecting is worth trying because the state is not on this
+// side: if the session is still alive the application never learns anything
+// happened.
+bool reconnect_locked() {
+  if (!g_replay_possible) {
+    log("too much unacknowledged work to replay; not reconnecting");
+    return false;
+  }
+  const int seconds = env_int("RGPU_RECONNECT_SECONDS", 60);
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(seconds);
+  int attempt = 0;
+  while (std::chrono::steady_clock::now() < deadline) {
+    const int wait_ms = attempt < 5 ? 100 * (1 << attempt) : 3000;
+    std::this_thread::sleep_for(std::chrono::milliseconds(wait_ms));
+    attempt++;
+    g_connect_failed = false;
+    if (ensure_connected_locked()) return true;
+    if (g_connect_failed && g_had_session && g_fd < 0 && !g_replay_possible) {
+      break;
+    }
+  }
+  log("could not reach the server again within %ds", seconds);
+  g_connect_failed = true;
+  return false;
+}
+
+// The connection is gone; the session on the other side may not be. Closing
+// the socket here says nothing about whether the GPU state survived - that is
+// decided when we try to reconnect and the server says whether it still has
+// us.
 void drop_connection_locked(const char* why) {
   if (g_fd >= 0) {
     ::close(g_fd);
     g_fd = -1;
   }
-  // A dropped connection loses all server-side state (contexts, allocations,
-  // loaded modules), so silently reconnecting would hand the application a
-  // GPU that has forgotten everything. Fail instead.
-  g_connect_failed = true;
-  log("connection lost (%s); GPU state is gone, failing subsequent calls", why);
+  log("connection lost (%s); trying to reach the server again", why);
 }
 
 }  // namespace
@@ -179,11 +310,30 @@ void queue_frame_locked(uint32_t api_id, const Buffer& req, uint32_t flags) {
   g_queued.insert(g_queued.end(), hb, hb + sizeof(h));
   g_queued.insert(g_queued.end(), req.data().begin(), req.data().end());
   g_stats.bytes_out += sizeof(h) + req.size();
+
+  // Kept until a reply proves the server has it. Everything still in the send
+  // queue is in here too, so a reconnect replays from here and starts the
+  // queue empty.
+  if (g_replay_possible) {
+    SentFrame f;
+    f.req_id = h.req_id;
+    f.bytes.reserve(sizeof(h) + req.size());
+    f.bytes.insert(f.bytes.end(), hb, hb + sizeof(h));
+    f.bytes.insert(f.bytes.end(), req.data().begin(), req.data().end());
+    g_unacked_bytes += f.bytes.size();
+    g_unacked.push_back(std::move(f));
+    if (g_unacked_bytes > kMaxUnackedBytes) {
+      g_replay_possible = false;
+      g_unacked.clear();
+      g_unacked_bytes = 0;
+    }
+  }
 }
 
 // Writes everything queued as a single write. Returns false if the connection
 // died, in which case it has already been dropped.
 bool flush_locked() {
+  if (g_fd < 0) return false;
   if (g_queued.empty()) return true;
   const bool ok = write_exact(g_fd, g_queued.data(), g_queued.size());
   g_queued.clear();
@@ -192,36 +342,17 @@ bool flush_locked() {
 }
 
 CUresult call_async(uint32_t api_id, const Buffer& req) {
+  if (!batching()) {
+    // Wait for the reply, so a failure surfaces at the call that caused it.
+    Buffer rsp;
+    return call(api_id, req, &rsp);
+  }
+
   std::lock_guard<std::mutex> lk(g_mu);
   if (!ensure_connected_locked()) return CUDA_ERROR_NOT_INITIALIZED;
 
   if (verbose()) log("~> %s (%zu bytes, no reply)", api_name(api_id), req.size());
 
-  if (!batching()) {
-    // Same frame, but wait for the reply so a failure surfaces here.
-    ReqHeader h{};
-    h.magic = kMagicReq;
-    h.api_id = api_id;
-    h.req_id = g_next_req++;
-    h.flags = 0;
-    h.payload_len = static_cast<uint32_t>(req.size());
-    if (!flush_locked()) return CUDA_ERROR_UNKNOWN;
-    if (!send_frame(g_fd, h, req)) {
-      drop_connection_locked("send failed");
-      return CUDA_ERROR_UNKNOWN;
-    }
-    g_stats.bytes_out += sizeof(h) + req.size();
-    RspHeader rh{};
-    std::vector<uint8_t> payload;
-    if (!recv_frame(g_fd, kMagicRsp, &rh, &payload)) {
-      drop_connection_locked("recv failed");
-      return CUDA_ERROR_UNKNOWN;
-    }
-    g_stats.round_trips++;
-    g_stats.by_api[api_id]++;
-    g_stats.bytes_in += sizeof(rh) + payload.size();
-    return static_cast<CUresult>(rh.result);
-  }
 
   queue_frame_locked(api_id, req, kFlagNoReply);
   g_stats.async_calls++;
@@ -244,26 +375,39 @@ CUresult call(uint32_t api_id, const Buffer& req, Buffer* rsp) {
   // sees the same order the application issued.
   queue_frame_locked(api_id, req, 0);
   const uint32_t expect_id = g_next_req - 1;
-  if (!flush_locked()) return CUDA_ERROR_UNKNOWN;
 
-  RspHeader rh{};
-  std::vector<uint8_t> payload;
-  if (!recv_frame(g_fd, kMagicRsp, &rh, &payload)) {
-    drop_connection_locked("recv failed");
-    return CUDA_ERROR_UNKNOWN;
-  }
-  if (rh.req_id != expect_id) {
-    // Under the lock this cannot happen unless the stream desynced.
-    drop_connection_locked("response id mismatch");
-    return CUDA_ERROR_UNKNOWN;
-  }
+  // Two goes: one on the connection we have, and if that breaks, one on a
+  // connection to the same session. The replay makes the second attempt the
+  // same request, not a new one.
+  for (int attempt = 0; attempt < 2; attempt++) {
+    if (!flush_locked()) {
+      if (attempt == 0 && reconnect_locked()) continue;
+      return CUDA_ERROR_UNKNOWN;
+    }
 
-  g_stats.round_trips++;
-  g_stats.by_api[api_id]++;
-  g_stats.bytes_in += sizeof(rh) + payload.size();
-  *rsp = Buffer(std::move(payload));
-  if (verbose()) log("<- %s result=%d", api_name(api_id), rh.result);
-  return static_cast<CUresult>(rh.result);
+    RspHeader rh{};
+    std::vector<uint8_t> payload;
+    if (!recv_frame(g_fd, kMagicRsp, &rh, &payload)) {
+      drop_connection_locked("recv failed");
+      if (attempt == 0 && reconnect_locked()) continue;
+      return CUDA_ERROR_UNKNOWN;
+    }
+    if (rh.req_id != expect_id) {
+      // Under the lock this cannot happen unless the stream desynced.
+      drop_connection_locked("response id mismatch");
+      return CUDA_ERROR_UNKNOWN;
+    }
+
+    g_last_reply = rh.req_id;
+    forget_acked_locked(rh.req_id);
+    g_stats.round_trips++;
+    g_stats.by_api[api_id]++;
+    g_stats.bytes_in += sizeof(rh) + payload.size();
+    *rsp = Buffer(std::move(payload));
+    if (verbose()) log("<- %s result=%d", api_name(api_id), rh.result);
+    return static_cast<CUresult>(rh.result);
+  }
+  return CUDA_ERROR_UNKNOWN;
 }
 
 CUresult unimplemented(const char* name, const char* why) {

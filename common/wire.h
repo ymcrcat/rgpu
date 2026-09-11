@@ -14,6 +14,31 @@ namespace rgpu {
 
 constexpr uint32_t kMagicReq = 0x52475155;  // "RGQU"
 constexpr uint32_t kMagicRsp = 0x52475250;  // "RGRP"
+constexpr uint32_t kMagicHello = 0x52474845;  // "RGHE"
+
+// Sent once, before any frames. The session id is the client process, not the
+// connection: a connection that drops takes no state with it, because the
+// server keeps the session alive for a while and hands the next connection
+// carrying the same id back to the very thread that was serving it. That
+// thread still holds the CUDA context, so device memory and every handle the
+// client is holding stay valid.
+constexpr uint32_t kProtocolVersion = 2;
+
+struct Handshake {
+  uint32_t magic;
+  uint32_t version;
+  uint64_t session_hi;
+  uint64_t session_lo;
+  uint32_t last_req_id;  // last reply the client received; 0 for a new session
+  uint32_t reserved;
+};
+
+struct HandshakeReply {
+  uint32_t magic;
+  uint32_t version;
+  uint32_t resumed;      // 1 if this attached to a session that already existed
+  uint32_t last_req_id;  // last request that session actually completed
+};
 
 // Flags on a request frame.
 enum : uint32_t {
