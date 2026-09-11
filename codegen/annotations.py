@@ -50,6 +50,10 @@ HANDWRITTEN = {
     "cuMemHostUnregister",
     # Version negotiation is answered locally.
     "cuDriverGetVersion",
+    # One output is a pointer to an array the driver owns, which cannot cross
+    # a wire as a pointer. The server copies the array out and the client keeps
+    # it for as long as the driver would have.
+    "cuStreamGetCaptureInfo_v2",
     # Undocumented table of internal driver function pointers. cudart asks for
     # it immediately after cuInit. Hand-written so we can log which table is
     # wanted and control exactly what we answer.
@@ -64,6 +68,12 @@ HANDWRITTEN = {
 # and it was 45% of all round trips before this. Retain, release, reset and
 # set-flags come along because they are what changes the answer.
 HANDWRITTEN_CLIENT = {
+    # Triton asks for every kernel argument's device pointer on every launch:
+    # 144 round trips per compiled inference. We made the allocations, so the
+    # answer is already here. Alloc and free come along to keep the table.
+    "cuPointerGetAttribute",
+    "cuMemAlloc_v2",
+    "cuMemFree_v2",
     "cuDevicePrimaryCtxGetState",
     "cuDevicePrimaryCtxRetain",
     "cuDevicePrimaryCtxRelease_v2",

@@ -35,6 +35,12 @@ if [[ -x "$BUILD/cublas_smoke" ]]; then
     "$BUILD/cublas_smoke" || rc=1
 fi
 
+if [[ -x "$BUILD/graph_smoke" ]]; then
+  echo
+  LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$PORT" \
+    "$BUILD/graph_smoke" || rc=1
+fi
+
 if [[ -x "$BUILD/cudnn_smoke" ]]; then
   echo
   LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$PORT" \

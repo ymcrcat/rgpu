@@ -111,6 +111,35 @@ CUresult handle_launch(Buffer& req, Buffer* rsp) {
                         extra);
 }
 
+// cuStreamGetCaptureInfo_v2, with the dependency array copied out rather than
+// pointed at. The driver owns that array and promises it stays valid until the
+// next call that changes the capture; the client keeps its copy under the same
+// rule, which is all the caller is allowed to assume.
+CUresult handle_capture_info(Buffer& req, Buffer* rsp) {
+  uint64_t stream_v = 0;
+  uint8_t want_deps = 0;
+  if (!req.get(&stream_v) || !req.get(&want_deps)) return CUDA_ERROR_INVALID_VALUE;
+  auto stream = reinterpret_cast<CUstream>(stream_v);
+
+  CUstreamCaptureStatus status = CU_STREAM_CAPTURE_STATUS_NONE;
+  cuuint64_t id = 0;
+  CUgraph graph = nullptr;
+  const CUgraphNode* deps = nullptr;
+  size_t ndeps = 0;
+  CUresult r = cuStreamGetCaptureInfo_v2(stream, &status, &id, &graph,
+                                         want_deps ? &deps : nullptr, &ndeps);
+  if (r != CUDA_SUCCESS) return r;
+
+  rsp->put<int32_t>(static_cast<int32_t>(status));
+  rsp->put<uint64_t>(id);
+  rsp->put<uint64_t>(reinterpret_cast<uint64_t>(graph));
+  rsp->put<uint64_t>(static_cast<uint64_t>(ndeps));
+  if (want_deps) {
+    rsp->put_sized(deps, deps ? ndeps * sizeof(CUgraphNode) : 0);
+  }
+  return CUDA_SUCCESS;
+}
+
 CUresult handle_hello(Buffer& req, Buffer* rsp) {
   (void)req;
   int version = 0;
@@ -124,6 +153,7 @@ bool dispatch_internal(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
     case API_rgpu_param_layout: *out = handle_param_layout(req, rsp); return true;
     case API_rgpu_launch: *out = handle_launch(req, rsp); return true;
     case API_rgpu_hello: *out = handle_hello(req, rsp); return true;
+    case API_rgpu_capture_info: *out = handle_capture_info(req, rsp); return true;
     default: return false;
   }
 }

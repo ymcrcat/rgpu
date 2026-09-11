@@ -1999,17 +1999,6 @@ extern "C" CUresult cuMemAllocPitch_v2(CUdeviceptr *dptr, size_t *pPitch, size_t
   return r_;
 }
 
-extern "C" CUresult cuMemAlloc_v2(CUdeviceptr *dptr, size_t bytesize) {
-  rgpu::Buffer req;
-  req.put<uint8_t>(dptr ? 1 : 0);
-  req.put<size_t>(bytesize);
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuMemAlloc_v2, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  if (dptr && !rsp.get(dptr)) return CUDA_ERROR_UNKNOWN;
-  return r_;
-}
-
 extern "C" CUresult cuMemBatchDecompressAsync(CUmemDecompressParams *paramsArray, size_t count, unsigned int flags, size_t *errorIndex, CUstream stream) {
   return rgpu::unimplemented("cuMemBatchDecompressAsync", "struct-pointer:struct CUmemDecompressParams_st");
 }
@@ -2028,15 +2017,6 @@ extern "C" CUresult cuMemFreeAsync(CUdeviceptr dptr, CUstream hStream) {
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuMemFreeAsync, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  return r_;
-}
-
-extern "C" CUresult cuMemFree_v2(CUdeviceptr dptr) {
-  rgpu::Buffer req;
-  req.put<CUdeviceptr>(dptr);
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuMemFree_v2, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
   return r_;
 }
@@ -2896,21 +2876,6 @@ extern "C" CUresult cuParamSetv(CUfunction hfunc, int offset, void *ptr, unsigne
   return rgpu::unimplemented("cuParamSetv", "void-pointer");
 }
 
-extern "C" CUresult cuPointerGetAttribute(void *data, CUpointer_attribute attribute, CUdeviceptr ptr) {
-  rgpu::Buffer req;
-  req.put<uint8_t>(data ? 1 : 0);
-  req.put<uint64_t>((uint64_t)(rgpu::pointer_attr_size(attribute)));
-  req.put<CUpointer_attribute>(attribute);
-  req.put<CUdeviceptr>(ptr);
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuPointerGetAttribute, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  if (data) { const uint8_t* b_; size_t n_;
-            if (!rsp.get_sized(&b_, &n_)) return CUDA_ERROR_UNKNOWN;
-            memcpy(data, b_, n_); }
-  return r_;
-}
-
 extern "C" CUresult cuPointerGetAttributes(unsigned int numAttributes, CUpointer_attribute *attributes, void **data, CUdeviceptr ptr) {
   return rgpu::unimplemented("cuPointerGetAttributes", "pointer-to-pointer");
 }
@@ -3015,10 +2980,6 @@ extern "C" CUresult cuStreamEndCapture(CUstream hStream, CUgraph *phGraph) {
 
 extern "C" CUresult cuStreamGetAttribute(CUstream hStream, CUstreamAttrID attr, CUstreamAttrValue *value_out) {
   return rgpu::unimplemented("cuStreamGetAttribute", "struct-pointer:union CUlaunchAttributeValue_union");
-}
-
-extern "C" CUresult cuStreamGetCaptureInfo_v2(CUstream hStream, CUstreamCaptureStatus *captureStatus_out, cuuint64_t *id_out, CUgraph *graph_out, const CUgraphNode **dependencies_out, size_t *numDependencies_out) {
-  return rgpu::unimplemented("cuStreamGetCaptureInfo_v2", "pointer-to-pointer");
 }
 
 extern "C" CUresult cuStreamGetCaptureInfo_v3(CUstream hStream, CUstreamCaptureStatus *captureStatus_out, cuuint64_t *id_out, CUgraph *graph_out, const CUgraphNode **dependencies_out, const CUgraphEdgeData **edgeData_out, size_t *numDependencies_out) {

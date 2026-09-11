@@ -17,6 +17,10 @@ enum InternalId : uint32_t {
   API_rgpu_launch = kInternalBase + 2,
   // Server identification and version handshake.
   API_rgpu_hello = kInternalBase + 3,
+  // cuStreamGetCaptureInfo_v2. Generated code cannot carry it: one of its
+  // outputs is a pointer to an array the driver owns, which has no meaning on
+  // the other side of a wire. The server copies the array out instead.
+  API_rgpu_capture_info = kInternalBase + 4,
 };
 
 }  // namespace rgpu

@@ -229,6 +229,12 @@ if(TARGET rgpu_cudnn)
   target_link_libraries(cudnn_smoke PRIVATE rgpu_cudnn rgpu_client)
 endif()
 
+# Checks the CUDA graph path, which is what torch.compile's reduce-overhead
+# mode uses. Linked against our runtime shim, since that is where the
+# translation lives.
+add_executable(graph_smoke tests/graph_smoke.cpp)
+target_link_libraries(graph_smoke PRIVATE rgpu_cudart rgpu_client)
+
 # A server backed by a fake driver instead of a GPU. Lets the whole stack run
 # on a machine with no NVIDIA hardware: real client stubs, real wire format,
 # real server dispatch, fake bottom layer.

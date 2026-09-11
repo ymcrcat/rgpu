@@ -246,6 +246,128 @@ CUresult cuGetProcAddress(const char* symbol, void** pfn, int cudaVersion,
   return cuGetProcAddress_v2(symbol, pfn, cudaVersion, flags, nullptr);
 }
 
+// --- device allocations ----------------------------------------------------
+//
+// Triton's kernel launcher asks the driver for the device pointer behind every
+// argument, on every launch: 144 round trips per compiled ResNet-18 inference,
+// which was 63% of them. For memory we allocated ourselves the answer is the
+// pointer it was given, and we are the ones who allocated it.
+//
+// Only that question is answered here. Anything else about a pointer, and any
+// pointer we do not recognise, goes to the server as before.
+
+namespace {
+
+std::mutex g_alloc_mu;
+std::map<CUdeviceptr, size_t> g_allocs;  // base -> size
+
+bool is_ours(CUdeviceptr p) {
+  std::lock_guard<std::mutex> lk(g_alloc_mu);
+  if (g_allocs.empty()) return false;
+  auto it = g_allocs.upper_bound(p);
+  if (it == g_allocs.begin()) return false;
+  --it;
+  return p >= it->first && p < it->first + it->second;
+}
+
+}  // namespace
+
+CUresult cuMemAlloc_v2(CUdeviceptr* dptr, size_t bytesize) {
+  if (!dptr) return CUDA_ERROR_INVALID_VALUE;
+  // Same frame the generated stub sent: a presence byte, then the size.
+  rgpu::Buffer req, rsp;
+  req.put<uint8_t>(1);
+  req.put<size_t>(bytesize);
+  CUresult r = rgpu::call(rgpu::API_cuMemAlloc_v2, req, &rsp);
+  if (r != CUDA_SUCCESS) return r;
+  CUdeviceptr p = 0;
+  if (!rsp.get(&p)) return CUDA_ERROR_UNKNOWN;
+  *dptr = p;
+  if (bytesize) {
+    std::lock_guard<std::mutex> lk(g_alloc_mu);
+    g_allocs[*dptr] = bytesize;
+  }
+  return r;
+}
+
+CUresult cuMemFree_v2(CUdeviceptr dptr) {
+  {
+    std::lock_guard<std::mutex> lk(g_alloc_mu);
+    g_allocs.erase(dptr);
+  }
+  rgpu::Buffer req, rsp;
+  req.put<CUdeviceptr>(dptr);
+  return rgpu::call(rgpu::API_cuMemFree_v2, req, &rsp);
+}
+
+CUresult cuPointerGetAttribute(void* data, CUpointer_attribute attribute,
+                               CUdeviceptr ptr) {
+  if (!data) return CUDA_ERROR_INVALID_VALUE;
+  if (attribute == CU_POINTER_ATTRIBUTE_DEVICE_POINTER && is_ours(ptr)) {
+    // A plain device allocation is its own device pointer.
+    *static_cast<CUdeviceptr*>(data) = ptr;
+    return CUDA_SUCCESS;
+  }
+  // Same frame the generated stub sent: the output buffer's presence and
+  // size, then the attribute and the pointer.
+  const uint64_t size = rgpu::pointer_attr_size(attribute);
+  rgpu::Buffer req, rsp;
+  req.put<uint8_t>(1);
+  req.put<uint64_t>(size);
+  req.put<CUpointer_attribute>(attribute);
+  req.put<CUdeviceptr>(ptr);
+  CUresult r = rgpu::call(rgpu::API_cuPointerGetAttribute, req, &rsp);
+  if (r != CUDA_SUCCESS) return r;
+  const uint8_t* bytes = nullptr;
+  size_t n = 0;
+  if (!rsp.get_sized(&bytes, &n)) return CUDA_ERROR_UNKNOWN;
+  std::memcpy(data, bytes, n < size ? n : size);
+  return r;
+}
+
+// --- stream capture --------------------------------------------------------
+
+// One of this call's outputs is a pointer to an array the driver owns, which
+// cannot cross a wire as a pointer. The server sends the contents and they are
+// kept here for as long as the driver would have kept its own: until the next
+// call that changes the capture. The buffer is per thread because the caller
+// may only use it before its own next call.
+CUresult cuStreamGetCaptureInfo_v2(CUstream hStream,
+                                   CUstreamCaptureStatus* captureStatus_out,
+                                   cuuint64_t* id_out, CUgraph* graph_out,
+                                   const CUgraphNode** dependencies_out,
+                                   size_t* numDependencies_out) {
+  static thread_local std::vector<CUgraphNode> deps;
+
+  rgpu::Buffer req, rsp;
+  req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  req.put<uint8_t>(dependencies_out ? 1 : 0);
+  CUresult r = rgpu::call(rgpu::API_rgpu_capture_info, req, &rsp);
+  if (r != CUDA_SUCCESS) return r;
+
+  int32_t status = 0;
+  uint64_t id = 0, graph = 0, ndeps = 0;
+  if (!rsp.get(&status) || !rsp.get(&id) || !rsp.get(&graph) ||
+      !rsp.get(&ndeps)) {
+    return CUDA_ERROR_UNKNOWN;
+  }
+  if (dependencies_out) {
+    const uint8_t* bytes = nullptr;
+    size_t n = 0;
+    if (!rsp.get_sized(&bytes, &n)) return CUDA_ERROR_UNKNOWN;
+    deps.assign(reinterpret_cast<const CUgraphNode*>(bytes),
+                reinterpret_cast<const CUgraphNode*>(bytes + n));
+    *dependencies_out = deps.data();
+  }
+  if (captureStatus_out) {
+    *captureStatus_out = static_cast<CUstreamCaptureStatus>(status);
+  }
+  if (id_out) *id_out = id;
+  if (graph_out) *graph_out = reinterpret_cast<CUgraph>(graph);
+  if (numDependencies_out) *numDependencies_out = ndeps;
+  return CUDA_SUCCESS;
+}
+
 // --- the primary context ---------------------------------------------------
 //
 // PyTorch asks whether a device's primary context exists before a great many

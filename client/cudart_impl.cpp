@@ -977,4 +977,108 @@ cudaError_t cudaLaunchKernel(const void* func, dim3 gridDim, dim3 blockDim,
                                   nullptr));
 }
 
+// --- CUDA graphs -----------------------------------------------------------
+//
+// This is what torch.compile's reduce-overhead mode uses, and it is the one
+// thing that can collapse remoting overhead rather than shave it: a captured
+// iteration replays as a single launch however many kernels it contains.
+//
+// Capture happens on the server. Our calls arrive there in the order the
+// application made them, on the stream it named, so the graph the driver
+// builds is the graph the application described. Nothing here has to
+// understand what is being captured.
+
+cudaError_t cudaStreamBeginCapture(cudaStream_t stream,
+                                   cudaStreamCaptureMode mode) {
+  CUresult r = ensure_context();
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  return record_cu(cuStreamBeginCapture_v2(
+      reinterpret_cast<CUstream>(stream),
+      static_cast<CUstreamCaptureMode>(mode)));
+}
+
+cudaError_t cudaStreamEndCapture(cudaStream_t stream, cudaGraph_t* pGraph) {
+  CUresult r = ensure_context();
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  CUgraph g = nullptr;
+  r = cuStreamEndCapture(reinterpret_cast<CUstream>(stream), &g);
+  if (r == CUDA_SUCCESS && pGraph) *pGraph = reinterpret_cast<cudaGraph_t>(g);
+  return record_cu(r);
+}
+
+// cudaStreamGetCaptureInfo is a macro for this name in the runtime header, so
+// this one definition serves both spellings.
+cudaError_t cudaStreamGetCaptureInfo_v2(
+    cudaStream_t stream, cudaStreamCaptureStatus* captureStatus_out,
+    unsigned long long* id_out, cudaGraph_t* graph_out,
+    const cudaGraphNode_t** dependencies_out, size_t* numDependencies_out) {
+  CUresult r = ensure_context();
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  CUstreamCaptureStatus st = CU_STREAM_CAPTURE_STATUS_NONE;
+  cuuint64_t id = 0;
+  CUgraph g = nullptr;
+  const CUgraphNode* deps = nullptr;
+  size_t ndeps = 0;
+  r = cuStreamGetCaptureInfo_v2(
+      reinterpret_cast<CUstream>(stream), &st, id_out ? &id : nullptr,
+      graph_out ? &g : nullptr, dependencies_out ? &deps : nullptr,
+      numDependencies_out || dependencies_out ? &ndeps : nullptr);
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  if (captureStatus_out) {
+    *captureStatus_out = static_cast<cudaStreamCaptureStatus>(st);
+  }
+  if (id_out) *id_out = id;
+  if (graph_out) *graph_out = reinterpret_cast<cudaGraph_t>(g);
+  if (dependencies_out) {
+    *dependencies_out = reinterpret_cast<const cudaGraphNode_t*>(deps);
+  }
+  if (numDependencies_out) *numDependencies_out = ndeps;
+  return record(cudaSuccess);
+}
+
+cudaError_t cudaGraphInstantiate(cudaGraphExec_t* pGraphExec, cudaGraph_t graph,
+                                 unsigned long long flags) {
+  CUresult r = ensure_context();
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  CUgraphExec e = nullptr;
+  r = cuGraphInstantiateWithFlags(&e, reinterpret_cast<CUgraph>(graph), flags);
+  if (r == CUDA_SUCCESS && pGraphExec) {
+    *pGraphExec = reinterpret_cast<cudaGraphExec_t>(e);
+  }
+  return record_cu(r);
+}
+
+cudaError_t cudaGraphInstantiateWithFlags(cudaGraphExec_t* pGraphExec,
+                                          cudaGraph_t graph,
+                                          unsigned long long flags) {
+  return cudaGraphInstantiate(pGraphExec, graph, flags);
+}
+
+cudaError_t cudaGraphLaunch(cudaGraphExec_t graphExec, cudaStream_t stream) {
+  CUresult r = ensure_context();
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  return record_cu(cuGraphLaunch(reinterpret_cast<CUgraphExec>(graphExec),
+                                 reinterpret_cast<CUstream>(stream)));
+}
+
+cudaError_t cudaGraphUpload(cudaGraphExec_t graphExec, cudaStream_t stream) {
+  CUresult r = ensure_context();
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  return record_cu(cuGraphUpload(reinterpret_cast<CUgraphExec>(graphExec),
+                                 reinterpret_cast<CUstream>(stream)));
+}
+
+cudaError_t cudaGraphDestroy(cudaGraph_t graph) {
+  CUresult r = ensure_context();
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  return record_cu(cuGraphDestroy(reinterpret_cast<CUgraph>(graph)));
+}
+
+cudaError_t cudaGraphExecDestroy(cudaGraphExec_t graphExec) {
+  CUresult r = ensure_context();
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  return record_cu(
+      cuGraphExecDestroy(reinterpret_cast<CUgraphExec>(graphExec)));
+}
+
 }  // extern "C"

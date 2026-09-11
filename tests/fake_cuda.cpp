@@ -253,4 +253,96 @@ CUresult cuLaunchKernel(CUfunction f, unsigned int gx, unsigned int gy,
   return CUDA_SUCCESS;
 }
 
+CUresult cuStreamCreate(CUstream* stream, unsigned int) {
+  if (!stream) return CUDA_ERROR_INVALID_VALUE;
+  *stream = reinterpret_cast<CUstream>(0x57EA);
+  return CUDA_SUCCESS;
+}
+
+CUresult cuStreamDestroy_v2(CUstream stream) {
+  return stream ? CUDA_SUCCESS : CUDA_ERROR_INVALID_VALUE;
+}
+
+CUresult cuStreamSynchronize(CUstream) { return CUDA_SUCCESS; }
+
+// --- stream capture --------------------------------------------------------
+//
+// Enough to tell whether the calls arrive intact. The dependency array is the
+// part worth checking: the driver owns it, so it cannot cross the wire as a
+// pointer, and the client has to be handed a copy of the contents instead.
+
+namespace {
+bool g_capturing = false;
+CUgraphNode g_nodes[2] = {reinterpret_cast<CUgraphNode>(0xDEB1),
+                          reinterpret_cast<CUgraphNode>(0xDEB2)};
+}  // namespace
+
+CUresult cuStreamBeginCapture_v2(CUstream, CUstreamCaptureMode mode) {
+  if (mode != CU_STREAM_CAPTURE_MODE_GLOBAL &&
+      mode != CU_STREAM_CAPTURE_MODE_THREAD_LOCAL &&
+      mode != CU_STREAM_CAPTURE_MODE_RELAXED) {
+    return CUDA_ERROR_INVALID_VALUE;
+  }
+  g_capturing = true;
+  return CUDA_SUCCESS;
+}
+
+CUresult cuStreamEndCapture(CUstream, CUgraph* graph) {
+  if (!g_capturing) return CUDA_ERROR_ILLEGAL_STATE;
+  g_capturing = false;
+  if (graph) *graph = reinterpret_cast<CUgraph>(0xC0FFEEull);
+  return CUDA_SUCCESS;
+}
+
+CUresult cuStreamIsCapturing(CUstream, CUstreamCaptureStatus* status) {
+  if (status) {
+    *status = g_capturing ? CU_STREAM_CAPTURE_STATUS_ACTIVE
+                          : CU_STREAM_CAPTURE_STATUS_NONE;
+  }
+  return CUDA_SUCCESS;
+}
+
+CUresult cuStreamGetCaptureInfo_v2(CUstream, CUstreamCaptureStatus* status,
+                                   cuuint64_t* id, CUgraph* graph,
+                                   const CUgraphNode** deps,
+                                   size_t* ndeps) {
+  if (status) {
+    *status = g_capturing ? CU_STREAM_CAPTURE_STATUS_ACTIVE
+                          : CU_STREAM_CAPTURE_STATUS_NONE;
+  }
+  if (id) *id = g_capturing ? 0x1D : 0;
+  if (graph) *graph = g_capturing ? reinterpret_cast<CUgraph>(0xC0FFEEull)
+                                  : nullptr;
+  if (deps) *deps = g_nodes;
+  if (ndeps) *ndeps = g_capturing ? 2 : 0;
+  return CUDA_SUCCESS;
+}
+
+CUresult cuGraphInstantiateWithFlags(CUgraphExec* exec, CUgraph graph,
+                                     unsigned long long) {
+  if (graph != reinterpret_cast<CUgraph>(0xC0FFEEull)) {
+    return CUDA_ERROR_INVALID_VALUE;
+  }
+  if (exec) *exec = reinterpret_cast<CUgraphExec>(0xE7E0ull);
+  return CUDA_SUCCESS;
+}
+
+CUresult cuGraphLaunch(CUgraphExec exec, CUstream) {
+  return exec == reinterpret_cast<CUgraphExec>(0xE7E0ull)
+             ? CUDA_SUCCESS
+             : CUDA_ERROR_INVALID_VALUE;
+}
+
+CUresult cuGraphDestroy(CUgraph graph) {
+  return graph == reinterpret_cast<CUgraph>(0xC0FFEEull)
+             ? CUDA_SUCCESS
+             : CUDA_ERROR_INVALID_VALUE;
+}
+
+CUresult cuGraphExecDestroy(CUgraphExec exec) {
+  return exec == reinterpret_cast<CUgraphExec>(0xE7E0ull)
+             ? CUDA_SUCCESS
+             : CUDA_ERROR_INVALID_VALUE;
+}
+
 }  // extern "C"
