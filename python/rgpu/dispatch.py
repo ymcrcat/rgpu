@@ -90,8 +90,35 @@ def _wrap_outputs(func, args, kwargs, out):
     return (results[0] if single else tuple(results)), out_ids
 
 
+def _writable_metas(func, args, kwargs):
+    """Metas of plain-Tensor inputs the op writes to (an out= or in-place self).
+
+    A Tensor(a!)[] written through a list is not covered - none of aten's
+    resizing ops (out=, in-place) take a list there, only a lone Tensor(a!).
+    """
+    metas = []
+    for i, a in enumerate(func._schema.arguments):
+        if a.alias_info is None or not a.alias_info.is_write:
+            continue
+        v = args[i] if i < len(args) else kwargs.get(a.name)
+        if isinstance(v, RemoteTensor):
+            metas.append(v._rgpu_meta)
+    return metas
+
+
 def _run(func, args, kwargs):
+    metas = _writable_metas(func, args, kwargs)
+    before = [(m.shape, m.stride(), m.storage_offset()) for m in metas]
     out = func(*tree_map(meta_of, args), **tree_map(meta_of, kwargs))
+    changed = False
+    for m, (shape, stride, offset) in zip(metas, before):
+        if m.shape != shape or m.stride() != stride or m.storage_offset() != offset:
+            m.as_strided_(shape, stride, offset)
+            changed = True
+    if changed:
+        raise NotImplementedError(
+            f"rgpu cannot run {func}: it changes the shape of a tensor it writes to "
+            "(resize an out= tensor to the right size first)")
     results, out_ids = _wrap_outputs(func, args, kwargs, out)
     a, kw = _wire_args(args, kwargs)
     session.get().post(wire.RUN, func._schema.name, func._overloadname, a, kw, out_ids)

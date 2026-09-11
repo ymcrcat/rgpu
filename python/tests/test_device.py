@@ -89,3 +89,26 @@ def test_seeding_makes_random_tensors_repeat():
 def test_repr_shows_the_values():
     text = repr(torch.tensor([1.5, 2.5]).to("rgpu"))
     assert "1.5" in text and "rgpu" in text
+
+
+def test_a_wrong_sized_out_raises_and_leaves_it_consistent():
+    a = torch.tensor([1.0, 2.0, 3.0, 4.0], device="rgpu")
+    r = torch.empty(0, device="rgpu")
+    with pytest.raises(NotImplementedError):
+        torch.add(a, a, out=r)
+    assert r.shape == r._rgpu_meta.shape == (0,)
+
+
+def test_a_correctly_sized_out_still_works():
+    x, y = torch.randn(4), torch.randn(4)
+    rx, ry = x.to("rgpu"), y.to("rgpu")
+    out = torch.empty(4, device="rgpu")
+    torch.add(rx, ry, out=out)
+    assert torch.allclose(out.cpu(), x + y)
+
+
+def test_an_inplace_reshape_raises_and_leaves_the_shape_unchanged():
+    x = torch.randn(4, device="rgpu")
+    with pytest.raises(NotImplementedError):
+        x.unsqueeze_(0)
+    assert x.shape == (4,)
