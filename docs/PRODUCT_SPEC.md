@@ -72,16 +72,26 @@ than that: one connection can already see another's device memory through the
 GPU itself, so isolation means one server process per tenant, not one server
 with a table of them.
 
-### 2. Nothing survives a dropped connection
+### 2. A dropped connection is survivable; a dead server is not
 
-Contexts, modules, allocations and descriptors all live in the server process
-and die with the connection. There is no reconnect, no checkpoint and no
-migration. A network blip in the middle of a long job loses the job.
+Solved for the common case. A session is the client process and a connection
+is one attempt by it to reach the server; the server keeps a session alive for
+a grace period after its connection goes, and hands the next connection with
+the same id back to the thread that was serving it. Nothing is torn down, so
+every pointer and handle the application holds stays valid.
 
-The protocol was designed with this in mind - calls that establish durable
-server state are tagged `record` in the annotations, and replaying the recorded
-set reconstructs a session - but nothing uses that tag yet. It is the hook for
-mrCUDA-style migration, not an implementation of it.
+Demonstrated on a real link: a training run from the laptop to a rented GPU,
+the ssh tunnel killed after step 4 and restored ten seconds later. The client
+retried, reconnected and resumed, and every loss afterwards was bit-identical
+to an uninterrupted run. The tunnel happened to die after the server had run a
+request but before its reply arrived, so the server sent its cached reply
+rather than running the call twice - the harder of the two cases, exercised by
+accident.
+
+Not solved, and not solvable by replaying calls: a server that actually dies
+takes the device memory with it. The `record` tag can rebuild contexts and
+modules, but the contents of memory that no longer exists need either
+continuous shadowing or application-level checkpoints.
 
 ### 3. Training works, but nothing has trained for long
 
@@ -137,11 +147,8 @@ without reading the source. In rough order of what blocks that.
 1. **Authentication and encryption.** Today the port is the credential. A
    shared secret at connection setup and TLS on the wire, or it cannot leave a
    tunnel.
-2. **Surviving a dropped connection.** A 34 ms link will drop sometimes, and
-   today that loses the job. The protocol already tags the calls that
-   establish durable state with `record`; replaying that set after a reconnect
-   rebuilds the session. This is the difference between a demo and something
-   you would leave running overnight.
+2. ~~Surviving a dropped connection.~~ Done; see gap 2. What remains is the
+   server dying, which needs checkpointing rather than reconnection.
 3. **An install that is one step.** Right now: build shims in a container, copy
    a server to the GPU host, set five LD_PRELOAD entries and three environment
    variables. It needs to be a client package and a server image, with one
