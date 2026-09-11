@@ -127,6 +127,29 @@ class Session:
     def _seed(self, seed):
         torch.manual_seed(seed)
 
+    def _compile(self, gid, nodes, compiler, mode):
+        from . import graphs
+        try:
+            self.graphs[gid] = graphs.build(nodes, self, compiler, mode)
+        except Exception as e:  # noqa: BLE001
+            self.graphs[gid] = Poison(f"compile of graph {gid}", f"{type(e).__name__}: {e}")
+            if self.first_error is None:
+                self.first_error = (self.graphs[gid].op, self.graphs[gid].message)
+
+    def _call(self, gid, in_ids, out_ids):
+        fn = self.graphs.get(gid)
+        if fn is None or isinstance(fn, Poison):
+            self._poison(out_ids, fn or Poison(f"graph {gid}", "was never compiled"))
+            return
+        try:
+            inputs = [self._arg(wire.Ref(i)) for i in in_ids]
+            outs = fn(*inputs)
+            self._store(list(outs), out_ids)
+        except _Skip as s:
+            self._poison(out_ids, s.poison)
+        except Exception as e:  # noqa: BLE001
+            self._fail(f"graph {gid}", e, out_ids)
+
     # --- messages the client waits for --------------------------------------
 
     def _download(self, tid):
@@ -155,7 +178,8 @@ class Session:
             torch.mps.synchronize()
         return None
 
-    _ASYNC = {wire.RUN: _run, wire.UPLOAD: _upload, wire.FREE: _free, wire.SEED: _seed}
+    _ASYNC = {wire.RUN: _run, wire.UPLOAD: _upload, wire.FREE: _free, wire.SEED: _seed,
+              wire.COMPILE: _compile, wire.CALL: _call}
     _WAITED = {wire.RUN_SYNC: _run_sync, wire.DOWNLOAD: _download, wire.SYNC: _sync}
 
     def execute(self, message):

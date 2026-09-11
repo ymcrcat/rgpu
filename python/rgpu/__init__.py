@@ -12,6 +12,7 @@ from .device import register_device as _register_device
 
 _register_device()
 
+from .compile import compile_backend  # noqa: E402
 from .session import RemoteError, SessionLost, stats  # noqa: E402
 
-__all__ = ["RemoteError", "SessionLost", "stats"]
+__all__ = ["RemoteError", "SessionLost", "compile_backend", "stats"]

@@ -18,10 +18,17 @@ import itertools
 import weakref
 
 import torch
+from torch._subclasses.fake_tensor import FakeTensor
+from torch._subclasses.functional_tensor import FunctionalTensor
 
 from . import session
 
 _next_id = itertools.count(1)
+
+# What a tracer puts in place of the meta tensor: dynamo and aot_autograd trace
+# with fake tensors, and aot_autograd functionalizes on top of them. A tensor
+# holding one of these has no data anywhere yet, and no id.
+_TRACED = (FakeTensor, FunctionalTensor)
 
 
 def register(meta, tid=None):
@@ -38,6 +45,11 @@ def id_of(meta):
         return meta._rgpu_id
     except AttributeError:
         raise RuntimeError("this tensor was never sent to the server") from None
+
+
+def is_traced(t):
+    """True while torch.compile traces this tensor: its meta is the tracer's."""
+    return isinstance(t, RemoteTensor) and isinstance(t._rgpu_meta, _TRACED)
 
 
 def meta_like(dtype, shape, stride, offset=0):
@@ -77,4 +89,6 @@ class RemoteTensor(torch.Tensor):
         return RemoteTensor(inner["_rgpu_meta"])
 
     def __repr__(self, *, tensor_contents=None):
+        if is_traced(self):
+            return f"rgpu:<traced {self.dtype} {tuple(self.shape)}>"   # no data to fetch
         return "rgpu:" + repr(self.detach().cpu())

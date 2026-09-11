@@ -1,6 +1,6 @@
 """Where every op on an rgpu tensor lands, after autograd.
 
-Each op is one of four kinds, and only two of them wait for the server:
+Each op is one of five kinds, and only two of them wait for the server:
 
   stream     outputs worked out here on meta tensors, ids chosen here, the op
              queued - no wait. Almost everything.
@@ -9,6 +9,8 @@ Each op is one of four kinds, and only two of them wait for the server:
   download   .cpu(), .item(), printing - one round trip.
   unknown    ops whose output size depends on the data - the server runs
              them and reports the shapes, one round trip. (Task 6.)
+  traced     torch.compile is tracing, so the tensors are fake and there is
+             nothing to send yet; the whole graph is shipped later. (Task 11.)
 
 Meta kernels make the same shape and dtype checks as real ones, so most
 mistakes raise here, on the line that made them, before anything is sent.
@@ -18,7 +20,7 @@ import torch
 from torch.utils._pytree import tree_flatten, tree_map
 
 from . import session, wire
-from .tensor import RemoteTensor, id_of, meta_like, register
+from .tensor import RemoteTensor, id_of, is_traced, meta_like, register
 
 aten = torch.ops.aten
 
@@ -186,7 +188,37 @@ def _run(func, args, kwargs):
     return results
 
 
+def _tracing(args, kwargs):
+    """True while torch.compile traces: the metas belong to the tracer, not us."""
+    flat, _ = tree_flatten((args, kwargs))
+    return any(is_traced(x) for x in flat)
+
+
+def _trace(func, args, kwargs):
+    """Run the op on the fake metas alone, so it lands in the graph being traced.
+
+    Nothing is sent: the tracer is collecting a graph, which torch.compile
+    ships as a whole. The op runs on the unwrapped metas, which is how it gets
+    recorded, and its outputs are rewrapped for whatever traces them next.
+    """
+    out = func(*tree_map(meta_of, args), **tree_map(meta_of, kwargs))
+    returns = func._schema.returns
+    if not returns:
+        return None
+    single = len(returns) == 1
+    results = []
+    for ret, o in zip(returns, [out] if single else list(out)):
+        if ret.alias_info is not None and ret.alias_info.is_write:
+            results.append(_written_input(func, args, kwargs, ret))
+        else:
+            results.append(tree_map(
+                lambda m: RemoteTensor(m) if isinstance(m, torch.Tensor) else m, o))
+    return results[0] if single else tuple(results)
+
+
 def handle(func, args, kwargs):
+    if _tracing(args, kwargs):
+        return _trace(func, args, kwargs)
     base = func._schema.name.split("::", 1)[1]
     if base in _METADATA_MUTATING:
         raise NotImplementedError(
