@@ -83,14 +83,13 @@ server state are tagged `record` in the annotations, and replaying the recorded
 set reconstructs a session - but nothing uses that tag yet. It is the hook for
 mrCUDA-style migration, not an implementation of it.
 
-### 3. Training has never been run
+### 3. Training works, but nothing has trained for long
 
-Everything above is inference. The backward pass has not been attempted once.
-Known missing pieces: the cuDNN batch-norm training group
-(`BatchNormalizationForwardTrainingEx`, `BackwardEx`, the two workspace size
-queries, activation descriptors). Unknown pieces: whatever else autograd
-touches. This is the largest untested area, and the plan always had it after
-milestone 1.
+The gradients are right and the loss falls, on a model small enough to check
+against CPU. What has not happened is a real run: hours rather than seconds, a
+dataset rather than random tensors, and therefore a data path across the link
+that nobody has measured. Gap 5 below is the part of training that is still
+unknown.
 
 ### 4. Multi-GPU and NCCL
 
