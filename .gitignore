@@ -14,3 +14,5 @@ third_party/
 __pycache__/
 *.pyc
 build-macos/
+docker/*.so*
+docker/install.sh

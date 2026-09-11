@@ -24,7 +24,8 @@ fi
 # is large and rarely changes.
 if ! docker image inspect "$IMAGE" >/dev/null 2>&1 \
    || [[ build/libcuda.so.1 -nt docker/libcuda.so.1 ]]; then
-  cp build/libcuda.so.1 docker/libcuda.so.1
+  cp build/libcuda.so.1 build/libcudart.so.12 build/libcublas.so.12 \
+     build/libcublasLt.so.12 build/libcudnn.so.9 scripts/install.sh docker/
   docker build --platform "$PLATFORM" -t "$IMAGE" -f docker/client.Dockerfile docker/
 fi
 

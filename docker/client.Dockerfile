@@ -42,23 +42,14 @@ RUN pip install --no-cache-dir --index-url "${TORCH_INDEX}" --no-deps \
       nvidia-cusparselt-cu12 \
       torchvision==0.24.1 numpy pillow
 
-# Every shim, built by scripts/build_client.sh. The maths libraries need
-# replacing for the same reason the runtime does: each of them initialises
-# through the driver's undocumented export tables.
-COPY libcuda.so.1 libcudart.so.12 libcublas.so.12 libcublasLt.so.12 \
-     libcudnn.so.9 /opt/rgpu/lib/
-RUN cd /opt/rgpu/lib \
- && ln -s libcuda.so.1 libcuda.so \
- && ln -s libcudart.so.12 libcudart.so \
- && ln -s libcublas.so.12 libcublas.so \
- && ln -s libcublasLt.so.12 libcublasLt.so \
- && ln -s libcudnn.so.9 libcudnn.so
+# Every shim, built by scripts/build_client.sh, installed the same way as on
+# any Linux machine. --system preloads them for every process in the image, so
+# nothing has to be remembered at run time; see scripts/install.sh for why
+# preloading is the only thing that reliably wins against torch's own paths.
+COPY install.sh libcuda.so.1 libcudart.so.12 libcublas.so.12 libcublasLt.so.12 \
+     libcudnn.so.9 /tmp/rgpu/
+RUN /tmp/rgpu/install.sh --from /tmp/rgpu --system && rm -rf /tmp/rgpu
 
-# LD_LIBRARY_PATH is not enough on its own: torch's libraries carry DT_RUNPATH,
-# which the loader consults first, and torch preloads the CUDA libraries by
-# absolute path besides. LD_PRELOAD wins over both.
-ENV LD_LIBRARY_PATH=/opt/rgpu/lib
-ENV LD_PRELOAD=/opt/rgpu/lib/libcudart.so.12:/opt/rgpu/lib/libcublas.so.12:/opt/rgpu/lib/libcublasLt.so.12:/opt/rgpu/lib/libcudnn.so.9:/opt/rgpu/lib/libcuda.so.1
 ENV RGPU_SERVER=host.docker.internal:9713
 
 WORKDIR /work
