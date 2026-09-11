@@ -2954,16 +2954,6 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
     *out = r_; return true;
   }
 
-  case rgpu::API_cuThreadExchangeStreamCaptureMode: {
-    uint8_t has_mode{}; if (!req.get(&has_mode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    CUstreamCaptureMode v_mode{};
-    static auto fn_ = reinterpret_cast<decltype(&::cuThreadExchangeStreamCaptureMode)>(rgpu::driver_sym("cuThreadExchangeStreamCaptureMode"));
-    if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
-    CUresult r_ = fn_(has_mode ? &v_mode : nullptr);
-    if (has_mode) rsp->put(v_mode);
-    *out = r_; return true;
-  }
-
   case rgpu::API_cuUserObjectRelease: {
     uint64_t u_object{}; if (!req.get(&u_object)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUuserObject v_object = reinterpret_cast<CUuserObject>(u_object);

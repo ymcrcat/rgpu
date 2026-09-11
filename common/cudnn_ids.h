@@ -45,6 +45,18 @@ enum CudnnId : uint32_t {
   API_cudnnGetTensorNdDescriptor = kCudnnBase + 23,
   API_cudnnDeriveBNTensorDescriptor = kCudnnBase + 24,
   API_cudnnBatchNormalizationForwardInference = kCudnnBase + 25,
+
+  // Batch normalisation in training mode, which is a different set of entry
+  // points from the inference one: it computes the batch's own statistics and
+  // keeps a reserve space for the backward pass to read.
+  API_cudnnCreateActivationDescriptor = kCudnnBase + 30,
+  API_cudnnSetActivationDescriptor = kCudnnBase + 31,
+  API_cudnnDestroyActivationDescriptor = kCudnnBase + 32,
+  API_cudnnGetBatchNormalizationForwardTrainingExWorkspaceSize = kCudnnBase + 33,
+  API_cudnnGetBatchNormalizationBackwardExWorkspaceSize = kCudnnBase + 34,
+  API_cudnnGetBatchNormalizationTrainingExReserveSpaceSize = kCudnnBase + 35,
+  API_cudnnBatchNormalizationForwardTrainingEx = kCudnnBase + 36,
+  API_cudnnBatchNormalizationBackwardEx = kCudnnBase + 37,
 };
 
 }  // namespace rgpu

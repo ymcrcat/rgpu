@@ -392,6 +392,23 @@ CUresult cuGraphGetNodes(CUgraph hGraph, CUgraphNode* nodes, size_t* numNodes) {
   return CUDA_SUCCESS;
 }
 
+// The mode is an argument as well as a result: the caller says which mode it
+// wants and is told which was in force. PyTorch uses this to make an
+// allocation legal in the middle of a stream capture, so a version that always
+// asks for mode zero does not fail here - it invalidates the capture, and the
+// error surfaces later at cuStreamEndCapture with nothing to point at.
+CUresult cuThreadExchangeStreamCaptureMode(CUstreamCaptureMode* mode) {
+  if (!mode) return CUDA_ERROR_INVALID_VALUE;
+  rgpu::Buffer req, rsp;
+  req.put<int32_t>(static_cast<int32_t>(*mode));
+  CUresult r = rgpu::call(rgpu::API_rgpu_capture_mode, req, &rsp);
+  if (r != CUDA_SUCCESS) return r;
+  int32_t previous = 0;
+  if (!rsp.get(&previous)) return CUDA_ERROR_UNKNOWN;
+  *mode = static_cast<CUstreamCaptureMode>(previous);
+  return CUDA_SUCCESS;
+}
+
 // --- the primary context ---------------------------------------------------
 //
 // PyTorch asks whether a device's primary context exists before a great many

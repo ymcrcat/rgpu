@@ -14,10 +14,11 @@ RUN apt-get update \
 ARG TORCH_VERSION=2.9.1
 ARG TORCH_INDEX=https://download.pytorch.org/whl/cu128
 
-# torch is installed without its dependency closure so we can leave out what
-# single-GPU inference does not need: triton (only torch.compile), nvshmem and
-# nccl (multi-GPU), cufile (GPUDirect storage) and cusparselt. Together those
-# are gigabytes. Versions are pinned to what this torch build resolves to.
+# torch is installed without its dependency closure, but less can be left out
+# than it looks: this build names nccl, nvshmem, cufile and cusparselt in
+# DT_NEEDED, so import torch fails without them however little we intend to
+# use them. Only triton is genuinely optional, and only until torch.compile.
+# Versions are pinned to what this torch build resolves to.
 #
 # nvidia-cuda-runtime-cu12 is deliberately absent: our libcudart.so.12 stands
 # in for it, and not installing the stock one removes any question of which
@@ -36,17 +37,28 @@ RUN pip install --no-cache-dir --index-url "${TORCH_INDEX}" --no-deps \
       nvidia-nvjitlink-cu12==12.8.93 \
       nvidia-cuda-nvrtc-cu12==12.8.93 \
       nvidia-cuda-cupti-cu12==12.8.90 \
-      nvidia-nvtx-cu12==12.8.90
+      nvidia-nvtx-cu12==12.8.90 \
+      nvidia-nccl-cu12 nvidia-nvshmem-cu12 nvidia-cufile-cu12 \
+      nvidia-cusparselt-cu12 \
+      torchvision==0.24.1 numpy pillow
 
-# Both shims, built by scripts/build_client.sh.
-COPY libcuda.so.1 /opt/rgpu/lib/libcuda.so.1
-COPY libcudart.so.12 /opt/rgpu/lib/libcudart.so.12
-RUN ln -s libcuda.so.1 /opt/rgpu/lib/libcuda.so \
- && ln -s libcudart.so.12 /opt/rgpu/lib/libcudart.so
+# Every shim, built by scripts/build_client.sh. The maths libraries need
+# replacing for the same reason the runtime does: each of them initialises
+# through the driver's undocumented export tables.
+COPY libcuda.so.1 libcudart.so.12 libcublas.so.12 libcublasLt.so.12 \
+     libcudnn.so.9 /opt/rgpu/lib/
+RUN cd /opt/rgpu/lib \
+ && ln -s libcuda.so.1 libcuda.so \
+ && ln -s libcudart.so.12 libcudart.so \
+ && ln -s libcublas.so.12 libcublas.so \
+ && ln -s libcublasLt.so.12 libcublasLt.so \
+ && ln -s libcudnn.so.9 libcudnn.so
 
-# LD_LIBRARY_PATH takes precedence over the DT_RUNPATH entries in torch's own
-# libraries, so our shims win over anything the wheels ship.
+# LD_LIBRARY_PATH is not enough on its own: torch's libraries carry DT_RUNPATH,
+# which the loader consults first, and torch preloads the CUDA libraries by
+# absolute path besides. LD_PRELOAD wins over both.
 ENV LD_LIBRARY_PATH=/opt/rgpu/lib
+ENV LD_PRELOAD=/opt/rgpu/lib/libcudart.so.12:/opt/rgpu/lib/libcublas.so.12:/opt/rgpu/lib/libcublasLt.so.12:/opt/rgpu/lib/libcudnn.so.9:/opt/rgpu/lib/libcuda.so.1
 ENV RGPU_SERVER=host.docker.internal:9713
 
 WORKDIR /work

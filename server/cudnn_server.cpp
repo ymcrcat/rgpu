@@ -491,6 +491,256 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       return true;
     }
 
+    case API_cudnnCreateActivationDescriptor: {
+      auto fn = cudnn_sym<cudnnStatus_t (*)(cudnnActivationDescriptor_t*)>(
+          "cudnnCreateActivationDescriptor");
+      uint64_t handle = get_raw(req, &ok);
+      if (!fn || !ok || !minted(handle)) {
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
+        return true;
+      }
+      cudnnActivationDescriptor_t d = nullptr;
+      cudnnStatus_t s = fn(&d);
+      if (s == CUDNN_STATUS_SUCCESS) t_handles[handle] = d;
+      put_status(rsp, out, s);
+      return true;
+    }
+    case API_cudnnSetActivationDescriptor: {
+      auto fn = cudnn_sym<cudnnStatus_t (*)(cudnnActivationDescriptor_t,
+                                            cudnnActivationMode_t,
+                                            cudnnNanPropagation_t, double)>(
+          "cudnnSetActivationDescriptor");
+      auto d = static_cast<cudnnActivationDescriptor_t>(get_ptr(req, &ok));
+      int32_t mode = 0, nan_opt = 0;
+      double coef = 0;
+      if (!fn || !ok || !req.get(&mode) || !req.get(&nan_opt) ||
+          !req.get(&coef)) {
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
+        return true;
+      }
+      put_status(rsp, out,
+                 fn(d, static_cast<cudnnActivationMode_t>(mode),
+                    static_cast<cudnnNanPropagation_t>(nan_opt), coef));
+      return true;
+    }
+    case API_cudnnDestroyActivationDescriptor: {
+      auto fn = cudnn_sym<cudnnStatus_t (*)(cudnnActivationDescriptor_t)>(
+          "cudnnDestroyActivationDescriptor");
+      uint64_t handle = get_raw(req, &ok);
+      auto d = static_cast<cudnnActivationDescriptor_t>(resolve(handle, &ok));
+      if (!fn || !ok) { put_status(rsp, out, CUDNN_STATUS_BAD_PARAM); return true; }
+      cudnnStatus_t s = fn(d);
+      t_handles.erase(handle);
+      put_status(rsp, out, s);
+      return true;
+    }
+
+    case API_cudnnGetBatchNormalizationForwardTrainingExWorkspaceSize:
+    case API_cudnnGetBatchNormalizationBackwardExWorkspaceSize:
+    case API_cudnnGetBatchNormalizationTrainingExReserveSpaceSize: {
+      // The three differ only in how many descriptors they take, and the
+      // client sends that count, so one case reads all of them.
+      auto handle = static_cast<cudnnHandle_t>(get_ptr(req, &ok));
+      int32_t mode = 0, bn_ops = 0;
+      uint32_t count = 0;
+      cudnnActivationDescriptor_t act = nullptr;
+      if (!ok || !req.get(&mode) || !req.get(&bn_ops)) {
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
+        return true;
+      }
+      act = static_cast<cudnnActivationDescriptor_t>(get_ptr(req, &ok));
+      if (!ok || !req.get(&count) || count > 8) {
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
+        return true;
+      }
+      cudnnTensorDescriptor_t d[8] = {};
+      for (uint32_t i = 0; i < count; i++) {
+        d[i] = static_cast<cudnnTensorDescriptor_t>(get_ptr(req, &ok));
+      }
+      if (!ok) { put_status(rsp, out, CUDNN_STATUS_BAD_PARAM); return true; }
+
+      size_t size = 0;
+      cudnnStatus_t s = CUDNN_STATUS_NOT_SUPPORTED;
+      const auto m = static_cast<cudnnBatchNormMode_t>(mode);
+      const auto ops = static_cast<cudnnBatchNormOps_t>(bn_ops);
+      if (id == API_cudnnGetBatchNormalizationForwardTrainingExWorkspaceSize) {
+        auto fn = cudnn_sym<cudnnStatus_t (*)(
+            cudnnHandle_t, cudnnBatchNormMode_t, cudnnBatchNormOps_t,
+            cudnnTensorDescriptor_t, cudnnTensorDescriptor_t,
+            cudnnTensorDescriptor_t, cudnnTensorDescriptor_t,
+            cudnnActivationDescriptor_t, size_t*)>(
+            "cudnnGetBatchNormalizationForwardTrainingExWorkspaceSize");
+        if (fn && count == 4) {
+          s = fn(handle, m, ops, d[0], d[1], d[2], d[3], act, &size);
+        }
+      } else if (id == API_cudnnGetBatchNormalizationBackwardExWorkspaceSize) {
+        auto fn = cudnn_sym<cudnnStatus_t (*)(
+            cudnnHandle_t, cudnnBatchNormMode_t, cudnnBatchNormOps_t,
+            cudnnTensorDescriptor_t, cudnnTensorDescriptor_t,
+            cudnnTensorDescriptor_t, cudnnTensorDescriptor_t,
+            cudnnTensorDescriptor_t, cudnnTensorDescriptor_t,
+            cudnnActivationDescriptor_t, size_t*)>(
+            "cudnnGetBatchNormalizationBackwardExWorkspaceSize");
+        if (fn && count == 6) {
+          s = fn(handle, m, ops, d[0], d[1], d[2], d[3], d[4], d[5], act,
+                 &size);
+        }
+      } else {
+        auto fn = cudnn_sym<cudnnStatus_t (*)(
+            cudnnHandle_t, cudnnBatchNormMode_t, cudnnBatchNormOps_t,
+            cudnnActivationDescriptor_t, cudnnTensorDescriptor_t, size_t*)>(
+            "cudnnGetBatchNormalizationTrainingExReserveSpaceSize");
+        if (fn && count == 1) s = fn(handle, m, ops, act, d[0], &size);
+      }
+      put_status(rsp, out, s);
+      if (s == CUDNN_STATUS_SUCCESS) rsp->put<uint64_t>(size);
+      return true;
+    }
+
+    case API_cudnnBatchNormalizationForwardTrainingEx: {
+      auto fn = cudnn_sym<cudnnStatus_t (*)(
+          cudnnHandle_t, cudnnBatchNormMode_t, cudnnBatchNormOps_t,
+          const void*, const void*, cudnnTensorDescriptor_t, const void*,
+          cudnnTensorDescriptor_t, const void*, cudnnTensorDescriptor_t, void*,
+          cudnnTensorDescriptor_t, const void*, const void*, double, void*,
+          void*, double, void*, void*, cudnnActivationDescriptor_t, void*,
+          size_t, void*, size_t)>(
+          "cudnnBatchNormalizationForwardTrainingEx");
+      auto handle = static_cast<cudnnHandle_t>(get_ptr(req, &ok));
+      int32_t mode = 0, bn_ops = 0;
+      uint32_t width = 0;
+      const uint8_t* alpha = nullptr;
+      const uint8_t* beta = nullptr;
+      size_t an = 0, bn = 0;
+      if (!fn || !ok || !req.get(&mode) || !req.get(&bn_ops) ||
+          !req.get(&width) || !req.get_sized(&alpha, &an) ||
+          !req.get_sized(&beta, &bn) || an != width || bn != width ||
+          (width != sizeof(float) && width != sizeof(double))) {
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
+        return true;
+      }
+      union Scalar { float f; double d; } a{}, b{};
+      std::memcpy(&a, alpha, width);
+      std::memcpy(&b, beta, width);
+
+      auto xDesc = static_cast<cudnnTensorDescriptor_t>(get_ptr(req, &ok));
+      void* x = get_ptr(req, &ok);
+      auto zDesc = static_cast<cudnnTensorDescriptor_t>(get_ptr(req, &ok));
+      void* z = get_ptr(req, &ok);
+      auto yDesc = static_cast<cudnnTensorDescriptor_t>(get_ptr(req, &ok));
+      void* y = get_ptr(req, &ok);
+      auto bnDesc = static_cast<cudnnTensorDescriptor_t>(get_ptr(req, &ok));
+      void* scale = get_ptr(req, &ok);
+      void* bias = get_ptr(req, &ok);
+      double average = 0, epsilon = 0;
+      if (!ok || !req.get(&average)) {
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
+        return true;
+      }
+      void* running_mean = get_ptr(req, &ok);
+      void* running_var = get_ptr(req, &ok);
+      if (!ok || !req.get(&epsilon)) {
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
+        return true;
+      }
+      void* save_mean = get_ptr(req, &ok);
+      void* save_inv_var = get_ptr(req, &ok);
+      auto act = static_cast<cudnnActivationDescriptor_t>(get_ptr(req, &ok));
+      void* workspace = get_ptr(req, &ok);
+      uint64_t workspace_size = 0, reserve_size = 0;
+      if (!ok || !req.get(&workspace_size)) {
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
+        return true;
+      }
+      void* reserve = get_ptr(req, &ok);
+      if (!ok || !req.get(&reserve_size)) {
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
+        return true;
+      }
+      put_status(rsp, out,
+                 fn(handle, static_cast<cudnnBatchNormMode_t>(mode),
+                    static_cast<cudnnBatchNormOps_t>(bn_ops), &a, &b, xDesc, x,
+                    zDesc, z, yDesc, y, bnDesc, scale, bias, average,
+                    running_mean, running_var, epsilon, save_mean,
+                    save_inv_var, act, workspace, workspace_size, reserve,
+                    reserve_size));
+      return true;
+    }
+
+    case API_cudnnBatchNormalizationBackwardEx: {
+      auto fn = cudnn_sym<cudnnStatus_t (*)(
+          cudnnHandle_t, cudnnBatchNormMode_t, cudnnBatchNormOps_t,
+          const void*, const void*, const void*, const void*,
+          cudnnTensorDescriptor_t, const void*, cudnnTensorDescriptor_t,
+          const void*, cudnnTensorDescriptor_t, const void*,
+          cudnnTensorDescriptor_t, void*, cudnnTensorDescriptor_t, void*,
+          cudnnTensorDescriptor_t, const void*, const void*, void*, void*,
+          double, const void*, const void*, cudnnActivationDescriptor_t,
+          void*, size_t, void*, size_t)>("cudnnBatchNormalizationBackwardEx");
+      auto handle = static_cast<cudnnHandle_t>(get_ptr(req, &ok));
+      int32_t mode = 0, bn_ops = 0;
+      uint32_t width = 0;
+      const uint8_t* s4[4] = {};
+      size_t n4[4] = {};
+      if (!fn || !ok || !req.get(&mode) || !req.get(&bn_ops) ||
+          !req.get(&width) ||
+          (width != sizeof(float) && width != sizeof(double))) {
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
+        return true;
+      }
+      for (int i = 0; i < 4; i++) {
+        if (!req.get_sized(&s4[i], &n4[i]) || n4[i] != width) {
+          put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
+          return true;
+        }
+      }
+      union Scalar { float f; double d; } sc[4]{};
+      for (int i = 0; i < 4; i++) std::memcpy(&sc[i], s4[i], width);
+
+      auto xDesc = static_cast<cudnnTensorDescriptor_t>(get_ptr(req, &ok));
+      void* x = get_ptr(req, &ok);
+      auto yDesc = static_cast<cudnnTensorDescriptor_t>(get_ptr(req, &ok));
+      void* y = get_ptr(req, &ok);
+      auto dyDesc = static_cast<cudnnTensorDescriptor_t>(get_ptr(req, &ok));
+      void* dy = get_ptr(req, &ok);
+      auto dzDesc = static_cast<cudnnTensorDescriptor_t>(get_ptr(req, &ok));
+      void* dz = get_ptr(req, &ok);
+      auto dxDesc = static_cast<cudnnTensorDescriptor_t>(get_ptr(req, &ok));
+      void* dx = get_ptr(req, &ok);
+      auto bnDesc = static_cast<cudnnTensorDescriptor_t>(get_ptr(req, &ok));
+      void* scale = get_ptr(req, &ok);
+      void* bias = get_ptr(req, &ok);
+      void* dscale = get_ptr(req, &ok);
+      void* dbias = get_ptr(req, &ok);
+      double epsilon = 0;
+      if (!ok || !req.get(&epsilon)) {
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
+        return true;
+      }
+      void* saved_mean = get_ptr(req, &ok);
+      void* saved_inv_var = get_ptr(req, &ok);
+      auto act = static_cast<cudnnActivationDescriptor_t>(get_ptr(req, &ok));
+      void* workspace = get_ptr(req, &ok);
+      uint64_t workspace_size = 0, reserve_size = 0;
+      if (!ok || !req.get(&workspace_size)) {
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
+        return true;
+      }
+      void* reserve = get_ptr(req, &ok);
+      if (!ok || !req.get(&reserve_size)) {
+        put_status(rsp, out, CUDNN_STATUS_BAD_PARAM);
+        return true;
+      }
+      put_status(rsp, out,
+                 fn(handle, static_cast<cudnnBatchNormMode_t>(mode),
+                    static_cast<cudnnBatchNormOps_t>(bn_ops), &sc[0], &sc[1],
+                    &sc[2], &sc[3], xDesc, x, yDesc, y, dyDesc, dy, dzDesc, dz,
+                    dxDesc, dx, bnDesc, scale, bias, dscale, dbias, epsilon,
+                    saved_mean, saved_inv_var, act, workspace, workspace_size,
+                    reserve, reserve_size));
+      return true;
+    }
+
     default:
       std::fprintf(stderr, "[rgpu-server] unhandled cuDNN id %u\n", id);
       put_status(rsp, out, CUDNN_STATUS_NOT_SUPPORTED);

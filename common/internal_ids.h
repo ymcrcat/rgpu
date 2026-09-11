@@ -26,6 +26,11 @@ enum InternalId : uint32_t {
   // array as a single handle and never sent the capacity, so the call would
   // have quietly reported no nodes at all.
   API_rgpu_graph_nodes = kInternalBase + 5,
+  // cuThreadExchangeStreamCaptureMode. Its one parameter is read as well as
+  // written: the caller passes the mode it wants and gets the old one back.
+  // The generator saw only a pointer being written to, sent no value, and so
+  // asked for mode zero whatever the caller wanted.
+  API_rgpu_capture_mode = kInternalBase + 6,
 };
 
 }  // namespace rgpu

@@ -57,6 +57,9 @@ HANDWRITTEN = {
     # Its count is the caller's capacity on the way in and the number written
     # on the way out, which the generator cannot express.
     "cuGraphGetNodes",
+    # Its parameter is read as well as written, which the generator cannot
+    # see: it sent no value, so the mode asked for was always zero.
+    "cuThreadExchangeStreamCaptureMode",
     # Undocumented table of internal driver function pointers. cudart asks for
     # it immediately after cuInit. Hand-written so we can log which table is
     # wanted and control exactly what we answer.

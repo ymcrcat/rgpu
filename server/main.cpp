@@ -162,6 +162,20 @@ CUresult handle_graph_nodes(Buffer& req, Buffer* rsp) {
   return CUDA_SUCCESS;
 }
 
+// cuThreadExchangeStreamCaptureMode, whose parameter is both the mode being
+// asked for and the mode that was in force. PyTorch uses it to make an
+// allocation legal in the middle of a capture, so getting it wrong invalidates
+// the capture rather than failing anything obvious.
+CUresult handle_capture_mode(Buffer& req, Buffer* rsp) {
+  int32_t wanted = 0;
+  if (!req.get(&wanted)) return CUDA_ERROR_INVALID_VALUE;
+  auto mode = static_cast<CUstreamCaptureMode>(wanted);
+  CUresult r = cuThreadExchangeStreamCaptureMode(&mode);
+  if (r != CUDA_SUCCESS) return r;
+  rsp->put<int32_t>(static_cast<int32_t>(mode));
+  return CUDA_SUCCESS;
+}
+
 CUresult handle_hello(Buffer& req, Buffer* rsp) {
   (void)req;
   int version = 0;
@@ -177,6 +191,7 @@ bool dispatch_internal(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
     case API_rgpu_hello: *out = handle_hello(req, rsp); return true;
     case API_rgpu_capture_info: *out = handle_capture_info(req, rsp); return true;
     case API_rgpu_graph_nodes: *out = handle_graph_nodes(req, rsp); return true;
+    case API_rgpu_capture_mode: *out = handle_capture_mode(req, rsp); return true;
     default: return false;
   }
 }

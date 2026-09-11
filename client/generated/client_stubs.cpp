@@ -3477,16 +3477,6 @@ extern "C" CUresult cuTexRefSetMipmappedArray(CUtexref hTexRef, CUmipmappedArray
   return r_;
 }
 
-extern "C" CUresult cuThreadExchangeStreamCaptureMode(CUstreamCaptureMode *mode) {
-  rgpu::Buffer req;
-  req.put<uint8_t>(mode ? 1 : 0);
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuThreadExchangeStreamCaptureMode, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  if (mode && !rsp.get(mode)) return CUDA_ERROR_UNKNOWN;
-  return r_;
-}
-
 extern "C" CUresult cuUserObjectCreate(CUuserObject *object_out, void *ptr, CUhostFn destroy, unsigned int initialRefcount, unsigned int flags) {
   return rgpu::unimplemented("cuUserObjectCreate", "void-pointer");
 }

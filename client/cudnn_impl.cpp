@@ -18,6 +18,7 @@
 // client/generated/cudnn_stubs.cpp.
 
 #include <atomic>
+#include <initializer_list>
 #include <cstring>
 #include <mutex>
 #include <unordered_map>
@@ -480,6 +481,190 @@ cudnnStatus_t cudnnBatchNormalizationForwardInference(
   put_ptr(req, estimatedVariance);
   req.put<double>(epsilon);
   return send_async(rgpu::API_cudnnBatchNormalizationForwardInference, req);
+}
+
+// --- batch normalisation in training mode ----------------------------------
+//
+// A different set of entry points from the inference form: these compute the
+// batch's own statistics, update the running ones, and write a reserve space
+// that the backward pass reads. The workspace and reserve are device memory
+// the caller allocated, so they travel as pointers like any other.
+
+cudnnStatus_t cudnnCreateActivationDescriptor(
+    cudnnActivationDescriptor_t* activationDesc) {
+  if (!activationDesc) return CUDNN_STATUS_BAD_PARAM;
+  void* h = mint_handle();
+  rgpu::Buffer req;
+  put_ptr(req, h);
+  cudnnStatus_t s = send_async(rgpu::API_cudnnCreateActivationDescriptor, req);
+  if (s != CUDNN_STATUS_SUCCESS) return s;
+  *activationDesc = static_cast<cudnnActivationDescriptor_t>(h);
+  return s;
+}
+
+cudnnStatus_t cudnnSetActivationDescriptor(
+    cudnnActivationDescriptor_t activationDesc, cudnnActivationMode_t mode,
+    cudnnNanPropagation_t reluNanOpt, double coef) {
+  rgpu::Buffer req;
+  put_ptr(req, activationDesc);
+  req.put<int32_t>(static_cast<int32_t>(mode));
+  req.put<int32_t>(static_cast<int32_t>(reluNanOpt));
+  req.put<double>(coef);
+  return send_async(rgpu::API_cudnnSetActivationDescriptor, req);
+}
+
+cudnnStatus_t cudnnDestroyActivationDescriptor(
+    cudnnActivationDescriptor_t activationDesc) {
+  rgpu::Buffer req;
+  put_ptr(req, activationDesc);
+  cudnnStatus_t s =
+      send_async(rgpu::API_cudnnDestroyActivationDescriptor, req);
+  forget_type(activationDesc);
+  return s;
+}
+
+namespace {
+
+// The three size queries differ only in which descriptors they take, so they
+// share a frame: the fixed arguments, then the descriptors in order.
+cudnnStatus_t size_query(uint32_t id, cudnnHandle_t handle,
+                         cudnnBatchNormMode_t mode, cudnnBatchNormOps_t bnOps,
+                         cudnnActivationDescriptor_t activationDesc,
+                         std::initializer_list<const void*> descriptors,
+                         size_t* sizeInBytes) {
+  if (!sizeInBytes) return CUDNN_STATUS_BAD_PARAM;
+  rgpu::Buffer req, rsp;
+  put_ptr(req, handle);
+  req.put<int32_t>(static_cast<int32_t>(mode));
+  req.put<int32_t>(static_cast<int32_t>(bnOps));
+  put_ptr(req, activationDesc);
+  req.put<uint32_t>(static_cast<uint32_t>(descriptors.size()));
+  for (const void* d : descriptors) put_ptr(req, d);
+  cudnnStatus_t s = send(id, req, &rsp);
+  if (s != CUDNN_STATUS_SUCCESS) return s;
+  uint64_t v = 0;
+  if (!rsp.get(&v)) return CUDNN_STATUS_INTERNAL_ERROR;
+  *sizeInBytes = static_cast<size_t>(v);
+  return s;
+}
+
+}  // namespace
+
+cudnnStatus_t cudnnGetBatchNormalizationForwardTrainingExWorkspaceSize(
+    cudnnHandle_t handle, cudnnBatchNormMode_t mode, cudnnBatchNormOps_t bnOps,
+    const cudnnTensorDescriptor_t xDesc, const cudnnTensorDescriptor_t zDesc,
+    const cudnnTensorDescriptor_t yDesc,
+    const cudnnTensorDescriptor_t bnScaleBiasMeanVarDesc,
+    const cudnnActivationDescriptor_t activationDesc, size_t* sizeInBytes) {
+  return size_query(
+      rgpu::API_cudnnGetBatchNormalizationForwardTrainingExWorkspaceSize,
+      handle, mode, bnOps, activationDesc,
+      {xDesc, zDesc, yDesc, bnScaleBiasMeanVarDesc}, sizeInBytes);
+}
+
+cudnnStatus_t cudnnGetBatchNormalizationBackwardExWorkspaceSize(
+    cudnnHandle_t handle, cudnnBatchNormMode_t mode, cudnnBatchNormOps_t bnOps,
+    const cudnnTensorDescriptor_t xDesc, const cudnnTensorDescriptor_t yDesc,
+    const cudnnTensorDescriptor_t dyDesc, const cudnnTensorDescriptor_t dzDesc,
+    const cudnnTensorDescriptor_t dxDesc,
+    const cudnnTensorDescriptor_t dBnScaleBiasDesc,
+    const cudnnActivationDescriptor_t activationDesc, size_t* sizeInBytes) {
+  return size_query(
+      rgpu::API_cudnnGetBatchNormalizationBackwardExWorkspaceSize, handle, mode,
+      bnOps, activationDesc,
+      {xDesc, yDesc, dyDesc, dzDesc, dxDesc, dBnScaleBiasDesc}, sizeInBytes);
+}
+
+cudnnStatus_t cudnnGetBatchNormalizationTrainingExReserveSpaceSize(
+    cudnnHandle_t handle, cudnnBatchNormMode_t mode, cudnnBatchNormOps_t bnOps,
+    const cudnnActivationDescriptor_t activationDesc,
+    const cudnnTensorDescriptor_t xDesc, size_t* sizeInBytes) {
+  return size_query(
+      rgpu::API_cudnnGetBatchNormalizationTrainingExReserveSpaceSize, handle,
+      mode, bnOps, activationDesc, {xDesc}, sizeInBytes);
+}
+
+cudnnStatus_t cudnnBatchNormalizationForwardTrainingEx(
+    cudnnHandle_t handle, cudnnBatchNormMode_t mode, cudnnBatchNormOps_t bnOps,
+    const void* alpha, const void* beta, const cudnnTensorDescriptor_t xDesc,
+    const void* xData, const cudnnTensorDescriptor_t zDesc, const void* zData,
+    const cudnnTensorDescriptor_t yDesc, void* yData,
+    const cudnnTensorDescriptor_t bnScaleBiasMeanVarDesc,
+    const void* bnScaleData, const void* bnBiasData,
+    double exponentialAverageFactor, void* resultRunningMeanData,
+    void* resultRunningVarianceData, double epsilon, void* saveMean,
+    void* saveInvVariance, const cudnnActivationDescriptor_t activationDesc,
+    void* workspace, size_t workSpaceSizeInBytes, void* reserveSpace,
+    size_t reserveSpaceSizeInBytes) {
+  if (!alpha || !beta) return CUDNN_STATUS_BAD_PARAM;
+  const size_t width = scalar_width(yDesc);
+  rgpu::Buffer req;
+  put_ptr(req, handle);
+  req.put<int32_t>(static_cast<int32_t>(mode));
+  req.put<int32_t>(static_cast<int32_t>(bnOps));
+  req.put<uint32_t>(static_cast<uint32_t>(width));
+  req.put_sized(alpha, width);
+  req.put_sized(beta, width);
+  const void* const forward_ptrs[] = {
+      xDesc, xData, zDesc, zData, yDesc, yData,
+      bnScaleBiasMeanVarDesc, bnScaleData, bnBiasData};
+  for (const void* p : forward_ptrs) put_ptr(req, p);
+  req.put<double>(exponentialAverageFactor);
+  put_ptr(req, resultRunningMeanData);
+  put_ptr(req, resultRunningVarianceData);
+  req.put<double>(epsilon);
+  put_ptr(req, saveMean);
+  put_ptr(req, saveInvVariance);
+  put_ptr(req, activationDesc);
+  put_ptr(req, workspace);
+  req.put<uint64_t>(workSpaceSizeInBytes);
+  put_ptr(req, reserveSpace);
+  req.put<uint64_t>(reserveSpaceSizeInBytes);
+  return send_async(rgpu::API_cudnnBatchNormalizationForwardTrainingEx, req);
+}
+
+cudnnStatus_t cudnnBatchNormalizationBackwardEx(
+    cudnnHandle_t handle, cudnnBatchNormMode_t mode, cudnnBatchNormOps_t bnOps,
+    const void* alphaDataDiff, const void* betaDataDiff,
+    const void* alphaParamDiff, const void* betaParamDiff,
+    const cudnnTensorDescriptor_t xDesc, const void* xData,
+    const cudnnTensorDescriptor_t yDesc, const void* yData,
+    const cudnnTensorDescriptor_t dyDesc, const void* dyData,
+    const cudnnTensorDescriptor_t dzDesc, void* dzData,
+    const cudnnTensorDescriptor_t dxDesc, void* dxData,
+    const cudnnTensorDescriptor_t dBnScaleBiasDesc, const void* bnScaleData,
+    const void* bnBiasData, void* dBnScaleData, void* dBnBiasData,
+    double epsilon, const void* savedMean, const void* savedInvVariance,
+    const cudnnActivationDescriptor_t activationDesc, void* workspace,
+    size_t workSpaceSizeInBytes, void* reserveSpace,
+    size_t reserveSpaceSizeInBytes) {
+  if (!alphaDataDiff || !betaDataDiff || !alphaParamDiff || !betaParamDiff) {
+    return CUDNN_STATUS_BAD_PARAM;
+  }
+  const size_t width = scalar_width(dxDesc);
+  rgpu::Buffer req;
+  put_ptr(req, handle);
+  req.put<int32_t>(static_cast<int32_t>(mode));
+  req.put<int32_t>(static_cast<int32_t>(bnOps));
+  req.put<uint32_t>(static_cast<uint32_t>(width));
+  req.put_sized(alphaDataDiff, width);
+  req.put_sized(betaDataDiff, width);
+  req.put_sized(alphaParamDiff, width);
+  req.put_sized(betaParamDiff, width);
+  const void* const backward_ptrs[] = {
+      xDesc, xData, yDesc, yData, dyDesc, dyData, dzDesc, dzData,
+      dxDesc, dxData, dBnScaleBiasDesc, bnScaleData, bnBiasData,
+      dBnScaleData, dBnBiasData};
+  for (const void* p : backward_ptrs) put_ptr(req, p);
+  req.put<double>(epsilon);
+  put_ptr(req, savedMean);
+  put_ptr(req, savedInvVariance);
+  put_ptr(req, activationDesc);
+  put_ptr(req, workspace);
+  req.put<uint64_t>(workSpaceSizeInBytes);
+  put_ptr(req, reserveSpace);
+  req.put<uint64_t>(reserveSpaceSizeInBytes);
+  return send_async(rgpu::API_cudnnBatchNormalizationBackwardEx, req);
 }
 
 }  // extern "C"
