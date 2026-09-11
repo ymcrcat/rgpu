@@ -15,7 +15,7 @@ def roundtrip(v):
     None, True, False, 0, -1, 2**62, 3.5, float("inf"), "", "aten::mm",
     b"", b"\x00\x01", [], [1, [2, [3]]], torch.float16, torch.bfloat16,
     torch.int64, torch.bool, torch.strided, torch.channels_last,
-    torch.contiguous_format,
+    torch.contiguous_format, {}, {"a": 1}, {"x": [1, 2], "y": 3.5},
 ])
 def test_values_survive(value):
     assert roundtrip(value) == value
@@ -50,7 +50,7 @@ def test_host_of_non_contiguous_and_empty():
     assert roundtrip(wire.Host.of(torch.empty(0, 3))).tensor().shape == (0, 3)
 
 
-@pytest.mark.parametrize("value", [object(), {1: 2}, {1, 2}, 1j, torch.zeros(1), 2**64])
+@pytest.mark.parametrize("value", [object(), {1, 2}, 1j, torch.zeros(1), 2**64])
 def test_unsupported_values_raise_where_encoded(value):
     with pytest.raises(wire.EncodeError):
         wire.encode(value)

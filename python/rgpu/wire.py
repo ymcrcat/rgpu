@@ -202,6 +202,11 @@ def _enc(v, out, depth):
         _put_str(b"A", str(v), out)
     elif isinstance(v, torch.memory_format):
         _put_str(b"M", str(v), out)
+    elif isinstance(v, dict):
+        out += b"K" + struct.pack("<I", len(v))
+        for k, val in v.items():
+            _enc(k, out, depth + 1)
+            _enc(val, out, depth + 1)
     else:
         raise EncodeError(f"cannot send a {type(v).__name__} to the server")
 
@@ -292,6 +297,11 @@ def _dec(r, depth):
         return _lookup(_LAYOUTS, r.string(), "layout")
     if tag == b"M":
         return _lookup(_FORMATS, r.string(), "memory format")
+    if tag == b"K":
+        n = r.unpack("<I")
+        if n > MAX_ITEMS:
+            raise DecodeError("dict too large")
+        return {_dec(r, depth + 1): _dec(r, depth + 1) for _ in range(n)}
     raise DecodeError(f"unknown tag {tag!r}")
 
 
