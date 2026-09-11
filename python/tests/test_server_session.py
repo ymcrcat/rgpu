@@ -78,7 +78,7 @@ def test_blocked_and_unknown_ops_are_refused():
     assert status == wire.ERROR and "not allowed" in message
     c.send(wire.RUN, "aten::__dict__", "default", [], {}, [2])
     assert c.reply(wire.SYNC)[0] == wire.ERROR
-    c.send(wire.RUN, "aten::prims", "default", [], {}, [3])
+    c.send(wire.RUN, "prims::add", "default", [], {}, [3])
     assert c.reply(wire.SYNC)[0] == wire.ERROR
 
 
