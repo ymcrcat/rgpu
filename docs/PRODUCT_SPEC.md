@@ -33,9 +33,28 @@ same machine:
 With graphs the remoting overhead is gone rather than reduced, because an
 iteration is one replay rather than several hundred calls.
 
-**Every one of those numbers is loopback.** Client and server were the same
-box. Nothing here has been measured over a network, which is the single
-largest gap in what we claim.
+Training works too: eight rungs, each checking a gradient rather than a loss,
+all matching the same work on CPU. Linear and convolution backward, batch norm
+in training mode, SGD and Adam, a ResNet-18 training step, a falling loss over
+ten steps, and mixed precision with a gradient scaler.
+
+### Over a real network
+
+From a laptop in one city to a rented 3090 in another, through an ssh tunnel,
+a round trip costs **34.6 ms**. ResNet-18 at batch 1:
+
+| | per inference | round trips |
+|---|---|---|
+| eager | 1632 ms | 49 |
+| captured as a CUDA graph | 70 ms | 2 |
+
+Twenty-three times faster, and within a millisecond of two round trips, which
+is what the round trip count predicted. The client was an arm64 container on
+the laptop and the server an x86_64 host, so that pairing is confirmed on a
+real link as well.
+
+The lesson for anyone using this: **over a network, the only number that
+matters is round trips per iteration.** Everything else is detail.
 
 ## Gaps, in the order they would stop someone
 
@@ -108,6 +127,63 @@ understand. The defence is the unimplemented-call log and tests that check
 values rather than status codes, and both need to stay ahead of the generator.
 Every hand-written call in this repository exists because the generator was
 wrong about it, and there will be more.
+
+## What it would take to be usable by someone else
+
+Usable means a person who did not write this can run their own work on it
+without reading the source. In rough order of what blocks that.
+
+### Table stakes
+
+1. **Authentication and encryption.** Today the port is the credential. A
+   shared secret at connection setup and TLS on the wire, or it cannot leave a
+   tunnel.
+2. **Surviving a dropped connection.** A 34 ms link will drop sometimes, and
+   today that loses the job. The protocol already tags the calls that
+   establish durable state with `record`; replaying that set after a reconnect
+   rebuilds the session. This is the difference between a demo and something
+   you would leave running overnight.
+3. **An install that is one step.** Right now: build shims in a container, copy
+   a server to the GPU host, set five LD_PRELOAD entries and three environment
+   variables. It needs to be a client package and a server image, with one
+   command that runs your script against a remote GPU.
+4. **Making the fast path the default.** The gap between 1632 ms and 70 ms is
+   entirely whether the work was captured into a graph. A user who does not
+   know that will conclude the whole idea is too slow. At minimum this means
+   documenting `torch.compile(mode="reduce-overhead")` as the supported path;
+   better would be detecting an uncaptured hot loop and saying so.
+
+### Needed before real workloads
+
+5. **The data path.** Training against a remote GPU ships every batch across
+   the link. Nothing here has measured that, and at 34 ms and whatever
+   bandwidth the link has, it may well dominate everything this document
+   measures. The fixes are known - stage the dataset on the GPU host, prefetch
+   deeper, compress - but the measurement comes first.
+6. **Multi-GPU and NCCL**, for anything distributed.
+7. **Honest failure.** A missing entry point currently logs a name and returns
+   "not supported", which is right for us and useless for a user. It should say
+   what was unsupported, and what to do about it.
+8. **Memory behaviour.** Out-of-memory on the far side should look like
+   out-of-memory here, and `torch.cuda.memory_allocated` should mean something.
+
+### Operational
+
+9. **Observability.** The round trip counter exists behind an environment
+   variable. It should be a supported report: how many round trips, where they
+   went, what that costs on this link.
+10. **Version negotiation.** The server resolves driver entry points lazily, so
+    it tolerates a different CUDA version, but nothing checks compatibility
+    explicitly or explains a mismatch.
+11. **Lifecycle and cost.** A GPU left running is the expensive failure mode,
+    and we have made it twice ourselves. Idle detection and shutdown belong in
+    the product, not in a skill file.
+
+### What is not on this list
+
+Shared memory and RDMA transport. With graphs the round trips are down to two
+per iteration, so a faster round trip is no longer what stands between this and
+being useful.
 
 ## What to build next
 
