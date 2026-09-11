@@ -13,6 +13,7 @@ import collections
 import os
 import socket
 import threading
+import time
 
 import torch
 
@@ -140,20 +141,66 @@ class Connection:
 
     # --- the socket ----------------------------------------------------------
 
+    def _reconnect(self):
+        """Reach the server again and pick the session back up.
+
+        Worth trying because the state is not on this side: if the server
+        still has the session, nothing the application holds is lost.
+        """
+        if self.sock is not None:
+            self.sock.close()
+            self.sock = None
+        deadline = time.monotonic() + _env_int("RGPU_RECONNECT_SECONDS", 60)
+        delay = 0.1
+        while True:
+            try:
+                resumed, server_seq = self._connect()
+                break
+            except SessionLost:
+                raise
+            except OSError:
+                if time.monotonic() > deadline:
+                    raise ConnectionError("could not reach rgpu-opserver again") from None
+                time.sleep(delay)
+                delay = min(delay * 2, 3.0)
+        if server_seq < self.seq and (not self.replay_possible or not self.unacked
+                                      or self.unacked[0][0] > server_seq + 1):
+            self.sock.close()
+            self.sock = None
+            raise SessionLost("messages the server never received were too large to keep "
+                              "for replay; tensors on rgpu may be stale")
+        while self.unacked and self.unacked[0][0] <= server_seq:
+            self.unacked.popleft()
+        self.pending = []
+        self.pending_bytes = 0
+        if self.unacked:
+            wire.send_frame(self.sock, wire.encode(list(self.unacked)))
+
     def _flush(self):
         if not self.pending:
             return
-        if self.sock is None:
-            self._connect()
         frame = wire.encode(self.pending)
-        wire.send_frame(self.sock, frame)
+        try:
+            if self.sock is None:
+                self._connect()
+            wire.send_frame(self.sock, frame)
+        except SessionLost:
+            raise
+        except OSError:
+            self._reconnect()   # replays everything unacknowledged, this batch included
         self.stats["bytes_out"] += len(frame)
         self.pending = []
         self.pending_bytes = 0
 
     def _await(self, seq):
         while True:
-            frame = wire.recv_frame(self.sock)
+            try:
+                frame = wire.recv_frame(self.sock)
+            except SessionLost:
+                raise
+            except OSError:
+                self._reconnect()   # the server resends a lost reply, or runs the replay
+                continue
             self.stats["bytes_in"] += len(frame)
             rseq, status, value = wire.decode(frame)
             if rseq < seq:
