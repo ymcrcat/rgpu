@@ -166,8 +166,10 @@ class Connection:
     def _ack(self, seq):
         self.last_acked = seq
         while self.unacked and self.unacked[0][0] <= seq:
-            self.unacked_bytes -= 64
             self.unacked.popleft()
+        # unacked_bytes is an upper bound on what is held for replay, reset once
+        # the server has acknowledged everything (so the 64 MB limit can only
+        # trip early, never late).
         if not self.unacked:
             self.unacked_bytes = 0
             self.replay_possible = True

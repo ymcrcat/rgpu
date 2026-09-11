@@ -66,3 +66,13 @@ def test_versions_must_agree_on_major_and_minor(monkeypatch):
         session._check_versions("1.0.0")
     monkeypatch.setenv("RGPU_ALLOW_VERSION_MISMATCH", "1")
     session._check_versions("1.0.0")
+
+
+def test_unacked_bytes_drains_on_ack(conn):
+    conn.post(wire.SEED, 1, size=1000)
+    assert conn.unacked_bytes >= 1000
+    assert len(conn.unacked) == 1
+    conn.request(wire.SYNC)
+    assert conn.unacked_bytes == 0
+    assert len(conn.unacked) == 0
+    assert conn.replay_possible is True
