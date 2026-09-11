@@ -115,3 +115,6 @@ def register_device():
     # __torch_dispatch__: see _copy_from_kernel.
     lib.impl("_copy_from", _copy_from_kernel, "PrivateUse1")
     _libs.append(lib)   # registrations live only as long as the Library object
+
+    from . import autocast
+    autocast.install()
