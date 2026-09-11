@@ -30,8 +30,9 @@ _METADATA_MUTATING = frozenset({
     "unsqueeze_", "swapaxes_", "swapdims_",
 })
 
-# Ops whose result depends on the data, but whose meta kernel says so with a
-# RuntimeError rather than NotImplementedError. They always wait.
+# Ops whose result always depends on the data. Their meta kernel does not fail
+# with NotImplementedError (aten.equal's raises plain RuntimeError on torch
+# 2.14), so routing them here just skips a meta attempt that can only fail.
 _ALWAYS_SYNC = frozenset({aten.equal.default})
 
 
@@ -155,16 +156,21 @@ def _run(func, args, kwargs):
     except NotImplementedError:
         if not _returns_only_inputs(func):
             return _run_sync(func, args, kwargs)
-        # No meta kernel, but nothing new comes out, so there is no shape to
-        # infer: send it and hand back the inputs it wrote to.
-        returns = func._schema.returns
-        results = [_written_input(func, args, kwargs, r) for r in returns]
-        a, kw = _wire_args(args, kwargs)
-        out_ids = [None] * sum(len(tree_flatten(r)[0]) for r in results)
-        session.get().post(wire.RUN, func._schema.name, func._overloadname, a, kw, out_ids)
-        if not returns:
-            return None
-        return results[0] if len(results) == 1 else tuple(results)
+        # Nothing new comes out, so there would be no shape to infer even with
+        # a meta kernel - but an out= tensor still needs to be the right size
+        # before it is written, and only the data can say what that is.
+        if any(a.alias_info is not None and a.alias_info.is_write and a.is_out
+               for a in func._schema.arguments):
+            raise NotImplementedError(
+                f"rgpu cannot run {func}: its output size depends on the data, so it "
+                "cannot write into an out= tensor; call it without out=")
+        # An in-place (self-writing, non-out=) op with no meta kernel. No aten
+        # op currently falls here - a survey of every in-place overload found
+        # none missing a meta kernel - so this is refused rather than shipping
+        # a streaming path that has never run against a real op.
+        raise NotImplementedError(
+            f"rgpu cannot run {func}: it has no meta kernel to infer its output from, "
+            "and rgpu has no other way to run an in-place op without one")
     changed = False
     for m, (shape, stride, offset) in zip(metas, before):
         if m.shape != shape or m.stride() != stride or m.storage_offset() != offset:
@@ -173,7 +179,7 @@ def _run(func, args, kwargs):
     if changed:
         raise NotImplementedError(
             f"rgpu cannot run {func}: it changes the shape of a tensor it writes to "
-            "(resize an out= tensor to the right size first)")
+            "(allocate the out= tensor at the right size)")
     results, out_ids = _wrap_outputs(func, args, kwargs, out)
     a, kw = _wire_args(args, kwargs)
     session.get().post(wire.RUN, func._schema.name, func._overloadname, a, kw, out_ids)

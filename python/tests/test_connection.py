@@ -1,3 +1,4 @@
+import gc
 import os
 
 import pytest
@@ -8,6 +9,14 @@ from rgpu import session, wire
 
 @pytest.fixture
 def conn():
+    # Tensors freed by an earlier test (on the shared process connection) can
+    # still be sitting in this process-wide queue; the next Connection to post
+    # anything drains it, so left alone a fresh one here would pick up frees
+    # that aren't its own and see an inflated message count. Send them to the
+    # process connection first, where they belong.
+    gc.collect()
+    if session.pending_frees:
+        session.get().request(wire.SYNC)
     return session.Connection(os.environ["RGPU_OPSERVER"])
 
 

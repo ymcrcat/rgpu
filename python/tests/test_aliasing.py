@@ -2,17 +2,7 @@ import pytest
 import torch
 
 import rgpu
-from rgpu import session, wire
-
-
-@pytest.fixture(autouse=True)
-def _drain_frees_from_the_shared_session():
-    """Send this test's tensor frees now, so they don't sit in the process-wide
-    queue waiting for whichever connection happens to post next - which, for
-    tests elsewhere that open their own Connection, would otherwise inflate an
-    unrelated message count."""
-    yield
-    session.get().request(wire.SYNC)
+from rgpu import dispatch
 
 
 def test_an_in_place_op_on_a_view_changes_the_base():
@@ -60,9 +50,30 @@ def test_expand_and_broadcast():
 ])
 def test_ops_whose_size_depends_on_the_data(op):
     x = torch.tensor([0.0, 3.0, -1.0, 3.0, 5.0])
-    got = op(x.to("rgpu"))
+    r = x.to("rgpu")
+    waits = rgpu.stats()["waits"]
+    got = op(r)
+    assert rgpu.stats()["waits"] == waits + 1
     want = op(x)
     assert got.shape == want.shape and torch.equal(got.cpu(), want)
+
+
+def test_a_data_dependent_op_refuses_an_out_tensor():
+    x = torch.tensor([0.0, 3.0, -1.0]).to("rgpu")
+    out = torch.empty(0, dtype=torch.long, device="rgpu")
+    with pytest.raises(NotImplementedError, match="out="):
+        torch.nonzero(x, out=out)
+
+
+def test_run_sync_refuses_an_op_that_writes_an_input_and_returns_a_new_tensor():
+    lib = torch.library.Library("rgputest", "DEF")
+    lib.define("mixed(Tensor(a!) x) -> (Tensor(a!), Tensor)")
+    op = torch.ops.rgputest.mixed.default
+    r = torch.zeros(3, device="rgpu")
+    waits = rgpu.stats()["waits"]
+    with pytest.raises(NotImplementedError, match="whose size only the data can tell"):
+        dispatch._run_sync(op, (r,), {})
+    assert rgpu.stats()["waits"] == waits
 
 
 def test_the_output_of_a_data_dependent_op_streams_onward():
