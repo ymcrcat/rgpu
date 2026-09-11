@@ -13,3 +13,4 @@ third_party/
 *.so.*
 __pycache__/
 *.pyc
+build-macos/
