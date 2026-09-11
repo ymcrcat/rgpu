@@ -1225,17 +1225,7 @@ extern "C" CUresult cuGraphGetEdges_v2(CUgraph hGraph, CUgraphNode *from, CUgrap
 }
 
 extern "C" CUresult cuGraphGetRootNodes(CUgraph hGraph, CUgraphNode *rootNodes, size_t *numRootNodes) {
-  rgpu::Buffer req;
-  req.put<uint64_t>(reinterpret_cast<uint64_t>(hGraph));
-  req.put<uint8_t>(rootNodes ? 1 : 0);
-  req.put<uint8_t>(numRootNodes ? 1 : 0);
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuGraphGetRootNodes, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  if (rootNodes) { uint64_t h_; if (!rsp.get(&h_)) return CUDA_ERROR_UNKNOWN;
-            *rootNodes = reinterpret_cast<CUgraphNode>(h_); }
-  if (numRootNodes && !rsp.get(numRootNodes)) return CUDA_ERROR_UNKNOWN;
-  return r_;
+  return rgpu::unimplemented("cuGraphGetRootNodes", "array:rootNodes is numRootNodes elements, not one");
 }
 
 extern "C" CUresult cuGraphHostNodeGetParams(CUgraphNode hNode, CUDA_HOST_NODE_PARAMS *nodeParams) {
@@ -1344,39 +1334,19 @@ extern "C" CUresult cuGraphNodeFindInClone(CUgraphNode *phNode, CUgraphNode hOri
 }
 
 extern "C" CUresult cuGraphNodeGetDependencies(CUgraphNode hNode, CUgraphNode *dependencies, size_t *numDependencies) {
-  rgpu::Buffer req;
-  req.put<uint64_t>(reinterpret_cast<uint64_t>(hNode));
-  req.put<uint8_t>(dependencies ? 1 : 0);
-  req.put<uint8_t>(numDependencies ? 1 : 0);
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuGraphNodeGetDependencies, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  if (dependencies) { uint64_t h_; if (!rsp.get(&h_)) return CUDA_ERROR_UNKNOWN;
-            *dependencies = reinterpret_cast<CUgraphNode>(h_); }
-  if (numDependencies && !rsp.get(numDependencies)) return CUDA_ERROR_UNKNOWN;
-  return r_;
+  return rgpu::unimplemented("cuGraphNodeGetDependencies", "array:dependencies is numDependencies elements, not one");
 }
 
 extern "C" CUresult cuGraphNodeGetDependencies_v2(CUgraphNode hNode, CUgraphNode *dependencies, CUgraphEdgeData *edgeData, size_t *numDependencies) {
-  return rgpu::unimplemented("cuGraphNodeGetDependencies_v2", "struct-pointer:struct CUgraphEdgeData_st");
+  return rgpu::unimplemented("cuGraphNodeGetDependencies_v2", "array:dependencies is numDependencies elements, not one");
 }
 
 extern "C" CUresult cuGraphNodeGetDependentNodes(CUgraphNode hNode, CUgraphNode *dependentNodes, size_t *numDependentNodes) {
-  rgpu::Buffer req;
-  req.put<uint64_t>(reinterpret_cast<uint64_t>(hNode));
-  req.put<uint8_t>(dependentNodes ? 1 : 0);
-  req.put<uint8_t>(numDependentNodes ? 1 : 0);
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuGraphNodeGetDependentNodes, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  if (dependentNodes) { uint64_t h_; if (!rsp.get(&h_)) return CUDA_ERROR_UNKNOWN;
-            *dependentNodes = reinterpret_cast<CUgraphNode>(h_); }
-  if (numDependentNodes && !rsp.get(numDependentNodes)) return CUDA_ERROR_UNKNOWN;
-  return r_;
+  return rgpu::unimplemented("cuGraphNodeGetDependentNodes", "array:dependentNodes is numDependentNodes elements, not one");
 }
 
 extern "C" CUresult cuGraphNodeGetDependentNodes_v2(CUgraphNode hNode, CUgraphNode *dependentNodes, CUgraphEdgeData *edgeData, size_t *numDependentNodes) {
-  return rgpu::unimplemented("cuGraphNodeGetDependentNodes_v2", "struct-pointer:struct CUgraphEdgeData_st");
+  return rgpu::unimplemented("cuGraphNodeGetDependentNodes_v2", "array:dependentNodes is numDependentNodes elements, not one");
 }
 
 extern "C" CUresult cuGraphNodeGetEnabled(CUgraphExec hGraphExec, CUgraphNode hNode, unsigned int *isEnabled) {
@@ -1768,16 +1738,7 @@ extern "C" CUresult cuLaunchKernelEx(const CUlaunchConfig *config, CUfunction f,
 }
 
 extern "C" CUresult cuLibraryEnumerateKernels(CUkernel *kernels, unsigned int numKernels, CUlibrary lib) {
-  rgpu::Buffer req;
-  req.put<uint8_t>(kernels ? 1 : 0);
-  req.put<unsigned int>(numKernels);
-  req.put<uint64_t>(reinterpret_cast<uint64_t>(lib));
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuLibraryEnumerateKernels, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  if (kernels) { uint64_t h_; if (!rsp.get(&h_)) return CUDA_ERROR_UNKNOWN;
-            *kernels = reinterpret_cast<CUkernel>(h_); }
-  return r_;
+  return rgpu::unimplemented("cuLibraryEnumerateKernels", "array:kernels is numKernels elements, not one");
 }
 
 extern "C" CUresult cuLibraryGetGlobal(CUdeviceptr *dptr, size_t *bytes, CUlibrary library, const char *name) {
@@ -1864,7 +1825,7 @@ extern "C" CUresult cuLibraryLoadData(CUlibrary *library, const void *code, CUji
 }
 
 extern "C" CUresult cuLibraryLoadFromFile(CUlibrary *library, const char *fileName, CUjit_option *jitOptions, void **jitOptionsValues, unsigned int numJitOptions, CUlibraryOption *libraryOptions, void **libraryOptionValues, unsigned int numLibraryOptions) {
-  return rgpu::unimplemented("cuLibraryLoadFromFile", "pointer-to-pointer");
+  return rgpu::unimplemented("cuLibraryLoadFromFile", "array:jitOptions is numJitOptions elements, not one");
 }
 
 extern "C" CUresult cuLibraryUnload(CUlibrary library) {
@@ -1881,7 +1842,7 @@ extern "C" CUresult cuLinkAddData_v2(CUlinkState state, CUjitInputType type, voi
 }
 
 extern "C" CUresult cuLinkAddFile_v2(CUlinkState state, CUjitInputType type, const char *path, unsigned int numOptions, CUjit_option *options, void **optionValues) {
-  return rgpu::unimplemented("cuLinkAddFile_v2", "pointer-to-pointer");
+  return rgpu::unimplemented("cuLinkAddFile_v2", "array:options is numOptions elements, not one");
 }
 
 extern "C" CUresult cuLinkComplete(CUlinkState state, void **cubinOut, size_t *sizeOut) {
@@ -1889,7 +1850,7 @@ extern "C" CUresult cuLinkComplete(CUlinkState state, void **cubinOut, size_t *s
 }
 
 extern "C" CUresult cuLinkCreate_v2(unsigned int numOptions, CUjit_option *options, void **optionValues, CUlinkState *stateOut) {
-  return rgpu::unimplemented("cuLinkCreate_v2", "pointer-to-pointer");
+  return rgpu::unimplemented("cuLinkCreate_v2", "array:options is numOptions elements, not one");
 }
 
 extern "C" CUresult cuLinkDestroy(CUlinkState state) {
@@ -2565,16 +2526,7 @@ extern "C" CUresult cuMipmappedArrayGetSparseProperties(CUDA_ARRAY_SPARSE_PROPER
 }
 
 extern "C" CUresult cuModuleEnumerateFunctions(CUfunction *functions, unsigned int numFunctions, CUmodule mod) {
-  rgpu::Buffer req;
-  req.put<uint8_t>(functions ? 1 : 0);
-  req.put<unsigned int>(numFunctions);
-  req.put<uint64_t>(reinterpret_cast<uint64_t>(mod));
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuModuleEnumerateFunctions, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  if (functions) { uint64_t h_; if (!rsp.get(&h_)) return CUDA_ERROR_UNKNOWN;
-            *functions = reinterpret_cast<CUfunction>(h_); }
-  return r_;
+  return rgpu::unimplemented("cuModuleEnumerateFunctions", "array:functions is numFunctions elements, not one");
 }
 
 extern "C" CUresult cuModuleGetFunction(CUfunction *hfunc, CUmodule hmod, const char *name) {
@@ -2863,7 +2815,7 @@ extern "C" CUresult cuParamSetv(CUfunction hfunc, int offset, void *ptr, unsigne
 }
 
 extern "C" CUresult cuPointerGetAttributes(unsigned int numAttributes, CUpointer_attribute *attributes, void **data, CUdeviceptr ptr) {
-  return rgpu::unimplemented("cuPointerGetAttributes", "pointer-to-pointer");
+  return rgpu::unimplemented("cuPointerGetAttributes", "array:attributes is numAttributes elements, not one");
 }
 
 extern "C" CUresult cuPointerSetAttribute(const void *value, CUpointer_attribute attribute, CUdeviceptr ptr) {
@@ -3089,21 +3041,11 @@ extern "C" CUresult cuStreamSynchronize(CUstream hStream) {
 }
 
 extern "C" CUresult cuStreamUpdateCaptureDependencies(CUstream hStream, CUgraphNode *dependencies, size_t numDependencies, unsigned int flags) {
-  rgpu::Buffer req;
-  req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
-  req.put<uint8_t>(dependencies ? 1 : 0);
-  req.put<size_t>(numDependencies);
-  req.put<unsigned int>(flags);
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuStreamUpdateCaptureDependencies, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  if (dependencies) { uint64_t h_; if (!rsp.get(&h_)) return CUDA_ERROR_UNKNOWN;
-            *dependencies = reinterpret_cast<CUgraphNode>(h_); }
-  return r_;
+  return rgpu::unimplemented("cuStreamUpdateCaptureDependencies", "array:dependencies is numDependencies elements, not one");
 }
 
 extern "C" CUresult cuStreamUpdateCaptureDependencies_v2(CUstream hStream, CUgraphNode *dependencies, const CUgraphEdgeData *dependencyData, size_t numDependencies, unsigned int flags) {
-  return rgpu::unimplemented("cuStreamUpdateCaptureDependencies_v2", "struct-pointer:const struct CUgraphEdgeData_st");
+  return rgpu::unimplemented("cuStreamUpdateCaptureDependencies_v2", "array:dependencies is numDependencies elements, not one");
 }
 
 extern "C" CUresult cuStreamWaitEvent(CUstream hStream, CUevent hEvent, unsigned int Flags) {

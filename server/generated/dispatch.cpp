@@ -1045,21 +1045,6 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
     *out = r_; return true;
   }
 
-  case rgpu::API_cuGraphGetRootNodes: {
-    uint64_t u_hGraph{}; if (!req.get(&u_hGraph)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    CUgraph v_hGraph = reinterpret_cast<CUgraph>(u_hGraph);
-    uint8_t has_rootNodes{}; if (!req.get(&has_rootNodes)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    CUgraphNode v_rootNodes{};
-    uint8_t has_numRootNodes{}; if (!req.get(&has_numRootNodes)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    size_t v_numRootNodes{};
-    static auto fn_ = reinterpret_cast<decltype(&::cuGraphGetRootNodes)>(rgpu::driver_sym("cuGraphGetRootNodes"));
-    if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
-    CUresult r_ = fn_(v_hGraph, has_rootNodes ? &v_rootNodes : nullptr, has_numRootNodes ? &v_numRootNodes : nullptr);
-    if (has_rootNodes) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_rootNodes));
-    if (has_numRootNodes) rsp->put(v_numRootNodes);
-    *out = r_; return true;
-  }
-
   case rgpu::API_cuGraphInstantiateWithFlags: {
     uint8_t has_phGraphExec{}; if (!req.get(&has_phGraphExec)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUgraphExec v_phGraphExec{};
@@ -1118,36 +1103,6 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
     if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
     CUresult r_ = fn_(has_phNode ? &v_phNode : nullptr, v_hOriginalNode, v_hClonedGraph);
     if (has_phNode) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_phNode));
-    *out = r_; return true;
-  }
-
-  case rgpu::API_cuGraphNodeGetDependencies: {
-    uint64_t u_hNode{}; if (!req.get(&u_hNode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    CUgraphNode v_hNode = reinterpret_cast<CUgraphNode>(u_hNode);
-    uint8_t has_dependencies{}; if (!req.get(&has_dependencies)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    CUgraphNode v_dependencies{};
-    uint8_t has_numDependencies{}; if (!req.get(&has_numDependencies)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    size_t v_numDependencies{};
-    static auto fn_ = reinterpret_cast<decltype(&::cuGraphNodeGetDependencies)>(rgpu::driver_sym("cuGraphNodeGetDependencies"));
-    if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
-    CUresult r_ = fn_(v_hNode, has_dependencies ? &v_dependencies : nullptr, has_numDependencies ? &v_numDependencies : nullptr);
-    if (has_dependencies) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_dependencies));
-    if (has_numDependencies) rsp->put(v_numDependencies);
-    *out = r_; return true;
-  }
-
-  case rgpu::API_cuGraphNodeGetDependentNodes: {
-    uint64_t u_hNode{}; if (!req.get(&u_hNode)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    CUgraphNode v_hNode = reinterpret_cast<CUgraphNode>(u_hNode);
-    uint8_t has_dependentNodes{}; if (!req.get(&has_dependentNodes)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    CUgraphNode v_dependentNodes{};
-    uint8_t has_numDependentNodes{}; if (!req.get(&has_numDependentNodes)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    size_t v_numDependentNodes{};
-    static auto fn_ = reinterpret_cast<decltype(&::cuGraphNodeGetDependentNodes)>(rgpu::driver_sym("cuGraphNodeGetDependentNodes"));
-    if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
-    CUresult r_ = fn_(v_hNode, has_dependentNodes ? &v_dependentNodes : nullptr, has_numDependentNodes ? &v_numDependentNodes : nullptr);
-    if (has_dependentNodes) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_dependentNodes));
-    if (has_numDependentNodes) rsp->put(v_numDependentNodes);
     *out = r_; return true;
   }
 
@@ -1493,19 +1448,6 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
     static auto fn_ = reinterpret_cast<decltype(&::cuLaunchGridAsync)>(rgpu::driver_sym("cuLaunchGridAsync"));
     if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
     CUresult r_ = fn_(v_f, v_grid_width, v_grid_height, v_hStream);
-    *out = r_; return true;
-  }
-
-  case rgpu::API_cuLibraryEnumerateKernels: {
-    uint8_t has_kernels{}; if (!req.get(&has_kernels)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    CUkernel v_kernels{};
-    unsigned int v_numKernels{}; if (!req.get(&v_numKernels)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    uint64_t u_lib{}; if (!req.get(&u_lib)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    CUlibrary v_lib = reinterpret_cast<CUlibrary>(u_lib);
-    static auto fn_ = reinterpret_cast<decltype(&::cuLibraryEnumerateKernels)>(rgpu::driver_sym("cuLibraryEnumerateKernels"));
-    if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
-    CUresult r_ = fn_(has_kernels ? &v_kernels : nullptr, v_numKernels, v_lib);
-    if (has_kernels) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_kernels));
     *out = r_; return true;
   }
 
@@ -2142,19 +2084,6 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
     *out = r_; return true;
   }
 
-  case rgpu::API_cuModuleEnumerateFunctions: {
-    uint8_t has_functions{}; if (!req.get(&has_functions)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    CUfunction v_functions{};
-    unsigned int v_numFunctions{}; if (!req.get(&v_numFunctions)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    uint64_t u_mod{}; if (!req.get(&u_mod)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    CUmodule v_mod = reinterpret_cast<CUmodule>(u_mod);
-    static auto fn_ = reinterpret_cast<decltype(&::cuModuleEnumerateFunctions)>(rgpu::driver_sym("cuModuleEnumerateFunctions"));
-    if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
-    CUresult r_ = fn_(has_functions ? &v_functions : nullptr, v_numFunctions, v_mod);
-    if (has_functions) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_functions));
-    *out = r_; return true;
-  }
-
   case rgpu::API_cuModuleGetFunction: {
     uint8_t has_hfunc{}; if (!req.get(&has_hfunc)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUfunction v_hfunc{};
@@ -2619,20 +2548,6 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
     static auto fn_ = reinterpret_cast<decltype(&::cuStreamSynchronize)>(rgpu::driver_sym("cuStreamSynchronize"));
     if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
     CUresult r_ = fn_(v_hStream);
-    *out = r_; return true;
-  }
-
-  case rgpu::API_cuStreamUpdateCaptureDependencies: {
-    uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    CUstream v_hStream = reinterpret_cast<CUstream>(u_hStream);
-    uint8_t has_dependencies{}; if (!req.get(&has_dependencies)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    CUgraphNode v_dependencies{};
-    size_t v_numDependencies{}; if (!req.get(&v_numDependencies)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    unsigned int v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
-    static auto fn_ = reinterpret_cast<decltype(&::cuStreamUpdateCaptureDependencies)>(rgpu::driver_sym("cuStreamUpdateCaptureDependencies"));
-    if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
-    CUresult r_ = fn_(v_hStream, has_dependencies ? &v_dependencies : nullptr, v_numDependencies, v_flags);
-    if (has_dependencies) rsp->put<uint64_t>(reinterpret_cast<uint64_t>(v_dependencies));
     *out = r_; return true;
   }
 

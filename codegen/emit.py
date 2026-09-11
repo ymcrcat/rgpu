@@ -56,11 +56,44 @@ def plan_param(p, annotation):
     return {"mode": kind}
 
 
+# A pointer parameter whose length lives in another parameter, spotted by the
+# pair of names: nodes and numNodes, dependencies and numDependencies. The
+# generator has no way to express this. Left alone it produced code that looked
+# right and was not: cuGraphGetNodes sent no capacity and read back a single
+# handle, so it reported one node, or none, and never an error. A wrong answer
+# with no error is the worst thing this can do, so the shape is refused unless
+# a human has said what it means.
+COUNT_WORD = re.compile(r"(count|num|size|len)")
+
+
+def length_param(pname, params):
+    base = pname.lower().lstrip("p_").rstrip("_").rstrip("s")
+    if not base:
+        return None
+    for q in params:
+        if q["name"] == pname:
+            continue
+        n = q["name"].lower().lstrip("p_").rstrip("_")
+        if not COUNT_WORD.search(n):
+            continue
+        stripped = re.sub(r"^(num|count|len|size)", "", n)
+        stripped = re.sub(r"(count|num|len|size)$", "", stripped)
+        if stripped.rstrip("s") == base:
+            return q["name"]
+    return None
+
+
 def plan_function(f):
     a = ann.for_function(f["name"])
     plans = []
     for p in f["params"]:
-        plans.append(plan_param(p, a["params"].get(p["name"])))
+        hand = a["params"].get(p["name"])
+        if hand is None and p["kind"] in ("out_handle", "out_scalar"):
+            counted_by = length_param(p["name"], f["params"])
+            if counted_by:
+                raise Unmarshalable(
+                    "array:%s is %s elements, not one" % (p["name"], counted_by))
+        plans.append(plan_param(p, hand))
     return plans, a
 
 
