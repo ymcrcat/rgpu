@@ -70,6 +70,7 @@ class Connection:
         self.replay_possible = True
         self.last_acked = 0
         self.had_session = False
+        self._recovery_deadline = None   # shared across _reconnect() calls; see _reconnect
         self.flush_ops = _env_int("RGPU_FLUSH_OPS", 64)
         self.flush_bytes = _env_int("RGPU_FLUSH_BYTES", 256 * 1024)
         self.stats = {"messages": 0, "waits": 0, "bytes_out": 0, "bytes_in": 0}
@@ -146,35 +147,51 @@ class Connection:
 
         Worth trying because the state is not on this side: if the server
         still has the session, nothing the application holds is lost.
+
+        One recovery deadline covers every attempt made while the connection
+        has not proven itself alive again, not one deadline per call: a peer
+        that completes the handshake and then dies again immediately would
+        otherwise reset the budget on every single reconnect, and the caller
+        would never see an error. The deadline is set the first time it is
+        needed and cleared only once a reply actually arrives (see _ack); the
+        backoff sleep between attempts applies whether the handshake itself
+        failed or it succeeded and sending the replay is what failed.
         """
-        if self.sock is not None:
-            self.sock.close()
-            self.sock = None
-        deadline = time.monotonic() + _env_int("RGPU_RECONNECT_SECONDS", 60)
+        if self._recovery_deadline is None:
+            self._recovery_deadline = time.monotonic() + _env_int("RGPU_RECONNECT_SECONDS", 60)
         delay = 0.1
         while True:
+            if time.monotonic() > self._recovery_deadline:
+                raise ConnectionError("could not reach rgpu-opserver again")
+            if self.sock is not None:
+                self.sock.close()
+                self.sock = None
             try:
                 resumed, server_seq = self._connect()
-                break
+                if server_seq < self.seq and (not self.replay_possible or not self.unacked
+                                              or self.unacked[0][0] > server_seq + 1):
+                    self.sock.close()
+                    self.sock = None
+                    raise SessionLost(
+                        "messages the server never received were too large to keep "
+                        "for replay; tensors on rgpu may be stale")
+                while self.unacked and self.unacked[0][0] <= server_seq:
+                    self.unacked.popleft()
+                if not self.unacked:
+                    self.unacked_bytes = 0
+                    self.replay_possible = True
+                self.pending = []
+                self.pending_bytes = 0
+                if self.unacked:
+                    frame = wire.encode(list(self.unacked))
+                    wire.send_frame(self.sock, frame)
+                    self.stats["bytes_out"] += len(frame)
+                return
             except SessionLost:
                 raise
             except OSError:
-                if time.monotonic() > deadline:
-                    raise ConnectionError("could not reach rgpu-opserver again") from None
                 time.sleep(delay)
                 delay = min(delay * 2, 3.0)
-        if server_seq < self.seq and (not self.replay_possible or not self.unacked
-                                      or self.unacked[0][0] > server_seq + 1):
-            self.sock.close()
-            self.sock = None
-            raise SessionLost("messages the server never received were too large to keep "
-                              "for replay; tensors on rgpu may be stale")
-        while self.unacked and self.unacked[0][0] <= server_seq:
-            self.unacked.popleft()
-        self.pending = []
-        self.pending_bytes = 0
-        if self.unacked:
-            wire.send_frame(self.sock, wire.encode(list(self.unacked)))
 
     def _flush(self):
         if not self.pending:
@@ -184,11 +201,11 @@ class Connection:
             if self.sock is None:
                 self._connect()
             wire.send_frame(self.sock, frame)
+            self.stats["bytes_out"] += len(frame)
         except SessionLost:
             raise
         except OSError:
             self._reconnect()   # replays everything unacknowledged, this batch included
-        self.stats["bytes_out"] += len(frame)
         self.pending = []
         self.pending_bytes = 0
 
@@ -212,6 +229,7 @@ class Connection:
 
     def _ack(self, seq):
         self.last_acked = seq
+        self._recovery_deadline = None   # a reply arrived: the connection is proven alive
         while self.unacked and self.unacked[0][0] <= seq:
             self.unacked.popleft()
         # unacked_bytes is an upper bound on what is held for replay, reset once

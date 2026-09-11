@@ -1,3 +1,4 @@
+import collections
 import gc
 import os
 
@@ -85,3 +86,136 @@ def test_unacked_bytes_drains_on_ack(conn):
     assert conn.unacked_bytes == 0
     assert len(conn.unacked) == 0
     assert conn.replay_possible is True
+
+
+# --- _reconnect, against a stubbed socket: no real server involved ---------
+#
+# Connection.__init__ does no I/O (the socket is only opened lazily by
+# _connect), so a plain Connection is a safe, cheap thing to unit-test
+# _reconnect against once _connect itself is replaced with a fake.
+
+
+def test_reconnect_replays_exactly_the_unacknowledged_messages(monkeypatch):
+    conn = session.Connection("127.0.0.1:1")
+    conn.seq = 3
+    conn.unacked = collections.deque([
+        [1, wire.SEED, 10],
+        [2, wire.SEED, 20],
+        [3, wire.SEED, 30],
+    ])
+    conn.unacked_bytes = 300
+    conn.replay_possible = True
+    conn.had_session = True
+    conn.pending = [[3, wire.SEED, 30]]   # already duplicated into unacked
+    conn.pending_bytes = 64
+
+    def fake_connect(self):
+        self.sock = object()
+        self.had_session = True
+        return True, 1   # resumed; the server had already applied message 1
+    monkeypatch.setattr(session.Connection, "_connect", fake_connect)
+
+    sent = []
+    monkeypatch.setattr(wire, "send_frame", lambda sock, frame: sent.append(wire.decode(frame)))
+
+    conn._reconnect()
+
+    assert len(sent) == 1
+    assert [m[0] for m in sent[0]] == [2, 3]   # nothing already applied resent, nothing skipped
+    assert [m[0] for m in conn.unacked] == [2, 3]
+    assert conn.pending == [] and conn.pending_bytes == 0   # already covered by the replay
+    expected = wire.encode([[2, wire.SEED, 20], [3, wire.SEED, 30]])
+    assert conn.stats["bytes_out"] == len(expected)   # counts what actually went out
+
+
+def test_reconnect_resets_replay_bookkeeping_once_everything_is_applied(monkeypatch):
+    conn = session.Connection("127.0.0.1:1")
+    conn.seq = 2
+    conn.unacked = collections.deque([[1, wire.SEED, 1], [2, wire.SEED, 2]])
+    conn.unacked_bytes = 200
+    conn.replay_possible = False
+    conn.had_session = True
+
+    def fake_connect(self):
+        self.sock = object()
+        self.had_session = True
+        return True, 2   # the server has already applied everything we sent
+    monkeypatch.setattr(session.Connection, "_connect", fake_connect)
+    monkeypatch.setattr(wire, "send_frame",
+                         lambda sock, frame: pytest.fail("nothing left to replay"))
+
+    conn._reconnect()
+
+    assert len(conn.unacked) == 0
+    assert conn.unacked_bytes == 0
+    assert conn.replay_possible is True
+
+
+def test_reconnect_retries_when_sending_the_replay_itself_fails(monkeypatch):
+    """A peer that completes the handshake and then dies before reading the
+    replay must be just another failed attempt, not a raw BrokenPipeError out
+    of _reconnect (and so out of whatever user call triggered it)."""
+    class FakeSocket:
+        def close(self):
+            pass
+
+    conn = session.Connection("127.0.0.1:1")
+    conn.seq = 1
+    conn.unacked = collections.deque([[1, wire.SEED, 1]])
+    conn.unacked_bytes = 64
+    conn.replay_possible = True
+    conn.had_session = True
+
+    def fake_connect(self):
+        self.sock = FakeSocket()
+        self.had_session = True
+        return True, 0
+    monkeypatch.setattr(session.Connection, "_connect", fake_connect)
+    monkeypatch.setattr(session.time, "sleep", lambda s: None)   # don't actually wait
+
+    sent = []
+    calls = {"n": 0}
+
+    def fake_send_frame(sock, frame):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise BrokenPipeError("peer died before reading the replay")
+        sent.append(wire.decode(frame))
+    monkeypatch.setattr(wire, "send_frame", fake_send_frame)
+
+    conn._reconnect()   # must not raise BrokenPipeError
+
+    assert calls["n"] == 2
+    assert len(sent) == 1 and [m[0] for m in sent[0]] == [1]
+
+
+def test_reconnect_shares_one_recovery_deadline_across_calls(monkeypatch):
+    """A server that keeps completing the handshake and then dying again must
+    not reset the recovery budget on every _reconnect() call: only an actual
+    reply (via _ack) proves the connection is alive. Uses a fake clock so the
+    test is fast and deterministic rather than waiting on a real one."""
+    monkeypatch.setenv("RGPU_RECONNECT_SECONDS", "2")
+    clock = [0.0]
+    monkeypatch.setattr(session.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(session.time, "sleep", lambda s: None)
+
+    class FakeSocket:
+        def close(self):
+            pass
+
+    conn = session.Connection("127.0.0.1:1")
+    conn.had_session = True
+
+    def fake_connect(self):
+        clock[0] += 0.5   # each handshake attempt "takes" half a second
+        self.sock = FakeSocket()
+        self.had_session = True
+        return True, self.seq   # resumed, fully caught up: nothing to replay
+    monkeypatch.setattr(session.Connection, "_connect", fake_connect)
+
+    calls = 0
+    with pytest.raises(ConnectionError):
+        for _ in range(100):
+            calls += 1
+            conn._reconnect()
+    assert calls < 100   # gave up once the shared deadline passed, not after 100 successes
