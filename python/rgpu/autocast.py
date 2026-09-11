@@ -51,6 +51,18 @@ def _kernel(op, target, eligible):
     return kernel
 
 
+def _has_out_argument(schema):
+    """True if any argument writes into a tensor the caller passed in.
+
+    An out= kernel's cast() would allocate a fresh cast tensor, compute into
+    that, and leave the caller's out tensor untouched - silently wrong
+    values, no exception. PyTorch's own CUDA autocast policy does not cover
+    out= variants either, so - like CUDA - they fall through to the uncast
+    path instead of getting a cast kernel here.
+    """
+    return any(a.alias_info is not None and a.alias_info.is_write for a in schema.arguments)
+
+
 def install():
     if _libs:
         return
@@ -73,7 +85,9 @@ def install():
             if packet is None:
                 continue
             for overload in packet.overloads():
+                op = getattr(packet, overload)
+                if _has_out_argument(op._schema):
+                    continue
                 qualified = name if overload == "default" else f"{name}.{overload}"
-                lib.impl(qualified, _kernel(getattr(packet, overload), target, eligible),
-                         "AutocastPrivateUse1")
+                lib.impl(qualified, _kernel(op, target, eligible), "AutocastPrivateUse1")
     _libs.extend([everything, lib])

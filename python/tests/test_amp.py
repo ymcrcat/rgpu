@@ -19,6 +19,16 @@ def test_autocast_off_leaves_float32_alone():
     assert (a @ a).dtype == torch.float32
 
 
+def test_out_variant_is_not_cast_away_from_the_callers_tensor():
+    a = torch.randn(4, 4).to("rgpu").half()
+    out = torch.empty(4, dtype=torch.float16, device="rgpu")
+    with torch.amp.autocast("rgpu", dtype=torch.float16):
+        r = torch.sum(a, dim=0, out=out)
+    assert r is out
+    assert torch.allclose(out.cpu(), a.float().cpu().sum(dim=0).half().cpu(),
+                           atol=1e-2, rtol=1e-2)
+
+
 def test_training_with_a_gradient_scaler():
     torch.manual_seed(0)
     model = nn.Sequential(nn.Linear(64, 128), nn.ReLU(), nn.Linear(128, 10)).to("rgpu")
