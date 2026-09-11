@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rgpu"
+version = "0.1.0"
+description = "A PyTorch device whose tensors live on a remote GPU"
+requires-python = ">=3.10"
+dependencies = ["torch>=2.14"]
+
+[project.optional-dependencies]
+test = ["pytest>=8", "torchvision"]
+
+[project.scripts]
+rgpu-opserver = "rgpu.server.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["rgpu*"]
