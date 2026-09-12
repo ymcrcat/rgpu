@@ -133,7 +133,7 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
   done
   reset_want="allocs=0 retains=0 contexts=0 modules=0 streams=0 events=0"
   reset_want="$reset_want graphs=0 execs=0 cublas=0 cublaslt=0 cudnn=0"
-  reset_want="$reset_want overreleases=0"
+  reset_want="$reset_want overreleases=0 stale=0"
   reset_got=$(cat "$RESET_STATS" 2>/dev/null)
   if [[ "$reset_got" != "$reset_want" ]]; then
     echo "FAIL: after a reset and an expiry the server should hold nothing and"

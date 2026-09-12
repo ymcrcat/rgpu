@@ -30,6 +30,10 @@ enum Kind {
   // a mistake, and the one a test cannot otherwise see, because the fake
   // refuses the call and the count it would have corrupted stays right.
   kOverRelease,
+  // Frees and destroys of something the fake never handed out, or already took
+  // back. The same kind of mistake as an over-release, and just as invisible:
+  // the fake refuses the call, so no resource count moves.
+  kStale,
   kKindCount,
 };
 

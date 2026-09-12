@@ -474,7 +474,10 @@ CUresult cuDevicePrimaryCtxReset_v2(CUdevice dev) {
   rgpu::Buffer req, rsp;
   req.put<CUdevice>(dev);
   CUresult r = rgpu::call(rgpu::API_cuDevicePrimaryCtxReset_v2, req, &rsp);
-  {
+  // Only a reset that happened resets anything. The server refuses one while
+  // other sessions are live, and forgetting the retains after a refusal would
+  // leave this process believing it holds nothing it still holds.
+  if (r == CUDA_SUCCESS) {
     std::lock_guard<std::mutex> lk(g_primary_mu);
     g_primary[dev] = PrimaryCtx{};
   }

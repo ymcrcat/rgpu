@@ -130,6 +130,8 @@ void take_resources(CUdevice dev, Held* held, bool own_context) {
   CHECK(cuStreamBeginCapture(held->stream, CU_STREAM_CAPTURE_MODE_GLOBAL));
   CHECK(cuStreamEndCapture(held->stream, &graph));
   CHECK(cuGraphInstantiateWithFlags(&exec, graph, 0));
+  CUgraph clone = nullptr;
+  CHECK(cuGraphClone(&clone, graph));
 #ifdef RGPU_EXPIRY_CUBLAS
   cublasHandle_t blas = nullptr;
   if (cublasCreate(&blas) != CUBLAS_STATUS_SUCCESS) {
@@ -363,6 +365,27 @@ int main(int argc, char** argv) {
   CHECK(cuMemsetD8(after, 0x5a, kBytes));
   CHECK(cuStreamSynchronize(mine.stream));
   CHECK(cuMemFree(after));
+
+  // With the other session gone this one is alone, so a device reset that was
+  // refused earlier must now be allowed. Last, because it destroys this
+  // session's own memory. It pins the other half of the session count: a
+  // server that never counted a session out would refuse resets for good after
+  // the first client came and went. The count drops when the dead session's
+  // thread finishes, a moment after its resources come back, so this waits
+  // for that rather than racing it.
+  CUresult reset = CUDA_ERROR_NOT_SUPPORTED;
+  for (int waited = 0; waited < 10000 && reset == CUDA_ERROR_NOT_SUPPORTED;
+       waited += 100) {
+    reset = cuDevicePrimaryCtxReset(dev);
+    if (reset == CUDA_ERROR_NOT_SUPPORTED) ::usleep(100 * 1000);
+  }
+  if (reset != CUDA_SUCCESS) {
+    std::fprintf(stderr,
+                 "FAIL: alone on the server after the other session expired, "
+                 "a device reset still returned %d\n",
+                 reset);
+    g_failures++;
+  }
 
   if (g_failures) {
     std::printf("\nFAILED: %d check(s)\n", g_failures);

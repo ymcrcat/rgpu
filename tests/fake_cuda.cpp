@@ -53,8 +53,13 @@ unsigned long long mint(std::set<unsigned long long>* into, unsigned tag) {
 }
 
 bool retire(std::set<unsigned long long>* from, unsigned long long h) {
-  std::lock_guard<std::mutex> lk(g_mu);
-  return from->erase(h) != 0;
+  bool known;
+  {
+    std::lock_guard<std::mutex> lk(g_mu);
+    known = from->erase(h) != 0;
+  }
+  if (!known) rgpu_fake::count(rgpu_fake::kStale, 1);
+  return known;
 }
 
 bool alive(std::set<unsigned long long>* in, unsigned long long h) {
@@ -261,9 +266,17 @@ CUresult cuMemAlloc_v2(CUdeviceptr* dptr, size_t bytesize) {
 }
 
 CUresult cuMemFree_v2(CUdeviceptr dptr) {
+  bool known;
   {
     std::lock_guard<std::mutex> lk(g_mu);
-    if (g_allocs.erase(dptr) == 0) return CUDA_ERROR_INVALID_VALUE;
+    known = g_allocs.erase(dptr) != 0;
+  }
+  if (!known) {
+    // A stale free is the worst thing the server's cleanup could do - on a
+    // real driver the address may belong to somebody else by now - so it is
+    // counted where a test can see it rather than just refused.
+    rgpu_fake::count(rgpu_fake::kStale, 1);
+    return CUDA_ERROR_INVALID_VALUE;
   }
   std::free(reinterpret_cast<void*>(dptr));
   rgpu_fake::count(rgpu_fake::kAlloc, -1);
@@ -504,6 +517,16 @@ CUresult cuGraphLaunch(CUgraphExec exec, CUstream) {
   return alive(&g_graph_execs, reinterpret_cast<unsigned long long>(exec))
              ? CUDA_SUCCESS
              : CUDA_ERROR_INVALID_VALUE;
+}
+
+CUresult cuGraphClone(CUgraph* clone, CUgraph original) {
+  if (!clone) return CUDA_ERROR_INVALID_VALUE;
+  if (!alive(&g_graphs, reinterpret_cast<unsigned long long>(original))) {
+    return CUDA_ERROR_INVALID_VALUE;
+  }
+  *clone = reinterpret_cast<CUgraph>(mint(&g_graphs, 0xC0FFEEu));
+  rgpu_fake::count(rgpu_fake::kGraph, 1);
+  return CUDA_SUCCESS;
 }
 
 CUresult cuGraphDestroy(CUgraph graph) {

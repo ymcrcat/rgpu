@@ -46,7 +46,6 @@ struct Inventory {
 
   std::mutex mu;
   Items allocs, contexts, modules, streams, events, graphs, graph_execs;
-  Items green_ctxs, libraries, texrefs;
   std::unordered_map<uint64_t, LibHandle> handles;
   // Per device, how many retains this session holds and has not released.
   // A primary context is shared, so this count, and not the handle, is what
