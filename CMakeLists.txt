@@ -150,7 +150,8 @@ find_library(CUDA_DRIVER_LIB NAMES cuda libcuda.so.1
         /usr/local/cuda/lib64/stubs /usr/local/cuda/lib64)
 
 if(CUDA_DRIVER_LIB)
-  set(SERVER_SOURCES server/main.cpp ${GEN_SERVER} ${GEN_NAMES})
+  set(SERVER_SOURCES server/main.cpp server/inventory.cpp ${GEN_SERVER}
+      ${GEN_NAMES})
   if(EXISTS ${CUBLAS_INCLUDE_DIR}/cublas_v2.h)
     list(APPEND SERVER_SOURCES server/cublas_server.cpp)
   endif()
@@ -240,6 +241,22 @@ target_link_libraries(hostile_smoke PRIVATE rgpu_client)
 add_executable(reconnect_smoke tests/reconnect_smoke.cpp)
 target_link_libraries(reconnect_smoke PRIVATE rgpu_client)
 
+# Checks that a session which never comes back gives its GPU resources up, and
+# that a session which is still there keeps its own. Re-executes itself to get
+# a second client process, so it needs nothing from the shell but a server.
+add_executable(expiry_smoke tests/expiry_smoke.cpp)
+target_link_libraries(expiry_smoke PRIVATE rgpu_client)
+if(TARGET rgpu_cublas)
+  target_link_libraries(expiry_smoke PRIVATE rgpu_cublas)
+  target_include_directories(expiry_smoke PRIVATE ${CUBLAS_INCLUDE_DIR})
+  target_compile_definitions(expiry_smoke PRIVATE RGPU_EXPIRY_CUBLAS)
+endif()
+if(TARGET rgpu_cudnn)
+  target_link_libraries(expiry_smoke PRIVATE rgpu_cudnn)
+  target_include_directories(expiry_smoke PRIVATE ${CUDNN_INCLUDE_DIR})
+  target_compile_definitions(expiry_smoke PRIVATE RGPU_EXPIRY_CUDNN)
+endif()
+
 # Checks the CUDA graph path, which is what torch.compile's reduce-overhead
 # mode uses. Linked against our runtime shim, since that is where the
 # translation lives.
@@ -251,10 +268,12 @@ target_link_libraries(graph_smoke PRIVATE rgpu_cudart rgpu_client)
 # real server dispatch, fake bottom layer.
 add_executable(rgpu_server_fake
   server/main.cpp
+  server/inventory.cpp
   ${GEN_SERVER}
   ${GEN_NAMES}
   tests/generated/fake_driver.cpp
   tests/fake_cuda.cpp
+  tests/fake_stats.cpp
   ${FAKE_CUBLAS_SOURCES}
 )
 if(FAKE_CUBLAS_SOURCES)

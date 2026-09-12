@@ -7,10 +7,13 @@
 // values or device pointers depending on a mode set earlier, and getting that
 // wrong would produce quietly wrong arithmetic rather than a failure.
 
+#include <atomic>
 #include <cstring>
 
 #include <cublas_v2.h>
 #include <cublasLt.h>
+
+#include "tests/fake_stats.h"
 
 namespace {
 
@@ -28,20 +31,32 @@ constexpr size_t kWorkspaceSize = 4096;
 
 bool near(float a, float b) { return a > b - 1e-6f && a < b + 1e-6f; }
 
+// Handles are counted rather than validated, so every create has to be
+// distinguishable from every other one.
+unsigned long long next_handle() {
+  static std::atomic<unsigned long long> n{1};
+  return n.fetch_add(1);
+}
+
 }  // namespace
 
 extern "C" {
 
 // --- cuBLAS ---------------------------------------------------------------
 
+// A distinct handle per create, so a handle that was destroyed and one that
+// was merely dropped are telling apart. The count is what a test reads.
 cublasStatus_t cublasCreate_v2(cublasHandle_t* handle) {
   if (!handle) return CUBLAS_STATUS_INVALID_VALUE;
-  *handle = reinterpret_cast<cublasHandle_t>(0xB1A5ull);
+  *handle = reinterpret_cast<cublasHandle_t>(0xB1A50000ull + next_handle());
+  rgpu_fake::count(rgpu_fake::kCublas, 1);
   return CUBLAS_STATUS_SUCCESS;
 }
 
 cublasStatus_t cublasDestroy_v2(cublasHandle_t handle) {
-  return handle ? CUBLAS_STATUS_SUCCESS : CUBLAS_STATUS_INVALID_VALUE;
+  if (!handle) return CUBLAS_STATUS_INVALID_VALUE;
+  rgpu_fake::count(rgpu_fake::kCublas, -1);
+  return CUBLAS_STATUS_SUCCESS;
 }
 
 cublasStatus_t cublasSetStream_v2(cublasHandle_t handle, cudaStream_t) {
@@ -98,12 +113,15 @@ cublasStatus_t cublasSgemm_v2(cublasHandle_t handle, cublasOperation_t transa,
 
 cublasStatus_t cublasLtCreate(cublasLtHandle_t* h) {
   if (!h) return CUBLAS_STATUS_INVALID_VALUE;
-  *h = reinterpret_cast<cublasLtHandle_t>(0x17000ull);
+  *h = reinterpret_cast<cublasLtHandle_t>(0x17000000ull + next_handle());
+  rgpu_fake::count(rgpu_fake::kCublasLt, 1);
   return CUBLAS_STATUS_SUCCESS;
 }
 
 cublasStatus_t cublasLtDestroy(cublasLtHandle_t h) {
-  return h ? CUBLAS_STATUS_SUCCESS : CUBLAS_STATUS_INVALID_VALUE;
+  if (!h) return CUBLAS_STATUS_INVALID_VALUE;
+  rgpu_fake::count(rgpu_fake::kCublasLt, -1);
+  return CUBLAS_STATUS_SUCCESS;
 }
 
 cublasStatus_t cublasLtMatmulDescCreate(cublasLtMatmulDesc_t* d,

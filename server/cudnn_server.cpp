@@ -17,6 +17,7 @@
 #include "common/cudnn_ids.h"
 #include "common/cudnn_sizes.h"
 #include "common/wire.h"
+#include "server/inventory.h"
 
 namespace rgpu {
 namespace {
@@ -47,6 +48,18 @@ Fn cudnn_sym(const char* name) {
   void* fn = ::dlsym(lib, name);
   if (!fn) std::fprintf(stderr, "[rgpu-server] cuDNN has no %s\n", name);
   return reinterpret_cast<Fn>(fn);
+}
+
+// How a handle is given back when the session that made it never comes back.
+// The descriptors a client minted are not tracked this way: they are held in
+// t_handles below, which belongs to the thread, and they are host-side objects
+// rather than device memory.
+CUresult destroy_handle(uint64_t h) {
+  auto fn = cudnn_sym<cudnnStatus_t (*)(cudnnHandle_t)>("cudnnDestroy");
+  if (!fn) return CUDA_ERROR_NOT_SUPPORTED;
+  return fn(reinterpret_cast<cudnnHandle_t>(h)) == CUDNN_STATUS_SUCCESS
+             ? CUDA_SUCCESS
+             : CUDA_ERROR_UNKNOWN;
 }
 
 // The status goes in the payload, where a caller that waited for a reply can
@@ -136,6 +149,8 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       put_status(rsp, out, s);
       if (s == CUDNN_STATUS_SUCCESS) {
         rsp->put<uint64_t>(reinterpret_cast<uint64_t>(h));
+        inventory_note_handle(reinterpret_cast<uint64_t>(h), "cuDNN",
+                              &destroy_handle);
       }
       return true;
     }
@@ -143,7 +158,11 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       auto fn = cudnn_sym<cudnnStatus_t (*)(cudnnHandle_t)>("cudnnDestroy");
       auto h = static_cast<cudnnHandle_t>(get_ptr(req, &ok));
       if (!fn || !ok) { put_status(rsp, out, CUDNN_STATUS_BAD_PARAM); return true; }
-      put_status(rsp, out, fn(h));
+      cudnnStatus_t s = fn(h);
+      if (s == CUDNN_STATUS_SUCCESS) {
+        inventory_forget_handle(reinterpret_cast<uint64_t>(h));
+      }
+      put_status(rsp, out, s);
       return true;
     }
     case API_cudnnSetStream: {

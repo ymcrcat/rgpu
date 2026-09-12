@@ -81,6 +81,31 @@ if [[ -x "$BUILD/reconnect_smoke" ]]; then
   kill $DROP_SRV 2>/dev/null
 fi
 
+# What an expired session leaves behind. Its own server, with a grace period
+# short enough to wait out and a file the fake driver publishes its outstanding
+# resource counts to; both are server-wide settings that the other tests want
+# left alone.
+if [[ -x "$BUILD/expiry_smoke" ]]; then
+  echo
+  EXPIRY_PORT=$((PORT + 3))
+  EXPIRY_STATS=$(mktemp "${TMPDIR:-/tmp}/rgpu-stats.XXXXXX")
+  RGPU_SESSION_GRACE=3 RGPU_FAKE_STATS="$EXPIRY_STATS" \
+    "$BUILD/rgpu-server-fake" "$EXPIRY_PORT" &
+  EXPIRY_SRV=$!
+  for _ in $(seq 1 50); do
+    if (exec 3<>/dev/tcp/127.0.0.1/"$EXPIRY_PORT") 2>/dev/null; then
+      exec 3<&- 3>&-
+      break
+    fi
+    sleep 0.1
+  done
+  LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$EXPIRY_PORT" \
+    RGPU_SESSION_GRACE=3 RGPU_FAKE_STATS="$EXPIRY_STATS" \
+    "$BUILD/expiry_smoke" || rc=1
+  kill $EXPIRY_SRV 2>/dev/null
+  rm -f "$EXPIRY_STATS" "$EXPIRY_STATS.tmp"
+fi
+
 # Hostile requests get a server of their own: if one of them does take the
 # server down, the other tests should not be the ones that notice.
 if [[ -x "$BUILD/hostile_smoke" ]]; then

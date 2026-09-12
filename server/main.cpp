@@ -27,6 +27,7 @@
 #include "common/internal_ids.h"
 #include "common/net.h"
 #include "common/wire.h"
+#include "server/inventory.h"
 
 namespace rgpu {
 
@@ -250,6 +251,10 @@ struct Session {
   // resending it would wait forever.
   uint32_t last_reply_id = 0;
   std::vector<uint8_t> last_reply;
+  // Everything the client asked the driver for and has not given back. It is
+  // this process that holds it, so when the session finally expires this is
+  // the only record of what to release. See server/inventory.h.
+  Inventory inventory;
 };
 
 using SessionKey = std::pair<uint64_t, uint64_t>;
@@ -404,6 +409,9 @@ void serve(int fd, const std::shared_ptr<Session>& session) {
 // Serves one session across however many connections it takes. Between them
 // the thread waits, holding everything the client owns.
 void serve_session(std::shared_ptr<Session> session, SessionKey key) {
+  // Everything this thread does from here belongs to this session, including
+  // the release at the end.
+  inventory_bind(&session->inventory);
   for (;;) {
     int fd = -1;
     {
@@ -430,10 +438,21 @@ void serve_session(std::shared_ptr<Session> session, SessionKey key) {
 
   {
     std::lock_guard<std::mutex> lk(g_sessions_mu);
-    g_sessions.erase(key);
+    // Only if it is still this session under that key. A client that
+    // reconnected after we gave up has a new session there, and erasing it
+    // would lose a live one.
+    auto it = g_sessions.find(key);
+    if (it != g_sessions.end() && it->second == session) g_sessions.erase(it);
   }
-  logf("session %llx expired; its GPU state is gone",
-       (unsigned long long)key.first);
+
+  // The client is gone but its GPU resources are not: they were created in
+  // this process and nothing else will ever free them. This is the only point
+  // at which that can be put right, and it has to happen on this thread,
+  // because the contexts they live in are this thread's.
+  const std::string summary = release_inventory(session->inventory);
+  inventory_bind(nullptr);
+  logf("session %llx expired; %s", (unsigned long long)key.first,
+       summary.c_str());
 }
 
 // Reads the handshake and either starts a session or hands the connection to

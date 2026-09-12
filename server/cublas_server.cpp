@@ -16,6 +16,7 @@
 
 #include "common/cublas_ids.h"
 #include "common/wire.h"
+#include "server/inventory.h"
 
 namespace rgpu {
 namespace {
@@ -47,6 +48,17 @@ Fn cublas_sym(const char* name) {
   void* fn = ::dlsym(lib, name);
   if (!fn) std::fprintf(stderr, "[rgpu-server] cuBLAS has no %s\n", name);
   return reinterpret_cast<Fn>(fn);
+}
+
+// How a handle is given back when the session that made it never comes back.
+// A cuBLAS handle owns a stream and a workspace on the device, so leaving one
+// behind costs GPU memory, and only this file knows how to destroy it.
+CUresult destroy_handle(uint64_t h) {
+  auto fn = cublas_sym<cublasStatus_t (*)(cublasHandle_t)>("cublasDestroy_v2");
+  if (!fn) return CUDA_ERROR_NOT_SUPPORTED;
+  return fn(reinterpret_cast<cublasHandle_t>(h)) == CUBLAS_STATUS_SUCCESS
+             ? CUDA_SUCCESS
+             : CUDA_ERROR_UNKNOWN;
 }
 
 // Every handler writes the cuBLAS status into the reply payload; the frame's
@@ -115,6 +127,8 @@ bool dispatch_cublas(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       put_status(rsp, s);
       if (s == CUBLAS_STATUS_SUCCESS) {
         rsp->put<uint64_t>(reinterpret_cast<uint64_t>(h));
+        inventory_note_handle(reinterpret_cast<uint64_t>(h), "cuBLAS",
+                              &destroy_handle);
       }
       return true;
     }
@@ -123,7 +137,11 @@ bool dispatch_cublas(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
           "cublasDestroy_v2");
       cublasHandle_t h = get_handle(req, &ok);
       if (!fn || !ok) { put_status(rsp, CUBLAS_STATUS_INVALID_VALUE); return true; }
-      put_status(rsp, fn(h));
+      cublasStatus_t s = fn(h);
+      if (s == CUBLAS_STATUS_SUCCESS) {
+        inventory_forget_handle(reinterpret_cast<uint64_t>(h));
+      }
+      put_status(rsp, s);
       return true;
     }
     case API_cublasSetStream: {
