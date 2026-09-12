@@ -233,21 +233,39 @@ match almost exactly. `--device mps` gives a second real backend.
 3. **Real hardware** - the same suites from native macOS Python over the
    tunnel to a RunPod GPU.
 
+On a CUDA device, the server turns TF32 off by default, since a client
+comparing against a CPU reference is comparing against float32: TF32's
+reduced mantissa moved a ResNet-18 loss by about 5e-4, enough to fail four
+tests before this was found. `RGPU_TF32=1` turns it back on for anyone who
+wants the speed and does not need bit-for-bit agreement with CPU.
+
 ## Done when
 
 From native Python on a Mac, against a RunPod GPU over an ssh tunnel:
 
-- the ladder, training rungs and compile tests pass against CPU references
-- this table is filled in with measured round trips per step:
+- **Done.** The ladder, training rungs and compile tests pass against CPU
+  references: 152 passed, 4 skipped (`test_reconnect.py`, which needs a local
+  drop hook and is skipped under `RGPU_REAL_SERVER=1`), from native macOS
+  Python against a RunPod A40 over a tunnel measured at 44.7 ms SYNC round
+  trip.
+- **Done.** This table is filled in with measured round trips per step. The
+  op-level path is one round trip per step in every mode - eager inference,
+  eager training and compiled training all wait only where the code pulls a
+  value back, typically once per step:
 
-  | | CUDA-level (measured) | op-level |
+  | | CUDA-level (measured) | op-level (measured) |
   |---|---|---|
-  | eager inference | 49 | |
-  | eager training step | many | |
-  | compiled training step | 2 | |
+  | eager inference | 49 | 1.00 |
+  | eager training step | many | 1.00 |
+  | compiled training step | 2 | 1.00 |
 
-- a training run survives the tunnel being killed and restored, with
-  bit-identical losses
+  The CUDA-level path needs graph capture to fall from 49 round trips to 2;
+  the op-level path reaches one round trip per step eagerly, with no capture
+  needed, because autograd runs on the client above the dispatch point.
+- **Done.** A training run survives the tunnel being killed and restored,
+  with bit-identical losses: `survive_drop.py 200`, tunnel killed 5 s in and
+  restored 12 s later, the server logging a resumed session, all 200 losses
+  bit-identical to an uninterrupted run.
 
 ## Risks
 

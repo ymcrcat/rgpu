@@ -69,10 +69,46 @@ training, mixed precision, `torch.compile`, and surviving a dropped
 connection (the same reconnect story as gap 2 below, ported to this path).
 156 tests pass this way.
 
-What is still unmeasured is everything on real hardware: no run yet on an
-actual remote GPU, over an actual network, from this Mac. No performance
-numbers exist for this path yet, and none are recorded here until they are
-measured.
+### Over a real network
+
+One run, native macOS Python (the CPU-only wheel, no local GPU, no Docker)
+over an ssh tunnel to a RunPod A40: 44.7 ms measured SYNC round trip, and the
+full suite - 152 passed, 4 skipped (the reconnect test, which needs a local
+drop hook and is skipped against a real server) - against the CPU
+references. This is a single measurement from one Mac to one A40, not a
+benchmark suite.
+
+ResNet-18 at batch 1, ten steps, `python/benchmarks/round_trips.py`:
+
+| | ms/step | round trips/step |
+|---|---|---|
+| eager inference | 152.0 | 1.00 |
+| eager training step | 106.3 | 1.00 |
+| compiled training step | 90.0 | 1.00 |
+
+Every mode costs one round trip per step, and it costs that eagerly, with no
+graph capture: autograd runs on the client above the dispatch point, so a
+step waits only where the code pulls a value back, typically `loss.item()`.
+That is the count the CUDA-level path needs a captured CUDA graph to reach -
+2 round trips per step, down from 49 eager - one section up; here it is the
+uncompiled baseline. Compiling still helps, 90.0 ms against 106.3 ms for an
+uncompiled training step, but it is a modest gain at this link's latency,
+because a step is one round trip either way - the win is in server-side
+execution time, not in fewer trips across the wire.
+
+Dropped-tunnel survival, the same story as gap 2 below, ported to this path:
+a 200-step training run (`survive_drop.py 200`), tunnel killed 5 s in and
+restored 12 s later. The run completed, the server logged the session
+resuming, and all 200 per-step losses were bit-identical to an uninterrupted
+run. Wall clock was 34.2 s against 16.4 s for the clean run - the difference
+is the outage plus reconnect backoff.
+
+These numbers, and the passing suite, are against full float32: the server
+turns TF32 off by default on a CUDA device, since a client comparing against
+a CPU reference is comparing against float32, and TF32's reduced mantissa
+moved a ResNet-18 loss by about 5e-4 - enough to fail four tests before this
+was found. `RGPU_TF32=1` restores it for anyone who wants the speed instead
+of bit-for-bit agreement with CPU.
 
 ## Gaps, in the order they would stop someone
 

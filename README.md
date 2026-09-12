@@ -256,6 +256,15 @@ default `127.0.0.1:9720`. The client and server must run the same torch
 major.minor version - op schemas can differ between versions, and the client
 checks this at connect time.
 
+Measured once from a Mac over an ssh tunnel to a rented NVIDIA A40 (44.7 ms
+round trip): the full suite passes (152 passed, 4 skipped), a ResNet-18
+training step costs one round trip and runs in roughly 90-150 ms depending
+on mode, and a 200-step training run survived the tunnel being killed and
+restored, with bit-identical losses. See `docs/PRODUCT_SPEC.md` for the
+numbers; this is one Mac against one A40, not a benchmark suite. The server
+also turns TF32 off by default on a CUDA device so results match a CPU
+reference - set `RGPU_TF32=1` to trade that for speed.
+
 ### Known limitations
 
 - **Move a model to `rgpu` before any grad-tracking forward pass.** Because an

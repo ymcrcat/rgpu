@@ -156,6 +156,15 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     torch.empty(0, device=args.device)   # fail now if the device is unusable
+    if torch.device(args.device).type == "cuda":
+        # A client comparing against a CPU reference is comparing against
+        # float32. TF32 quietly does the matmuls and convolutions in fewer
+        # mantissa bits, which moves a ResNet-18 logit by about 1e-3 - enough
+        # to look like a bug in the remoting. Correctness first; a client that
+        # wants the speed can set RGPU_TF32=1.
+        allow = os.environ.get("RGPU_TF32") == "1"
+        torch.backends.cuda.matmul.allow_tf32 = allow
+        torch.backends.cudnn.allow_tf32 = allow
     registry = Registry(args.device, float(os.environ.get("RGPU_SESSION_GRACE", 120)))
     drop = Drop(int(os.environ.get("RGPU_DROP_AFTER", 0)))
     server = socket.create_server((args.bind, args.port))
