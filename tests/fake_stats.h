@@ -26,6 +26,10 @@ enum Kind {
   kCublas,
   kCublasLt,
   kCudnn,
+  // Releases of a primary context that nobody had retained. Not a resource:
+  // a mistake, and the one a test cannot otherwise see, because the fake
+  // refuses the call and the count it would have corrupted stays right.
+  kOverRelease,
   kKindCount,
 };
 

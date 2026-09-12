@@ -22,8 +22,14 @@ namespace {
 
 std::mutex g_mu;
 // Device pointers are just host allocations here. Sizes are tracked so a copy
-// running off the end is caught rather than corrupting the heap.
-std::map<CUdeviceptr, size_t> g_allocs;
+// running off the end is caught rather than corrupting the heap, and contexts
+// so that resetting a device throws away what was allocated in its primary
+// context and nothing else.
+struct Alloc {
+  size_t size;
+  CUcontext ctx;
+};
+std::map<CUdeviceptr, Alloc> g_allocs;
 
 // Everything else the fake hands out. A real driver knows which of its handles
 // are still alive; this one has to as well, or a test could not tell a handle
@@ -60,13 +66,17 @@ bool alive(std::set<unsigned long long>* in, unsigned long long h) {
 // driver too.
 thread_local CUcontext t_current = nullptr;
 
+// The primary context's token. One per device, so an allocation made in it can
+// be told from one made in a context of the client's own.
+CUcontext primary_token() { return reinterpret_cast<CUcontext>(0xC0FFEE01); }
+
 bool range_ok(CUdeviceptr p, size_t n) {
   std::lock_guard<std::mutex> lk(g_mu);
   // Find the allocation containing p: the last one starting at or below it.
   auto it = g_allocs.upper_bound(p);
   if (it == g_allocs.begin()) return false;
   --it;
-  return p >= it->first && p + n <= it->first + it->second;
+  return p >= it->first && p + n <= it->first + it->second.size;
 }
 
 constexpr int kFakeDevice = 0;
@@ -153,7 +163,7 @@ CUresult cuDevicePrimaryCtxRetain(CUcontext* pctx, CUdevice dev) {
     std::lock_guard<std::mutex> lk(g_mu);
     g_primary_retains[dev]++;
   }
-  *pctx = reinterpret_cast<CUcontext>(0xC0FFEE01);
+  *pctx = primary_token();
   rgpu_fake::count(rgpu_fake::kPrimaryRetain, 1);
   return CUDA_SUCCESS;
 }
@@ -168,11 +178,48 @@ CUresult cuDevicePrimaryCtxRelease_v2(CUdevice dev) {
     std::lock_guard<std::mutex> lk(g_mu);
     auto it = g_primary_retains.find(dev);
     if (it == g_primary_retains.end() || it->second <= 0) {
+      // Recorded, because this is the whole hazard: a release nobody paid for
+      // is one taken off another session, and refusing it here means the
+      // counters stay right and nothing else would show that it happened.
+      rgpu_fake::count(rgpu_fake::kOverRelease, 1);
       return CUDA_ERROR_INVALID_CONTEXT;
     }
     it->second--;
   }
   rgpu_fake::count(rgpu_fake::kPrimaryRetain, -1);
+  return CUDA_SUCCESS;
+}
+
+// Destroys everything in the device's primary context and drops the reference
+// count with it, which is the reading the server is careful to survive: a
+// session that had retains before a reset owes nothing afterwards.
+CUresult cuDevicePrimaryCtxReset_v2(CUdevice dev) {
+  if (dev != kFakeDevice) return CUDA_ERROR_INVALID_VALUE;
+  int dropped = 0;
+  std::map<CUdeviceptr, Alloc> freed;
+  {
+    std::lock_guard<std::mutex> lk(g_mu);
+    auto it = g_primary_retains.find(dev);
+    if (it != g_primary_retains.end()) {
+      dropped = it->second;
+      it->second = 0;
+    }
+    for (auto a = g_allocs.begin(); a != g_allocs.end();) {
+      if (a->second.ctx == primary_token()) {
+        freed.insert(*a);
+        a = g_allocs.erase(a);
+      } else {
+        ++a;
+      }
+    }
+  }
+  for (const auto& a : freed) {
+    std::free(reinterpret_cast<void*>(a.first));
+    rgpu_fake::count(rgpu_fake::kAlloc, -1);
+  }
+  for (int i = 0; i < dropped; i++) {
+    rgpu_fake::count(rgpu_fake::kPrimaryRetain, -1);
+  }
   return CUDA_SUCCESS;
 }
 
@@ -206,7 +253,7 @@ CUresult cuMemAlloc_v2(CUdeviceptr* dptr, size_t bytesize) {
   auto d = reinterpret_cast<CUdeviceptr>(p);
   {
     std::lock_guard<std::mutex> lk(g_mu);
-    g_allocs[d] = bytesize;
+    g_allocs[d] = Alloc{bytesize, t_current};
   }
   rgpu_fake::count(rgpu_fake::kAlloc, 1);
   *dptr = d;

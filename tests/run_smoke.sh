@@ -104,6 +104,49 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
     "$BUILD/expiry_smoke" || rc=1
   kill $EXPIRY_SRV 2>/dev/null
   rm -f "$EXPIRY_STATS" "$EXPIRY_STATS.tmp"
+
+  # The other half of the device-reset ruling, which needs a server with
+  # nobody else on it: the reset is allowed, and the session must then owe
+  # nothing. Everything has to be back to zero afterwards - including the
+  # count of releases the fake driver had to refuse, which is what a session
+  # releasing retains a reset had already taken away would look like.
+  RESET_PORT=$((PORT + 4))
+  RESET_STATS=$(mktemp "${TMPDIR:-/tmp}/rgpu-stats.XXXXXX")
+  RESET_LOG=$(mktemp "${TMPDIR:-/tmp}/rgpu-reset-log.XXXXXX")
+  RGPU_SESSION_GRACE=3 RGPU_FAKE_STATS="$RESET_STATS" \
+    "$BUILD/rgpu-server-fake" "$RESET_PORT" >"$RESET_LOG" 2>&1 &
+  RESET_SRV=$!
+  for _ in $(seq 1 50); do
+    if (exec 3<>/dev/tcp/127.0.0.1/"$RESET_PORT") 2>/dev/null; then
+      exec 3<&- 3>&-
+      break
+    fi
+    sleep 0.1
+  done
+  LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$RESET_PORT" \
+    RGPU_FAKE_STATS="$RESET_STATS" "$BUILD/expiry_smoke" reset || rc=1
+  # Wait for the session to expire rather than for the counters, which are
+  # already back to zero: the mistake being looked for happens at expiry.
+  for _ in $(seq 1 200); do
+    grep -q "expired" "$RESET_LOG" && break
+    sleep 0.1
+  done
+  reset_want="allocs=0 retains=0 contexts=0 modules=0 streams=0 events=0"
+  reset_want="$reset_want graphs=0 execs=0 cublas=0 cublaslt=0 cudnn=0"
+  reset_want="$reset_want overreleases=0"
+  reset_got=$(cat "$RESET_STATS" 2>/dev/null)
+  if [[ "$reset_got" != "$reset_want" ]]; then
+    echo "FAIL: after a reset and an expiry the server should hold nothing and"
+    echo "      have released nothing it no longer owned"
+    echo "  expected: $reset_want"
+    echo "     found: $reset_got"
+    grep "session cleanup\|expired" "$RESET_LOG" | sed 's/^/  /'
+    rc=1
+  else
+    grep "expired" "$RESET_LOG" | sed 's/^/  /'
+  fi
+  kill $RESET_SRV 2>/dev/null
+  rm -f "$RESET_STATS" "$RESET_STATS.tmp" "$RESET_LOG"
 fi
 
 # Hostile requests get a server of their own: if one of them does take the

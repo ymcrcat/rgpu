@@ -1,5 +1,6 @@
 #include "server/inventory.h"
 
+#include <atomic>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -16,6 +17,11 @@ namespace {
 // end, so this is the whole of the plumbing between a call and the list it
 // belongs on.
 thread_local Inventory* t_inv = nullptr;
+
+// How many sessions are being served. A call that reaches past its own session
+// - resetting a device is the one that does - has to know whether anybody else
+// would be caught by it.
+std::atomic<int> g_live_sessions{0};
 
 void logf(const char* fmt, ...) {
   va_list ap;
@@ -113,6 +119,13 @@ void forget_primary(CUdevice dev) {
   auto it = inv->primary_ctx.find(dev);
   if (it == inv->primary_ctx.end()) return;
   forget_under(inv, it->second);
+  // The retains go too. A reset destroys the primary context and all its
+  // state, and the driver is entitled to have dropped the reference count with
+  // it; owing releases against a count that no longer exists would take a
+  // retain off whoever retains it next. Forgetting them can at worst leak one
+  // retain, which is the safe way to be wrong.
+  inv->primary_retains.erase(dev);
+  inv->primary_ctx.erase(it);
 }
 
 // --- the wrappers ---------------------------------------------------------
@@ -181,8 +194,21 @@ CUresult w_cuDevicePrimaryCtxRelease_v2(CUdevice dev) {
   return r;
 }
 
+// Resetting a device destroys everything in its primary context, for every
+// session in this process, and only the session that asked can have its record
+// corrected. One client must not be able to throw another tenant's memory away
+// - the peer is not authenticated, so it must not be trusted with it - so this
+// is refused outright while anybody else is connected, in the same spirit as
+// the launch types the shim will not carry. Alone on the server it is allowed,
+// because then there is nobody else to harm.
 CUresult w_cuDevicePrimaryCtxReset_v2(CUdevice dev) {
   REAL("cuDevicePrimaryCtxReset_v2", CUdevice);
+  if (g_live_sessions.load() > 1) {
+    logf("refusing cuDevicePrimaryCtxReset on device %d: %d sessions are live "
+         "and it would destroy what all of them are holding",
+         dev, g_live_sessions.load());
+    return CUDA_ERROR_NOT_SUPPORTED;
+  }
   CUresult r = fn(dev);
   if (r == CUDA_SUCCESS) forget_primary(dev);
   return r;
@@ -337,6 +363,89 @@ CUresult w_cuGraphExecDestroy(CUgraphExec exec) {
   return r;
 }
 
+// A green context is a slice of a device, and nothing about it is tied to a
+// CUcontext, so it outlives everything else a session holds.
+CUresult w_cuGreenCtxCreate(CUgreenCtx* pctx, CUdevResourceDesc desc,
+                            CUdevice dev, unsigned int flags) {
+  REAL("cuGreenCtxCreate", CUgreenCtx*, CUdevResourceDesc, CUdevice,
+       unsigned int);
+  CUresult r = fn(pctx, desc, dev, flags);
+  if (r == CUDA_SUCCESS && pctx) {
+    note(&Inventory::green_ctxs, reinterpret_cast<uint64_t>(*pctx));
+  }
+  return r;
+}
+
+CUresult w_cuGreenCtxDestroy(CUgreenCtx ctx) {
+  REAL("cuGreenCtxDestroy", CUgreenCtx);
+  CUresult r = fn(ctx);
+  if (r == CUDA_SUCCESS) {
+    forget(&Inventory::green_ctxs, reinterpret_cast<uint64_t>(ctx));
+  }
+  return r;
+}
+
+// An ordinary stream, however it was made, so it is released like one.
+CUresult w_cuGreenCtxStreamCreate(CUstream* stream, CUgreenCtx ctx,
+                                  unsigned int flags, int priority) {
+  REAL("cuGreenCtxStreamCreate", CUstream*, CUgreenCtx, unsigned int, int);
+  CUresult r = fn(stream, ctx, flags, priority);
+  if (r == CUDA_SUCCESS && stream) {
+    note(&Inventory::streams, reinterpret_cast<uint64_t>(*stream));
+  }
+  return r;
+}
+
+CUresult w_cuLibraryLoadData(CUlibrary* library, const void* code,
+                             CUjit_option* jit_options, void** jit_values,
+                             unsigned int num_jit, CUlibraryOption* lib_options,
+                             void** lib_values, unsigned int num_lib) {
+  REAL("cuLibraryLoadData", CUlibrary*, const void*, CUjit_option*, void**,
+       unsigned int, CUlibraryOption*, void**, unsigned int);
+  CUresult r = fn(library, code, jit_options, jit_values, num_jit, lib_options,
+                  lib_values, num_lib);
+  if (r == CUDA_SUCCESS && library) {
+    note(&Inventory::libraries, reinterpret_cast<uint64_t>(*library));
+  }
+  return r;
+}
+
+CUresult w_cuLibraryUnload(CUlibrary library) {
+  REAL("cuLibraryUnload", CUlibrary);
+  CUresult r = fn(library);
+  if (r == CUDA_SUCCESS) {
+    forget(&Inventory::libraries, reinterpret_cast<uint64_t>(library));
+  }
+  return r;
+}
+
+CUresult w_cuGraphClone(CUgraph* clone, CUgraph original) {
+  REAL("cuGraphClone", CUgraph*, CUgraph);
+  CUresult r = fn(clone, original);
+  if (r == CUDA_SUCCESS && clone) {
+    note(&Inventory::graphs, reinterpret_cast<uint64_t>(*clone));
+  }
+  return r;
+}
+
+CUresult w_cuTexRefCreate(CUtexref* texref) {
+  REAL("cuTexRefCreate", CUtexref*);
+  CUresult r = fn(texref);
+  if (r == CUDA_SUCCESS && texref) {
+    note(&Inventory::texrefs, reinterpret_cast<uint64_t>(*texref));
+  }
+  return r;
+}
+
+CUresult w_cuTexRefDestroy(CUtexref texref) {
+  REAL("cuTexRefDestroy", CUtexref);
+  CUresult r = fn(texref);
+  if (r == CUDA_SUCCESS) {
+    forget(&Inventory::texrefs, reinterpret_cast<uint64_t>(texref));
+  }
+  return r;
+}
+
 struct Tracked {
   const char* name;
   void* fn;
@@ -378,6 +487,15 @@ const Tracked kTracked[] = {
     {"cuGraphInstantiateWithFlags",
      reinterpret_cast<void*>(&w_cuGraphInstantiateWithFlags)},
     {"cuGraphExecDestroy", reinterpret_cast<void*>(&w_cuGraphExecDestroy)},
+    {"cuGraphClone", reinterpret_cast<void*>(&w_cuGraphClone)},
+    {"cuGreenCtxCreate", reinterpret_cast<void*>(&w_cuGreenCtxCreate)},
+    {"cuGreenCtxDestroy", reinterpret_cast<void*>(&w_cuGreenCtxDestroy)},
+    {"cuGreenCtxStreamCreate",
+     reinterpret_cast<void*>(&w_cuGreenCtxStreamCreate)},
+    {"cuLibraryLoadData", reinterpret_cast<void*>(&w_cuLibraryLoadData)},
+    {"cuLibraryUnload", reinterpret_cast<void*>(&w_cuLibraryUnload)},
+    {"cuTexRefCreate", reinterpret_cast<void*>(&w_cuTexRefCreate)},
+    {"cuTexRefDestroy", reinterpret_cast<void*>(&w_cuTexRefDestroy)},
 };
 
 // --- releasing ------------------------------------------------------------
@@ -406,6 +524,18 @@ CUresult destroy_graph_exec(uint64_t h) {
   REAL("cuGraphExecDestroy", CUgraphExec);
   return fn(reinterpret_cast<CUgraphExec>(h));
 }
+CUresult destroy_green_ctx(uint64_t h) {
+  REAL("cuGreenCtxDestroy", CUgreenCtx);
+  return fn(reinterpret_cast<CUgreenCtx>(h));
+}
+CUresult destroy_library(uint64_t h) {
+  REAL("cuLibraryUnload", CUlibrary);
+  return fn(reinterpret_cast<CUlibrary>(h));
+}
+CUresult destroy_texref(uint64_t h) {
+  REAL("cuTexRefDestroy", CUtexref);
+  return fn(reinterpret_cast<CUtexref>(h));
+}
 CUresult destroy_context(uint64_t h) {
   REAL("cuCtxDestroy_v2", CUcontext);
   return fn(reinterpret_cast<CUcontext>(h));
@@ -429,8 +559,11 @@ CUresult sync_context() {
 // the destroy under, in case the driver does not need it.
 class Current {
  public:
+  // A null context means no context, not "leave whatever the last one was":
+  // a resource recorded without one was made without one, and destroying it
+  // under a context it never belonged to is at best luck.
   void use(CUcontext ctx) {
-    if (!ctx || ctx == ctx_) return;
+    if (known_ && ctx == ctx_) return;
     CUresult r = set_context(ctx);
     if (r != CUDA_SUCCESS) {
       logf("session cleanup: could not make context %p current (%d); "
@@ -438,15 +571,13 @@ class Current {
            (void*)ctx, r);
     }
     ctx_ = ctx;
+    known_ = true;
   }
-  void none() {
-    if (!ctx_) return;
-    set_context(nullptr);
-    ctx_ = nullptr;
-  }
+  void none() { use(nullptr); }
 
  private:
   CUcontext ctx_ = nullptr;
+  bool known_ = false;
 };
 
 unsigned release_items(Inventory::Items& items, const char* what,
@@ -467,13 +598,37 @@ unsigned release_items(Inventory::Items& items, const char* what,
   return released;
 }
 
-std::string plural(unsigned n, const char* what) {
-  return std::to_string(n) + " " + what + (n == 1 ? "" : "s");
+// The same, for what does not live in a context and must not be destroyed
+// under one.
+unsigned release_detached(Inventory::Items& items, const char* what,
+                          CUresult (*destroy)(uint64_t), unsigned* failed) {
+  unsigned released = 0;
+  for (const auto& entry : items) {
+    CUresult r = destroy(entry.first);
+    if (r == CUDA_SUCCESS) {
+      released++;
+    } else {
+      (*failed)++;
+      logf("session cleanup: %s %llx was not released (%d)", what,
+           (unsigned long long)entry.first, r);
+    }
+  }
+  return released;
+}
+
+std::string plural(unsigned n, const char* one, const char* many = nullptr) {
+  if (n == 1) return std::to_string(n) + " " + one;
+  return std::to_string(n) + " " + (many ? std::string(many)
+                                         : std::string(one) + "s");
 }
 
 }  // namespace
 
-void inventory_bind(Inventory* inv) { t_inv = inv; }
+void inventory_bind(Inventory* inv) {
+  if (inv && !t_inv) g_live_sessions.fetch_add(1);
+  if (!inv && t_inv) g_live_sessions.fetch_sub(1);
+  t_inv = inv;
+}
 
 void inventory_note_handle(uint64_t handle, const char* what,
                            CUresult (*destroy)(uint64_t)) {
@@ -503,6 +658,7 @@ std::string release_inventory(Inventory& inv) {
   // that somehow arrives afterwards is recorded against an empty list rather
   // than freed twice.
   Inventory::Items allocs, contexts, modules, streams, events, graphs, execs;
+  Inventory::Items green_ctxs, libraries, texrefs;
   std::unordered_map<uint64_t, Inventory::LibHandle> handles;
   std::unordered_map<int, int> retains;
   {
@@ -514,6 +670,9 @@ std::string release_inventory(Inventory& inv) {
     events.swap(inv.events);
     graphs.swap(inv.graphs);
     execs.swap(inv.graph_execs);
+    green_ctxs.swap(inv.green_ctxs);
+    libraries.swap(inv.libraries);
+    texrefs.swap(inv.texrefs);
     handles.swap(inv.handles);
     retains.swap(inv.primary_retains);
   }
@@ -524,8 +683,8 @@ std::string release_inventory(Inventory& inv) {
   // Work still running would be reading the memory about to be freed. The
   // contexts are synchronised first, once each, rather than per resource.
   {
-    Inventory::Items* maps[] = {&allocs, &modules, &streams,
-                                &events, &graphs,  &execs};
+    Inventory::Items* maps[] = {&allocs, &modules,   &streams, &events,
+                                &graphs, &execs,     &libraries, &texrefs};
     std::vector<CUcontext> seen;
     for (const Inventory::Items* m : maps) {
       for (const auto& entry : *m) {
@@ -575,24 +734,22 @@ std::string release_inventory(Inventory& inv) {
       release_items(streams, "stream", destroy_stream, &current, &failed);
   const unsigned modules_released =
       release_items(modules, "module", destroy_module, &current, &failed);
+  const unsigned libraries_released =
+      release_items(libraries, "library", destroy_library, &current, &failed);
+  const unsigned texrefs_released = release_items(
+      texrefs, "texture reference", destroy_texref, &current, &failed);
   const unsigned allocs_released =
       release_items(allocs, "allocation", destroy_alloc, &current, &failed);
 
-  // Nothing below runs inside a context, and destroying the one this thread is
-  // pointing at would leave it pointing at something that is gone. Contexts
-  // are destroyed by handle, with none of them current.
+  // Nothing below belongs to a context. Destroying the one this thread is
+  // pointing at would leave it pointing at something that is gone, and a green
+  // context is a slice of the device rather than something inside a context,
+  // so both are destroyed by handle with nothing current.
   current.none();
-  unsigned contexts_released = 0;
-  for (const auto& entry : contexts) {
-    CUresult r = destroy_context(entry.first);
-    if (r == CUDA_SUCCESS) {
-      contexts_released++;
-    } else {
-      failed++;
-      logf("session cleanup: context %llx was not destroyed (%d)",
-           (unsigned long long)entry.first, r);
-    }
-  }
+  const unsigned green_released =
+      release_detached(green_ctxs, "green context", destroy_green_ctx, &failed);
+  const unsigned contexts_released =
+      release_detached(contexts, "context", destroy_context, &failed);
 
   // Exactly as many releases as this session took retains, and no more: the
   // count above is already net of the releases the client made itself. One
@@ -604,12 +761,15 @@ std::string release_inventory(Inventory& inv) {
       CUresult r = release_primary(entry.first);
       if (r == CUDA_SUCCESS) {
         retains_released++;
-      } else {
-        failed++;
-        logf("session cleanup: a primary context retain on device %d was not "
-             "released (%d)",
-             entry.first, r);
+        continue;
       }
+      // The next one would fail the same way, and saying so once with the
+      // count is more use than the same line repeated.
+      failed++;
+      logf("session cleanup: releasing the primary context on device %d "
+           "failed (%d); %d of this session's retains are still held",
+           entry.first, r, entry.second - i);
+      break;
     }
   }
 
@@ -627,10 +787,19 @@ std::string release_inventory(Inventory& inv) {
   if (events_released) parts.push_back(plural(events_released, "event"));
   if (graphs_released) parts.push_back(plural(graphs_released, "graph"));
   if (execs_released) parts.push_back(plural(execs_released, "graph exec"));
+  if (green_released) parts.push_back(plural(green_released, "green context"));
+  if (libraries_released) {
+    parts.push_back(plural(libraries_released, "library", "libraries"));
+  }
+  if (texrefs_released) {
+    parts.push_back(plural(texrefs_released, "texture reference"));
+  }
 
   std::string summary;
   if (parts.empty()) {
-    summary = "it held nothing";
+    // Only ever a claim about the list, which is not everything a driver can
+    // hand out. See the tracked table above for what is on it.
+    summary = "it held nothing this server tracks";
   } else {
     summary = "released ";
     for (size_t i = 0; i < parts.size(); i++) {

@@ -38,6 +38,9 @@
 #ifdef RGPU_EXPIRY_CUBLAS
 #include <cublas_v2.h>
 #endif
+#ifdef RGPU_EXPIRY_CUBLASLT
+#include <cublasLt.h>
+#endif
 #ifdef RGPU_EXPIRY_CUDNN
 #include <cudnn.h>
 #endif
@@ -57,6 +60,20 @@ int g_failures = 0;
   } while (0)
 
 const size_t kBytes = 4096;
+
+// A fatbin header the shim can size, with a filler body: enough to ship, and
+// what the fake driver accepts. The same shape as the one in launch_smoke.
+std::vector<unsigned char> fake_fatbin() {
+  std::vector<unsigned char> img(16 + 256, 0xAB);
+  const unsigned int magic = 0xBA55ED50u;
+  const unsigned short version = 1, header_size = 16;
+  const unsigned long long body = 256;
+  std::memcpy(img.data() + 0, &magic, sizeof(magic));
+  std::memcpy(img.data() + 4, &version, sizeof(version));
+  std::memcpy(img.data() + 6, &header_size, sizeof(header_size));
+  std::memcpy(img.data() + 8, &body, sizeof(body));
+  return img;
+}
 
 // The counters as the fake driver last published them. One line of
 // name=value pairs; compared whole, so a kind this test never thought about
@@ -101,10 +118,29 @@ void take_resources(CUdevice dev, Held* held, bool own_context) {
   CHECK(cuMemAlloc(&held->b, kBytes));
   CHECK(cuStreamCreate(&held->stream, 0));
   CHECK(cuEventCreate(&held->event, 0));
+
+  // A module, and a graph with an executable made from it. These are the
+  // release paths that nothing else here would exercise, and a graph exec in
+  // particular can own a great deal of device memory.
+  const std::vector<unsigned char> image = fake_fatbin();
+  CUmodule mod = nullptr;
+  CHECK(cuModuleLoadData(&mod, image.data()));
+  CUgraph graph = nullptr;
+  CUgraphExec exec = nullptr;
+  CHECK(cuStreamBeginCapture(held->stream, CU_STREAM_CAPTURE_MODE_GLOBAL));
+  CHECK(cuStreamEndCapture(held->stream, &graph));
+  CHECK(cuGraphInstantiateWithFlags(&exec, graph, 0));
 #ifdef RGPU_EXPIRY_CUBLAS
   cublasHandle_t blas = nullptr;
   if (cublasCreate(&blas) != CUBLAS_STATUS_SUCCESS) {
     std::fprintf(stderr, "FAIL: cublasCreate\n");
+    g_failures++;
+  }
+#endif
+#ifdef RGPU_EXPIRY_CUBLASLT
+  cublasLtHandle_t lt = nullptr;
+  if (cublasLtCreate(&lt) != CUBLAS_STATUS_SUCCESS) {
+    std::fprintf(stderr, "FAIL: cublasLtCreate\n");
     g_failures++;
   }
 #endif
@@ -115,6 +151,40 @@ void take_resources(CUdevice dev, Held* held, bool own_context) {
     g_failures++;
   }
 #endif
+}
+
+// The other half of the reset ruling: alone on a server, a client may reset
+// the device, and the session must come out of it owing nothing. Everything
+// taken here is in the primary context, so the reset destroys all of it; if
+// the server still thought it held two retains it would try to release them
+// at expiry, and the fake driver would count the over-release.
+int reset_alone() {
+  CHECK(cuInit(0));
+  CUdevice dev = 0;
+  CHECK(cuDeviceGet(&dev, 0));
+  CUcontext primary = nullptr;
+  CHECK(cuDevicePrimaryCtxRetain(&primary, dev));
+  CHECK(cuDevicePrimaryCtxRetain(&primary, dev));
+  CHECK(cuCtxSetCurrent(primary));
+  CUdeviceptr a = 0, b = 0;
+  CHECK(cuMemAlloc(&a, kBytes));
+  CHECK(cuMemAlloc(&b, kBytes));
+
+  const CUresult r = cuDevicePrimaryCtxReset(dev);
+  if (r != CUDA_SUCCESS) {
+    std::fprintf(stderr,
+                 "FAIL: the only session on the server was refused a device "
+                 "reset (%d)\n",
+                 r);
+    g_failures++;
+  }
+  if (g_failures) {
+    std::printf("\nFAILED: %d check(s)\n", g_failures);
+    return 1;
+  }
+  // Left exactly as it is: the server has to be right about owing nothing.
+  std::printf("PASS: the only session on a server may reset the device\n");
+  return 0;
 }
 
 // The client that dies. Takes rather more than the parent, says so down the
@@ -153,6 +223,7 @@ int main(int argc, char** argv) {
   if (argc > 2 && std::strcmp(argv[1], "hold") == 0) {
     return hold_and_wait(std::atoi(argv[2]));
   }
+  if (argc > 1 && std::strcmp(argv[1], "reset") == 0) return reset_alone();
 
   if (!std::getenv("RGPU_FAKE_STATS")) {
     std::fprintf(stderr,
@@ -217,6 +288,20 @@ int main(int argc, char** argv) {
     ::kill(child, SIGKILL);
     ::waitpid(child, nullptr, 0);
     return 1;
+  }
+
+  // A device reset would destroy what the other session is holding, and this
+  // one cannot be trusted with that decision: while anybody else is connected
+  // it has to be refused. Checked here, with the child live and its resources
+  // counted, so a reset that got through would show up twice over - once as
+  // the wrong return code, and once as the counts never coming back.
+  const CUresult refused = cuDevicePrimaryCtxReset(dev);
+  if (refused != CUDA_ERROR_NOT_SUPPORTED) {
+    std::fprintf(stderr,
+                 "FAIL: resetting the device with another session live "
+                 "returned %d, expected %d\n",
+                 refused, CUDA_ERROR_NOT_SUPPORTED);
+    g_failures++;
   }
 
   const std::string both = read_stats();

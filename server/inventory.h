@@ -46,6 +46,7 @@ struct Inventory {
 
   std::mutex mu;
   Items allocs, contexts, modules, streams, events, graphs, graph_execs;
+  Items green_ctxs, libraries, texrefs;
   std::unordered_map<uint64_t, LibHandle> handles;
   // Per device, how many retains this session holds and has not released.
   // A primary context is shared, so this count, and not the handle, is what
@@ -58,7 +59,9 @@ struct Inventory {
 };
 
 // Binds this thread to the session it is serving, so the recording underneath
-// knows whose resource it is looking at. Passing nullptr unbinds.
+// knows whose resource it is looking at. Passing nullptr unbinds. Binding and
+// unbinding is also how the server counts how many sessions are live, which is
+// what makes it possible to refuse a call that would reach into all of them.
 void inventory_bind(Inventory* inv);
 
 // Records a maths-library handle against the session being served here, and
