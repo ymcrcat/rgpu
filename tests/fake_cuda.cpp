@@ -160,6 +160,15 @@ CUresult cuMemsetD8_v2(CUdeviceptr dst, unsigned char value, size_t n) {
   return CUDA_SUCCESS;
 }
 
+// The one fire-and-forget call the fake actually completes. Every other
+// asynchronous entry point falls through to the generated stub and fails,
+// which is fine until a test needs asynchronous work that works: without it
+// there is no way to put successful no-reply traffic either side of a failure.
+CUresult cuMemsetD8Async(CUdeviceptr dst, unsigned char value, size_t n,
+                         CUstream) {
+  return cuMemsetD8_v2(dst, value, n);
+}
+
 // ---------------------------------------------------------------------------
 // Modules and kernels
 // ---------------------------------------------------------------------------

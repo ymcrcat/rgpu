@@ -234,6 +234,16 @@ struct Session {
   int fd = -1;                 // the current connection, -1 while waiting
   bool finished = false;       // the serving thread has given up and gone
   uint32_t last_req = 0;       // last request this session actually completed
+  // A call sent without expecting a reply has nowhere to report a failure, so
+  // we hold the first one and hand it to the next call that does reply. CUDA
+  // reports asynchronous failures the same way, at a later call rather than
+  // the one that caused them.
+  //
+  // It belongs to the session and not to the connection. A dropped connection
+  // is not an acknowledgement: the client was told the call completed, so it
+  // will not send it again, and an error left behind on the old connection
+  // would turn a failed launch into an apparent success.
+  CUresult pending_async = CUDA_SUCCESS;
   // The most recent reply, kept in case the connection died between running
   // the call and answering it. Without this the client has a request that was
   // executed and never answered: resending it would run it twice, and not
@@ -262,11 +272,6 @@ void serve_session(std::shared_ptr<Session> session, SessionKey key);
 
 void serve(int fd, const std::shared_ptr<Session>& session) {
   tune_socket(fd);
-  // A call sent without expecting a reply has nowhere to report a failure, so
-  // we hold the first one and hand it to the next call that does reply. CUDA
-  // reports asynchronous failures the same way, at a later call rather than
-  // the one that caused them.
-  CUresult pending_async = CUDA_SUCCESS;
 
   // Each connection is one client process. Its CUDA objects live in this
   // server process and die with the connection.
@@ -338,12 +343,16 @@ void serve(int fd, const std::shared_ptr<Session>& session) {
     }
 
     if (h.flags & kFlagNoReply) {
+      bool held = false;
       {
         std::lock_guard<std::mutex> lk(session->mu);
         session->last_req = h.req_id;
+        if (result != CUDA_SUCCESS && session->pending_async == CUDA_SUCCESS) {
+          session->pending_async = result;
+          held = true;
+        }
       }
-      if (result != CUDA_SUCCESS && pending_async == CUDA_SUCCESS) {
-        pending_async = result;
+      if (held) {
         // Always logged: an application that ignores the next return value
         // would otherwise never learn this happened.
         logf("%s failed with %d and had no reply to report it in; the next "
@@ -352,13 +361,12 @@ void serve(int fd, const std::shared_ptr<Session>& session) {
       continue;
     }
 
-    if (pending_async != CUDA_SUCCESS) {
-      result = pending_async;
-      pending_async = CUDA_SUCCESS;
-    }
-
     {
       std::lock_guard<std::mutex> lk(session->mu);
+      if (session->pending_async != CUDA_SUCCESS) {
+        result = session->pending_async;
+        session->pending_async = CUDA_SUCCESS;
+      }
       session->last_req = h.req_id;
     }
 
