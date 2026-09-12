@@ -56,6 +56,24 @@ real link as well.
 The lesson for anyone using this: **over a network, the only number that
 matters is round trips per iteration.** Everything else is detail.
 
+## The macOS path
+
+`python/` is a second way to reach this that needs none of the above: a
+PyTorch device named `rgpu`, registered from pure Python, that runs on the
+stock CPU-only `torch` wheel - no CUDA libraries, no Docker, no driver on the
+client at all. What used to need a C++ shim in front of the driver is now a
+`pip install -e python` and an import.
+
+Verified so far, against a CPU reference on a local server: inference,
+training, mixed precision, `torch.compile`, and surviving a dropped
+connection (the same reconnect story as gap 2 below, ported to this path).
+156 tests pass this way.
+
+What is still unmeasured is everything on real hardware: no run yet on an
+actual remote GPU, over an actual network, from this Mac. No performance
+numbers exist for this path yet, and none are recorded here until they are
+measured.
+
 ## Gaps, in the order they would stop someone
 
 ### 1. It has no authentication at all

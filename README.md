@@ -219,3 +219,60 @@ refused explicitly. Kernel launches with `cuLaunchKernelEx` launch
 configurations are not marshalled yet. A dropped connection loses all
 server-side GPU state, so the client fails subsequent calls rather than
 silently reconnecting to an empty GPU.
+
+## The macOS path: `rgpu` as a PyTorch device
+
+Everything above replaces the driver underneath CUDA, which needs a container
+with CUDA's own runtime and math libraries. There is a second, lighter path in
+`python/`: `rgpu` as a PyTorch device name, registered from pure Python
+through PyTorch's own `PrivateUse1` backend hook. It runs on the stock,
+CPU-only `torch` wheel you get from `pip install torch` on a Mac - no CUDA
+libraries, no Docker, no driver, nothing to build. A tensor made with
+`device="rgpu"` is a small stand-in on this side; its data and every op on it
+live on a remote GPU host running `rgpu-opserver`.
+
+Three steps:
+
+```sh
+# on the Mac
+pip install -e python
+
+# on the GPU host: binds 127.0.0.1 by default and has no authentication
+# at all, so an ssh tunnel is the only supported way in
+rgpu-opserver
+ssh -N -L 9720:localhost:9720 user@gpuhost
+```
+
+```python
+# on the Mac
+import rgpu, torch
+
+x = torch.randn(1024, 1024, device="rgpu")
+y = (x @ x).relu().sum().item()   # one round trip, at .item()
+```
+
+`RGPU_OPSERVER=host:port` points the client at the tunnel if it isn't the
+default `127.0.0.1:9720`. The client and server must run the same torch
+major.minor version - op schemas can differ between versions, and the client
+checks this at connect time.
+
+### Known limitations
+
+- **Move a model to `rgpu` before any grad-tracking forward pass.** Because an
+  rgpu tensor is a wrapper subclass, `nn.Module.to("rgpu")` installs
+  parameters with `torch.utils.swap_tensors`, which refuses a parameter that
+  something else still holds - and the autograd graph of an earlier forward
+  holds exactly that. Moving afterwards raises `_apply(): Couldn't swap
+  <Module>.<param>`. A real CUDA device has no such rule. Under
+  `torch.no_grad()`, or before the first forward, rgpu behaves the same as
+  CUDA.
+- **An op whose output size depends on the data costs a round trip**, and
+  cannot write into an `out=` tensor - only the data can say how big the
+  result is, so there is no size to allocate it at ahead of time. Call it
+  without `out=`.
+- **A graph containing a non-`aten` custom op cannot run on rgpu at all**,
+  compiled or eager: `rgpu-opserver` runs aten ops only, so a custom op has
+  nowhere to run.
+- **`torch.compile(model, backend="rgpu")` is the supported way to compile.**
+  The graph is shipped once and compiled on the server; after that, a call is
+  one message.

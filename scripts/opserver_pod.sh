@@ -8,7 +8,7 @@ want=${1:?give the client torch version, e.g. 2.14}
 if [[ ! -x /root/opvenv/bin/python ]]; then
   python3 -m venv /root/opvenv
 fi
-if ! /root/opvenv/bin/python -c "import torch,sys; sys.exit(not torch.__version__.startswith('$want'))" 2>/dev/null; then
+if ! /root/opvenv/bin/python -c "import torch,sys; sys.exit(torch.__version__.split('.')[:2] != '$want'.split('.')[:2])" 2>/dev/null; then
   for cu in cu128 cu126 cu130; do
     /root/opvenv/bin/pip install -q "torch==$want.*" --index-url "https://download.pytorch.org/whl/$cu" && break
   done
