@@ -187,6 +187,17 @@ enable_testing()
 add_executable(test_wire tests/test_wire.cpp)
 add_test(NAME wire COMMAND test_wire)
 
+# The fake driver on its own, driven from several OS threads on two devices.
+# Everything else reaches the fake through the server, where one thread serves
+# a session, so this is the only test that can see whether the fake keeps
+# contexts apart the way a real driver does.
+add_executable(test_fake_cuda tests/test_fake_cuda.cpp tests/fake_cuda.cpp
+  tests/fake_stats.cpp tests/generated/fake_driver.cpp)
+target_link_libraries(test_fake_cuda PRIVATE Threads::Threads)
+target_compile_options(test_fake_cuda PRIVATE -Wno-deprecated-declarations)
+add_test(NAME fake_cuda COMMAND test_fake_cuda)
+set_tests_properties(fake_cuda PROPERTIES ENVIRONMENT RGPU_FAKE_DEVICES=2)
+
 # The GPU-free end-to-end test: client stubs and server dispatch over a real
 # socket, with a fake driver underneath.
 add_test(NAME remoting

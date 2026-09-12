@@ -42,4 +42,8 @@ enum Kind {
 // path any real deployment runs.
 void count(Kind k, int delta);
 
+// The counter as it stands, for a test that links the fake directly rather
+// than reading it back through RGPU_FAKE_STATS.
+long value(Kind k);
+
 }  // namespace rgpu_fake

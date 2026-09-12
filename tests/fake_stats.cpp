@@ -46,4 +46,6 @@ void count(Kind k, int delta) {
   publish();
 }
 
+long value(Kind k) { return g_counts[k].load(std::memory_order_relaxed); }
+
 }  // namespace rgpu_fake

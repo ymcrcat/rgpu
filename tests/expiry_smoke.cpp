@@ -107,13 +107,8 @@ struct Held {
   CUevent event = nullptr;
 };
 
-void take_resources(CUdevice dev, Held* held, bool own_context) {
-  CUcontext ctx = nullptr;
-  if (own_context) {
-    // A context of its own, on top of the shared one, so the cleanup has to
-    // free what is inside it before destroying it.
-    CHECK(cuCtxCreate(&ctx, 0, dev));
-  }
+// What the driver hands out, in whatever context is current.
+void take_driver_resources(Held* held) {
   CHECK(cuMemAlloc(&held->a, kBytes));
   CHECK(cuMemAlloc(&held->b, kBytes));
   CHECK(cuStreamCreate(&held->stream, 0));
@@ -132,6 +127,16 @@ void take_resources(CUdevice dev, Held* held, bool own_context) {
   CHECK(cuGraphInstantiateWithFlags(&exec, graph, 0));
   CUgraph clone = nullptr;
   CHECK(cuGraphClone(&clone, graph));
+}
+
+void take_resources(CUdevice dev, Held* held, bool own_context) {
+  CUcontext ctx = nullptr;
+  if (own_context) {
+    // A context of its own, on top of the shared one, so the cleanup has to
+    // free what is inside it before destroying it.
+    CHECK(cuCtxCreate(&ctx, 0, dev));
+  }
+  take_driver_resources(held);
 #ifdef RGPU_EXPIRY_CUBLAS
   cublasHandle_t blas = nullptr;
   if (cublasCreate(&blas) != CUBLAS_STATUS_SUCCESS) {
@@ -160,6 +165,14 @@ void take_resources(CUdevice dev, Held* held, bool own_context) {
 // taken here is in the primary context, so the reset destroys all of it; if
 // the server still thought it held two retains it would try to release them
 // at expiry, and the fake driver would count the over-release.
+//
+// Not only memory. The server forgets every kind of thing it recorded in the
+// primary context when the device is reset, so every kind the driver hands
+// out is taken here: a driver whose reset left the streams, events, modules and
+// graphs behind would show them as held at the end, and a server that went on
+// to release them would show as stale. Library handles are not taken: they are
+// the libraries' objects, not the driver's, and the fake libraries do not
+// model a reset.
 int reset_alone() {
   CHECK(cuInit(0));
   CUdevice dev = 0;
@@ -171,6 +184,8 @@ int reset_alone() {
   CUdeviceptr a = 0, b = 0;
   CHECK(cuMemAlloc(&a, kBytes));
   CHECK(cuMemAlloc(&b, kBytes));
+  Held held;
+  take_driver_resources(&held);
 
   const CUresult r = cuDevicePrimaryCtxReset(dev);
   if (r != CUDA_SUCCESS) {
