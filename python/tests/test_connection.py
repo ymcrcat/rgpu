@@ -171,7 +171,7 @@ def test_reconnect_retries_when_sending_the_replay_itself_fails(monkeypatch):
         self.had_session = True
         return True, 0
     monkeypatch.setattr(session.Connection, "_connect", fake_connect)
-    monkeypatch.setattr(session.time, "sleep", lambda s: None)   # don't actually wait
+    monkeypatch.setattr(session, "_sleep", lambda s: None)   # don't actually wait
 
     sent = []
     calls = {"n": 0}
@@ -192,12 +192,14 @@ def test_reconnect_retries_when_sending_the_replay_itself_fails(monkeypatch):
 def test_reconnect_shares_one_recovery_deadline_across_calls(monkeypatch):
     """A server that keeps completing the handshake and then dying again must
     not reset the recovery budget on every _reconnect() call: only an actual
-    reply (via _ack) proves the connection is alive. Uses a fake clock so the
-    test is fast and deterministic rather than waiting on a real one."""
+    reply (via _ack) proves the connection is alive. Uses a fake clock (via
+    session's own module-local _monotonic/_sleep, not the real time module,
+    so nothing else in the process is affected) so the test is fast and
+    deterministic rather than waiting on a real one."""
     monkeypatch.setenv("RGPU_RECONNECT_SECONDS", "2")
     clock = [0.0]
-    monkeypatch.setattr(session.time, "monotonic", lambda: clock[0])
-    monkeypatch.setattr(session.time, "sleep", lambda s: None)
+    monkeypatch.setattr(session, "_monotonic", lambda: clock[0])
+    monkeypatch.setattr(session, "_sleep", lambda s: None)
 
     class FakeSocket:
         def close(self):

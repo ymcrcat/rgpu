@@ -39,6 +39,13 @@ pending_frees = collections.deque()
 
 MAX_UNACKED = 64 << 20
 
+# Module-local names for the two time functions _reconnect needs, so a test
+# can fake the clock and the sleep for just this module (monkeypatching the
+# real time module would affect pytest's own timing and any other thread for
+# as long as the test runs).
+_monotonic = time.monotonic
+_sleep = time.sleep
+
 
 def _env_int(name, default):
     return int(os.environ.get(name, default))
@@ -71,6 +78,7 @@ class Connection:
         self.last_acked = 0
         self.had_session = False
         self._recovery_deadline = None   # shared across _reconnect() calls; see _reconnect
+        self._recovery_delay = None      # ditto: the backoff also has to persist
         self.flush_ops = _env_int("RGPU_FLUSH_OPS", 64)
         self.flush_bytes = _env_int("RGPU_FLUSH_BYTES", 256 * 1024)
         self.stats = {"messages": 0, "waits": 0, "bytes_out": 0, "bytes_in": 0}
@@ -148,24 +156,34 @@ class Connection:
         Worth trying because the state is not on this side: if the server
         still has the session, nothing the application holds is lost.
 
-        One recovery deadline covers every attempt made while the connection
-        has not proven itself alive again, not one deadline per call: a peer
-        that completes the handshake and then dies again immediately would
-        otherwise reset the budget on every single reconnect, and the caller
-        would never see an error. The deadline is set the first time it is
-        needed and cleared only once a reply actually arrives (see _ack); the
-        backoff sleep between attempts applies whether the handshake itself
-        failed or it succeeded and sending the replay is what failed.
+        _recovery_deadline and _recovery_delay live on the Connection, not as
+        state local to this call, so a recovery that spans several
+        _reconnect() calls -- a peer that gets through the handshake and
+        then dies again, so _connect() itself never raises -- still shares
+        one deadline and one growing backoff instead of getting a fresh copy
+        of each on every call. The backoff sleep runs before every attempt
+        after the very first one of a recovery, whether the previous attempt
+        failed to connect at all or connected fine and something else killed
+        it afterwards; it is capped at 3 s. Both are cleared once a reply
+        actually arrives (see _ack) or once a recovery gives up, so the next
+        one starts with a fresh budget instead of failing instantly forever.
         """
-        if self._recovery_deadline is None:
-            self._recovery_deadline = time.monotonic() + _env_int("RGPU_RECONNECT_SECONDS", 60)
-        delay = 0.1
+        fresh = self._recovery_deadline is None
+        if fresh:
+            self._recovery_deadline = _monotonic() + _env_int("RGPU_RECONNECT_SECONDS", 60)
+            self._recovery_delay = 0.1
         while True:
-            if time.monotonic() > self._recovery_deadline:
-                raise ConnectionError("could not reach rgpu-opserver again")
             if self.sock is not None:
                 self.sock.close()
                 self.sock = None
+            if _monotonic() > self._recovery_deadline:
+                self._recovery_deadline = None
+                self._recovery_delay = None
+                raise ConnectionError("could not reach rgpu-opserver again")
+            if not fresh:
+                _sleep(self._recovery_delay)
+                self._recovery_delay = min(self._recovery_delay * 2, 3.0)
+            fresh = False
             try:
                 resumed, server_seq = self._connect()
                 if server_seq < self.seq and (not self.replay_possible or not self.unacked
@@ -188,10 +206,11 @@ class Connection:
                     self.stats["bytes_out"] += len(frame)
                 return
             except SessionLost:
+                self._recovery_deadline = None
+                self._recovery_delay = None
                 raise
             except OSError:
-                time.sleep(delay)
-                delay = min(delay * 2, 3.0)
+                continue
 
     def _flush(self):
         if not self.pending:
@@ -230,6 +249,7 @@ class Connection:
     def _ack(self, seq):
         self.last_acked = seq
         self._recovery_deadline = None   # a reply arrived: the connection is proven alive
+        self._recovery_delay = None
         while self.unacked and self.unacked[0][0] <= seq:
             self.unacked.popleft()
         # unacked_bytes is an upper bound on what is held for replay, reset once

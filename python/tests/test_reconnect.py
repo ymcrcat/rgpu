@@ -9,7 +9,7 @@ import torch.nn as nn
 
 import rgpu
 from rgpu import session, wire
-from conftest import start_server
+from conftest import free_port, start_server
 
 pytestmark = pytest.mark.skipif(
     bool(os.environ.get("RGPU_REAL_SERVER")),
@@ -72,12 +72,15 @@ def test_a_restarted_server_means_the_session_is_lost(use_server):
 
 def test_a_peer_that_keeps_dying_after_the_handshake_gives_up_in_time(monkeypatch):
     """A fake peer that resumes the handshake and then dies again, every time,
-    must not let the client spin forever: the recovery budget has to be shared
-    across reconnects, not renewed on each one. Without that fix the client
-    never gives up and no error ever reaches the caller (the reviewer's probe
-    ran for 10 s and saw 98,649 reconnect attempts with nothing surfacing);
-    with it, the operation raises ConnectionError once RGPU_RECONNECT_SECONDS
-    has actually elapsed."""
+    must not let the client spin forever: the recovery budget *and* the
+    backoff between attempts have to be shared across reconnects, not
+    renewed on each one. Without that fix the client hammers the peer at
+    full speed and no error ever reaches the caller (the reviewer's probe
+    ran for 10 s and saw 98,649 reconnect attempts with nothing surfacing,
+    a gap of 0.1-0.3 ms that never grew); with it, the backoff grows across
+    calls the same way it does within one, so only a handful of attempts
+    happen before the operation raises ConnectionError near
+    RGPU_RECONNECT_SECONDS."""
     srv = socket.create_server(("127.0.0.1", 0))
     port = srv.getsockname()[1]
     accepts = [0]
@@ -125,4 +128,62 @@ def test_a_peer_that_keeps_dying_after_the_handshake_gives_up_in_time(monkeypatc
     assert not t.is_alive(), "still retrying after 10s; the recovery deadline was not shared"
     assert outcome and isinstance(outcome[0], ConnectionError), outcome
     assert elapsed < 6   # gave up close to RGPU_RECONNECT_SECONDS=2, not after 10s of spinning
-    assert accepts[0] > 0   # retries did happen; it isn't failing for some unrelated reason
+    # With backoff growing 0.1s -> 0.2 -> 0.4 -> 0.8 -> 1.6, capped at 3s, a 2s
+    # budget allows only a handful of attempts -- nowhere near the thousands
+    # per second the bug produced.
+    assert 0 < accepts[0] < 30, accepts[0]
+
+
+def test_giving_up_clears_recovery_state_so_a_later_attempt_gets_a_fresh_budget(monkeypatch):
+    """Once _reconnect gives up and raises ConnectionError, the connection
+    must not stay wedged: leaving the deadline in the past (and the dead
+    socket assigned) would make a later operation fail instantly with zero
+    connect attempts, even once a real server is listening again on the
+    same address. A peer that keeps completing the handshake and dying
+    again (rather than one nothing ever answers) is what leaves self.sock
+    non-None at the moment the give-up fires, so this reproduces the
+    socket-left-assigned half of the bug too, not just the stale deadline:
+    with self.sock still set, _flush's fast path ("if self.sock is None:
+    connect") is skipped and the stale _reconnect state is what gets hit.
+
+    had_session is reset between phases: whether a *new* server recognizes
+    an *old* session is session identity, a separate concern already
+    covered by test_a_restarted_server_means_the_session_is_lost. Resetting
+    it isolates the thing this test is actually about -- does the same,
+    previously-wedged Connection try again at all, with a fresh budget."""
+    port = free_port()
+    srv = socket.create_server(("127.0.0.1", port))
+
+    def serve_flapping():
+        while True:
+            try:
+                conn, _ = srv.accept()
+            except OSError:
+                return
+            try:
+                wire.recv_exact(conn, len(wire.MAGIC))
+                wire.recv_frame(conn)
+                wire.send_frame(conn, wire.encode([wire.VERSION, True, 0, torch.__version__]))
+                wire.recv_frame(conn)   # swallow whatever it sends, then die without a reply
+            except OSError:
+                pass
+            conn.close()
+
+    threading.Thread(target=serve_flapping, daemon=True).start()
+    monkeypatch.setenv("RGPU_OPSERVER", f"127.0.0.1:{port}")
+    monkeypatch.setenv("RGPU_RECONNECT_SECONDS", "1")
+    session.reset()
+
+    with pytest.raises(ConnectionError):
+        torch.ones(3, device="rgpu").cpu()
+
+    srv.close()   # stop the flapping peer and free the port
+    session.get().had_session = False   # see docstring: isolate the wedge from session identity
+
+    proc, _ = start_server(port=port)   # a real, working server on the same address
+    try:
+        result = torch.ones(3, device="rgpu").cpu()   # the same, previously-wedged Connection
+        assert torch.equal(result, torch.ones(3))
+    finally:
+        proc.kill()
+        session.reset()
