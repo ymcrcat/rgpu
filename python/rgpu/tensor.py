@@ -88,6 +88,11 @@ class RemoteTensor(torch.Tensor):
     def __tensor_unflatten__(inner, ctx, outer_size, outer_stride):
         return RemoteTensor(inner["_rgpu_meta"])
 
+    def tolist(self):
+        # torch.Tensor.tolist refuses a subclass outright, so this download
+        # has to be spelled out here the way .cpu() and .item() are.
+        return self.detach().cpu().tolist()
+
     def __repr__(self, *, tensor_contents=None):
         if is_traced(self):
             return f"rgpu:<traced {self.dtype} {tuple(self.shape)}>"   # no data to fetch

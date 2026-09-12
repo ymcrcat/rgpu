@@ -1,3 +1,4 @@
+import pytest
 import torch
 import torch.nn as nn
 
@@ -27,6 +28,32 @@ def test_out_variant_is_not_cast_away_from_the_callers_tensor():
     assert r is out
     assert torch.allclose(out.cpu(), a.float().cpu().sum(dim=0).half().cpu(),
                            atol=1e-2, rtol=1e-2)
+
+
+def test_attention_runs_in_the_autocast_dtype():
+    """CUDA casts scaled_dot_product_attention, so a transformer gets mixed
+    precision there. Left off the list, every SDPA stays float32 and the
+    speedup silently disappears."""
+    q, k, v = (torch.randn(1, 2, 4, 8).to("rgpu") for _ in range(3))
+    with torch.amp.autocast("rgpu", dtype=torch.float16):
+        out = torch.nn.functional.scaled_dot_product_attention(q, k, v)
+    assert out.dtype == torch.float16
+    want = torch.nn.functional.scaled_dot_product_attention(
+        q.half().float().cpu(), k.half().float().cpu(), v.half().float().cpu())
+    assert torch.allclose(out.float().cpu(), want, atol=5e-3, rtol=1e-2)
+
+
+def test_binary_cross_entropy_is_refused_under_autocast():
+    """CUDA raises for this one because it is unsafe in half precision.
+    Running it anyway would be a silent divergence from a local GPU."""
+    p, t = torch.rand(4).to("rgpu"), torch.rand(4).to("rgpu")
+    with torch.amp.autocast("rgpu", dtype=torch.float16):
+        with pytest.raises(RuntimeError, match="binary_cross_entropy_with_logits"):
+            torch.nn.functional.binary_cross_entropy(p, t)
+    # Outside autocast it is an ordinary op, exactly as on CUDA.
+    assert torch.allclose(
+        torch.nn.functional.binary_cross_entropy(p, t).cpu(),
+        torch.nn.functional.binary_cross_entropy(p.cpu(), t.cpu()), atol=1e-5)
 
 
 def test_training_with_a_gradient_scaler():

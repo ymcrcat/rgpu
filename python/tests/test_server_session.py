@@ -118,6 +118,17 @@ def test_free_forgets_tensors():
     assert c.reply(wire.DOWNLOAD, 1)[0] == wire.ERROR
 
 
+def test_calling_a_graph_that_was_never_compiled_is_reported_at_the_next_wait():
+    """Every other failure path records the first error, so the client hears
+    about it at the next wait. This one only poisoned its outputs, so a CALL
+    for a graph id that was never compiled went unreported unless an output
+    happened to be downloaded."""
+    c = Client()
+    c.send(wire.CALL, 7, [], [1])
+    status, (op, message) = c.reply(wire.SYNC)
+    assert status == wire.ERROR and "graph 7" in op and "never compiled" in message
+
+
 def test_seed_makes_random_ops_repeat():
     c = Client()
     for tid in (1, 2):

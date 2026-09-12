@@ -10,6 +10,7 @@ backward on a thread of its own, so everything here is under one lock.
 """
 
 import collections
+import logging
 import os
 import socket
 import threading
@@ -18,6 +19,8 @@ import time
 import torch
 
 from . import wire
+
+log = logging.getLogger("rgpu")
 
 
 class RemoteError(RuntimeError):
@@ -51,6 +54,10 @@ def _env_int(name, default):
     return int(os.environ.get(name, default))
 
 
+def _env_float(name, default):
+    return float(os.environ.get(name, default))
+
+
 def _check_versions(server_torch):
     ours = torch.__version__.split(".")[:2]
     theirs = str(server_torch).split(".")[:2]
@@ -81,13 +88,24 @@ class Connection:
         self._recovery_delay = None      # ditto: the backoff also has to persist
         self.flush_ops = _env_int("RGPU_FLUSH_OPS", 64)
         self.flush_bytes = _env_int("RGPU_FLUSH_BYTES", 256 * 1024)
+        # Keepalive is the primary detector of a peer that has gone away: it
+        # cannot false-positive on a server that is legitimately busy with a
+        # long queue. The recv timeout is only a backstop, so it is generous
+        # - a single op is allowed to take minutes.
+        self.connect_timeout = _env_float("RGPU_CONNECT_TIMEOUT", 10)
+        self.recv_timeout = _env_float("RGPU_RECV_TIMEOUT", 300)
         self.stats = {"messages": 0, "waits": 0, "bytes_out": 0, "bytes_in": 0}
 
     # --- connecting ----------------------------------------------------------
 
     def _connect(self):
-        s = socket.create_connection((self.host, self.port))
+        # The connect timeout is separate and much shorter: a hung SYN that
+        # waited out the operating system's own timeout would overshoot the
+        # whole reconnect budget on a single attempt.
+        s = socket.create_connection((self.host, self.port), timeout=self.connect_timeout)
+        s.settimeout(self.recv_timeout)
         s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        wire.set_keepalive(s)
         s.sendall(wire.MAGIC)
         wire.send_frame(s, wire.encode(
             [wire.VERSION, self.session_id, self.last_acked, torch.__version__]))
@@ -129,6 +147,11 @@ class Connection:
                 self.replay_possible = False
                 self.unacked.clear()
                 self.unacked_bytes = 0
+                log.warning(
+                    "rgpu: more than %d MB is waiting to be acknowledged, over the "
+                    "replay limit, so this session cannot be recovered if the "
+                    "connection drops before the server catches up",
+                    MAX_UNACKED >> 20)
         return self.seq
 
     def post(self, kind, *fields, size=0):
@@ -224,6 +247,12 @@ class Connection:
         except SessionLost:
             raise
         except OSError:
+            if not self.had_session:
+                # Nothing to recover: no connection has ever succeeded, so
+                # there is no session on the far end to pick back up. A
+                # mistyped address must say so now rather than spend the
+                # whole reconnect budget retrying a port nothing answers.
+                raise
             self._reconnect()   # replays everything unacknowledged, this batch included
         self.pending = []
         self.pending_bytes = 0
@@ -235,7 +264,13 @@ class Connection:
             except SessionLost:
                 raise
             except OSError:
-                self._reconnect()   # the server resends a lost reply, or runs the replay
+                # A recv timeout arrives here too - socket.timeout is an
+                # OSError - and is treated as a dropped connection rather
+                # than raised at the caller: the server resends a lost reply,
+                # or runs the replay. It cannot buy unlimited time either,
+                # because the recovery deadline is only cleared by a reply
+                # actually arriving (see _ack), not by a reconnect.
+                self._reconnect()
                 continue
             self.stats["bytes_in"] += len(frame)
             rseq, status, value = wire.decode(frame)

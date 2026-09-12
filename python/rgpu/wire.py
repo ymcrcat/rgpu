@@ -19,6 +19,7 @@ limits so a malformed frame cannot make the reader allocate without bound.
 
 import ctypes
 import os
+import socket
 import struct
 
 import torch
@@ -48,7 +49,16 @@ SERVER_ID_BASE = 1 << 62
 MAX_DEPTH = 64
 MAX_ITEMS = 1 << 22
 MAX_STR = 1 << 20
-MAX_FRAME = int(os.environ.get("RGPU_MAX_FRAME", 1 << 34))
+MAX_FRAME = int(os.environ.get("RGPU_MAX_FRAME", 1 << 30))
+
+# Keepalive: how long a connection may be idle before the kernel starts
+# probing, how far apart the probes are, and how many go unanswered before it
+# gives up. Roughly a minute to notice a peer that has gone away without
+# closing - a network partition, a suspended laptop - which no amount of
+# waiting in recv() would ever reveal on its own.
+KEEPALIVE_IDLE = 30
+KEEPALIVE_INTERVAL = 10
+KEEPALIVE_COUNT = 3
 
 
 class EncodeError(TypeError):
@@ -307,6 +317,29 @@ def _dec(r, depth):
             raise DecodeError("dict too large")
         return {r.string(): _dec(r, depth + 1) for _ in range(n)}
     raise DecodeError(f"unknown tag {tag!r}")
+
+
+def set_keepalive(sock):
+    """Ask the kernel to notice a peer that has stopped answering.
+
+    The three knobs are spelled differently per platform - macOS calls the
+    idle time TCP_KEEPALIVE, Linux calls it TCP_KEEPIDLE, and the interval
+    and count are missing entirely on some - so each is probed rather than
+    assumed. SO_KEEPALIVE alone still works everywhere; only the timing
+    falls back to the system default, which is two hours.
+    """
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+    for name, value in (("TCP_KEEPIDLE", KEEPALIVE_IDLE),
+                        ("TCP_KEEPALIVE", KEEPALIVE_IDLE),
+                        ("TCP_KEEPINTVL", KEEPALIVE_INTERVAL),
+                        ("TCP_KEEPCNT", KEEPALIVE_COUNT)):
+        option = getattr(socket, name, None)
+        if option is None:
+            continue
+        try:
+            sock.setsockopt(socket.IPPROTO_TCP, option, value)
+        except OSError:
+            pass   # the name exists but this kernel will not take it
 
 
 def recv_exact(sock, n):

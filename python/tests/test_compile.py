@@ -5,9 +5,19 @@ import torch
 import torch.nn as nn
 
 import rgpu
-from rgpu.compile import Unshippable, serialize
+from rgpu.compile import Unshippable, UnsupportedOp, serialize
 
 EAGER = rgpu.compile_backend(compiler="eager")   # fast: runs the shipped graph as is
+
+
+@torch.library.custom_op("rgpu_probe::twice", mutates_args=())
+def _twice(x: torch.Tensor) -> torch.Tensor:
+    return x + x
+
+
+@_twice.register_fake
+def _(x):
+    return torch.empty_like(x)
 
 
 @pytest.fixture(autouse=True)
@@ -144,3 +154,36 @@ def test_graphs_with_things_the_wire_cannot_carry_are_refused():
     gm = torch.fx.symbolic_trace(lambda x: x + torch.ones(3))
     with pytest.raises(Unshippable):
         serialize(gm)
+
+
+def test_a_custom_op_is_refused_at_compile_time_naming_the_op():
+    """There is no eager fallback for this one and pretending otherwise only
+    delays the failure: running the graph op by op posts the same custom op
+    as a RUN, and the server looks ops up by name and runs only aten ops."""
+    f = lambda x: torch.ops.rgpu_probe.twice(x) + 1
+    with pytest.raises(Exception) as e:
+        torch.compile(f, backend=EAGER)(torch.randn(4).to("rgpu"))
+    # dynamo wraps whatever a backend raises, so the report is what matters:
+    # the op is named, the reason is given, and it did not reach the server.
+    assert "rgpu_probe::twice" in str(e.value) and "aten ops only" in str(e.value)
+    assert not isinstance(e.value, rgpu.RemoteError)
+    assert UnsupportedOp.__name__ in str(e.value)
+
+
+def test_a_graph_that_is_only_unshippable_still_runs_eagerly_and_correctly(caplog,
+                                                                           monkeypatch):
+    """The other half of the fence: a graph refused for what it is rather
+    than for an op it contains - a constant tensor, dynamic shapes - still
+    falls back to the ordinary dispatch path and gets the right answer."""
+    import rgpu.compile as rc
+
+    def refuse(gm):
+        raise rc.Unshippable("a constant tensor inside the graph")
+    monkeypatch.setattr(rc, "serialize", refuse)
+
+    f = lambda x: (x * 2).relu().sum(dim=0)
+    x = torch.randn(8, 4)
+    with caplog.at_level(logging.WARNING, logger="rgpu"):
+        got = torch.compile(f, backend=EAGER)(x.to("rgpu"))
+    assert "eagerly" in caplog.text and "a constant tensor" in caplog.text
+    assert torch.allclose(got.cpu(), f(x), atol=1e-5)

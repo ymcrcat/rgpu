@@ -41,6 +41,48 @@ def test_item_returns_a_python_number():
     assert torch.tensor([2.5, 0.5]).to("rgpu").sum().item() == 3.0
 
 
+def test_tolist_matches_cpu():
+    x, y = torch.arange(5.0), torch.randn(2, 3)
+    assert x.to("rgpu").tolist() == x.tolist()
+    assert y.to("rgpu").tolist() == y.tolist()
+
+
+def test_cpu_keeps_the_strides_a_transposed_view_has():
+    """What comes back over the wire is contiguous, but the tensor is not:
+    CPU and CUDA both keep the strides of a view that is dense, and code that
+    reads .stride() or .is_contiguous() after .cpu() must see the same."""
+    x = torch.randn(2, 3)
+    want = x.t()
+    got = x.to("rgpu").t().cpu()
+    assert got.stride() == want.stride()
+    assert torch.equal(got, want)
+
+
+def test_cpu_keeps_channels_last():
+    x = torch.randn(2, 3, 4, 5).to(memory_format=torch.channels_last)
+    got = x.to("rgpu").cpu()
+    assert got.stride() == x.stride()
+    assert got.is_contiguous(memory_format=torch.channels_last)
+    assert torch.equal(got, x)
+
+
+def test_a_memory_format_asked_for_on_the_way_back_is_honoured():
+    x = torch.randn(2, 3, 4, 5)
+    want = x.to("cpu", copy=True, memory_format=torch.channels_last)
+    got = x.to("rgpu").to("cpu", memory_format=torch.channels_last)
+    assert got.stride() == want.stride()
+    assert torch.equal(got, want)
+
+
+def test_a_view_that_is_not_dense_comes_back_contiguous():
+    """A copy cannot keep the strides of a view with gaps in it - PyTorch's
+    preserve_format makes such a tensor contiguous, and so does rgpu."""
+    x = torch.randn(4, 4)
+    got = x.to("rgpu")[:, ::2].cpu()
+    assert got.is_contiguous()
+    assert torch.equal(got, x[:, ::2])
+
+
 def test_dtype_conversion_happens_on_the_device():
     x = torch.randn(8)
     half = x.to("rgpu").to(torch.float16)

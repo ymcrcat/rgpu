@@ -30,6 +30,17 @@ class Unshippable(Exception):
     """A graph containing something the wire cannot carry."""
 
 
+class UnsupportedOp(Unshippable):
+    """An op in the graph that rgpu-opserver would refuse to run.
+
+    Unlike the other refusals this one has no eager fallback. Running the
+    graph through the ordinary dispatch path posts the very same op as a RUN,
+    and the server resolves ops by name and runs only aten ops, so it fails
+    there instead - later, and with a worse message. Raising at compile time
+    says the true thing: this cannot run on rgpu at all.
+    """
+
+
 def serialize(gm):
     nodes, index = [], {}
 
@@ -66,8 +77,15 @@ def serialize(gm):
                 nodes.append(["getitem", wire.NodeRef(index[src]), i])
                 index[n] = len(nodes) - 1
                 continue
-            if not isinstance(t, torch._ops.OpOverload) or t.namespace != "aten":
+            if not isinstance(t, torch._ops.OpOverload):
+                # A plain Python callable: not shippable as part of a graph,
+                # but the ops it calls are, so eager still works.
                 raise Unshippable(f"{t} is not an aten op")
+            if t.namespace != "aten":
+                raise UnsupportedOp(
+                    f"{t._schema.name}.{t._overloadname} cannot run on rgpu: "
+                    "rgpu-opserver runs aten ops only, so a custom op has nowhere "
+                    "to run, compiled or eager")
             nodes.append(["call", t._schema.name, t._overloadname,
                           tree_map(ref, list(n.args)),
                           {k: tree_map(ref, v) for k, v in n.kwargs.items()}])
@@ -114,6 +132,8 @@ def _compiler(mode, compiler):
             if any(isinstance(s, torch.SymInt) for v in values
                    if isinstance(v, torch.Tensor) for s in v.shape):
                 raise Unshippable("dynamic shapes; compile with dynamic=False")
+        except UnsupportedOp:
+            raise   # no eager fallback exists for this one; see UnsupportedOp
         except Unshippable as e:
             log.warning("rgpu: running a graph eagerly because it has %s", e)
             return _eager(gm)

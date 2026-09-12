@@ -172,9 +172,15 @@ streaming, because the output shapes are known from the traced graph.
 Graphs are specialized to shapes and recompile when shapes change, as with
 ordinary torch.compile. The server caches compiled graphs per session.
 
-A graph containing anything outside the allowlist - a custom op, a Python
-callable - is not shipped. It runs eagerly through the normal dispatch path,
-correct and slower, with a log line naming what forced it.
+A graph the wire cannot carry whole - a constant tensor inside it, dynamic
+shapes, a node that is not a call, a plain Python callable - is not shipped.
+It runs eagerly through the normal dispatch path, correct and slower, with a
+log line naming what forced it.
+
+A custom op is different: it cannot run on rgpu at all, compiled or eager.
+The server resolves ops by name and runs only `aten` ops, so falling back to
+eager would post the same op and fail there. A graph containing one raises at
+compile time, naming the op.
 
 Plain `torch.compile(model)` without `backend="rgpu"` would try to generate
 code for a device inductor does not know. In the first milestone,

@@ -1,11 +1,15 @@
 import collections
 import gc
 import os
+import socket
+import threading
+import time
 
 import pytest
 import torch
 
 from rgpu import session, wire
+from conftest import free_port
 
 
 @pytest.fixture
@@ -76,6 +80,72 @@ def test_versions_must_agree_on_major_and_minor(monkeypatch):
         session._check_versions("1.0.0")
     monkeypatch.setenv("RGPU_ALLOW_VERSION_MISMATCH", "1")
     session._check_versions("1.0.0")
+
+
+def test_the_socket_asks_the_kernel_to_keep_it_alive(conn):
+    """Without SO_KEEPALIVE a recv on a partitioned link blocks for hours: no
+    FIN ever arrives, so nothing tells this side the peer is gone."""
+    conn.request(wire.SYNC)   # opens the connection
+    assert conn.sock.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE) != 0
+
+
+def test_silence_from_the_peer_becomes_a_reconnect_not_a_wedged_call(monkeypatch):
+    """A peer that accepts, handshakes and then never answers must not hold
+    the caller forever. RGPU_RECV_TIMEOUT turns the silence into an OSError,
+    which has to route into _reconnect exactly as a dropped connection does -
+    the second connection answers the replayed download, so the caller gets
+    its values back and never sees the timeout."""
+    srv = socket.create_server(("127.0.0.1", 0))
+    accepted = []
+
+    def serve():
+        while True:
+            try:
+                c, _ = srv.accept()
+            except OSError:
+                return
+            accepted.append(c)   # kept open: closing would send a FIN and cheat
+            first = len(accepted) == 1
+            try:
+                wire.recv_exact(c, len(wire.MAGIC))
+                wire.recv_frame(c)
+                wire.send_frame(c, wire.encode(
+                    [wire.VERSION, not first, 0, torch.__version__]))
+                batch = wire.decode(wire.recv_frame(c))
+                if first:
+                    continue   # handshaken, and now silent forever
+                for seq, kind, *fields in batch:
+                    if kind == wire.DOWNLOAD:
+                        wire.send_frame(c, wire.encode(
+                            [seq, wire.OK, wire.Host.of(torch.ones(3))]))
+            except OSError:
+                pass
+
+    threading.Thread(target=serve, daemon=True).start()
+    monkeypatch.setenv("RGPU_OPSERVER", f"127.0.0.1:{srv.getsockname()[1]}")
+    monkeypatch.setenv("RGPU_RECV_TIMEOUT", "0.3")
+    session.reset()
+    try:
+        got = torch.ones(3, device="rgpu").cpu()
+    finally:
+        session.reset()
+        srv.close()
+        for c in accepted:
+            c.close()
+    assert torch.equal(got, torch.ones(3))
+    assert len(accepted) == 2   # the silence drove exactly one reconnect
+
+
+def test_a_first_connection_that_is_refused_fails_at_once(monkeypatch):
+    """There is no session to recover before the first connect succeeds, so a
+    mistyped RGPU_OPSERVER must raise now rather than spend the whole
+    reconnect budget retrying a port nothing will ever answer."""
+    monkeypatch.setenv("RGPU_RECONNECT_SECONDS", "5")
+    conn = session.Connection(f"127.0.0.1:{free_port()}")   # nothing is listening
+    start = time.monotonic()
+    with pytest.raises(OSError):
+        conn.request(wire.SYNC)
+    assert time.monotonic() - start < 1
 
 
 def test_unacked_bytes_drains_on_ack(conn):

@@ -29,9 +29,10 @@ def log(message):
 class Registry:
     """Sessions by id, kept for a grace period after their connection goes.
 
-    Each attach gets a generation number, so a stale connection noticing its
-    own death late cannot mark a session detached while a newer connection is
-    using it.
+    Each attach gets a generation number. A stale connection cannot mark a
+    session detached while a newer one is using it, and - because the number
+    is also kept on the Session - its serving thread stops rather than
+    applying messages the newer connection is about to replay.
     """
 
     def __init__(self, device, grace):
@@ -84,6 +85,10 @@ class Drop:
 
 def serve_connection(conn, registry, drop):
     conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    # No recv timeout here on purpose: a client sitting at a REPL is idle,
+    # not gone, and closing its session would start the grace period ticking
+    # under it. Keepalive is what removes a peer that really has died.
+    wire.set_keepalive(conn)
     sid = generation = None
     try:
         if wire.recv_exact(conn, len(wire.MAGIC)) != wire.MAGIC:
@@ -94,12 +99,19 @@ def serve_connection(conn, registry, drop):
             return
         session, resumed, generation = registry.attach(sid)
         with session.lock:
+            # Held from the snapshot through the resend: a message applied in
+            # between would make last_seq a lie, and the client would replay
+            # from the wrong point. max() rather than plain assignment because
+            # two attaches can reach this line out of order; the newer
+            # generation must win either way.
+            session.generation = max(session.generation, generation)
             last_seq, cached = session.last_seq, session.last_reply
-        wire.send_frame(conn, wire.encode([wire.VERSION, resumed, last_seq, torch.__version__]))
+            wire.send_frame(conn, wire.encode(
+                [wire.VERSION, resumed, last_seq, torch.__version__]))
+            if resumed and cached is not None and cached[0] > last_acked:
+                wire.send_frame(conn, cached[1])
         if resumed:
             log(f"session {sid.hex()[:8]} resumed after message {last_seq}")
-            if cached is not None and cached[0] > last_acked:
-                wire.send_frame(conn, cached[1])
         else:
             log(f"session {sid.hex()[:8]} started (client torch {client_torch})")
         while True:
@@ -109,6 +121,15 @@ def serve_connection(conn, registry, drop):
                     log("dropping the connection (RGPU_DROP_AFTER)")
                     return
                 with session.lock:
+                    if session.generation != generation:
+                        # A newer connection has the session. This one may be
+                        # mid-batch on a link that is already dead: applying
+                        # anything more would advance last_seq past messages
+                        # the new connection is about to replay, and the reply
+                        # would go into a socket nobody is reading.
+                        log(f"session {sid.hex()[:8]}: a newer connection took over, "
+                            "so this one stops without applying anything more")
+                        return
                     reply = session.execute(message)
                 if reply is not None:
                     wire.send_frame(conn, reply)

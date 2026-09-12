@@ -64,8 +64,37 @@ def _wire_args(args, kwargs):
     return tree_map(wire_of, list(args)), {k: tree_map(wire_of, v) for k, v in kwargs.items()}
 
 
+def _dense_layout(shape, stride):
+    """True if these strides pack the elements exactly: no gaps, no overlap.
+
+    The same test PyTorch's preserve_format uses. Only such a layout survives
+    a copy: a tensor whose strides leave gaps (a strided slice) or repeat
+    elements (an expand) comes out of .cpu() contiguous on CPU and CUDA too.
+    """
+    expected = 1
+    for size, step in sorted(zip(shape, stride), key=lambda pair: pair[1]):
+        if size == 1:
+            continue   # a length-1 dimension can have any stride
+        if step != expected:
+            return False
+        expected *= size
+    return True
+
+
 def _download(t):
-    return session.get().request(wire.DOWNLOAD, id_of(t._rgpu_meta)).tensor()
+    """The tensor's values on the CPU, laid out the way the tensor is laid out.
+
+    What comes over the wire is always contiguous, but the tensor need not
+    be: a transposed view and a channels_last tensor each have strides of
+    their own, which .cpu() keeps on CPU and CUDA. Rebuilding them here needs
+    no wire change - the meta tensor on this side already knows the layout.
+    """
+    meta = t._rgpu_meta
+    out = session.get().request(wire.DOWNLOAD, id_of(meta)).tensor()
+    shape, stride = tuple(meta.shape), tuple(meta.stride())
+    if stride != tuple(out.stride()) and _dense_layout(shape, stride):
+        out = torch.empty_strided(shape, stride, dtype=out.dtype).copy_(out)
+    return out
 
 
 def _written_input(func, args, kwargs, ret):
@@ -232,7 +261,12 @@ def handle(func, args, kwargs):
         if target is not None and torch.device(target).type == "cpu":
             out = _download(args[0])
             dtype = kwargs.get("dtype")
-            return out if dtype is None else out.to(dtype)
+            if dtype is not None:
+                out = out.to(dtype)
+            memory_format = kwargs.get("memory_format")
+            if memory_format not in (None, torch.preserve_format):
+                out = out.contiguous(memory_format=memory_format)
+            return out
     if func is aten.copy_.default:
         dst, src = args[0], args[1]
         if not isinstance(dst, RemoteTensor):

@@ -1,10 +1,12 @@
 import os
 import socket
+import threading
 
 import pytest
 import torch
 
 from rgpu import wire
+from rgpu.server.__main__ import Drop, Registry, serve_connection
 from conftest import start_server
 
 
@@ -77,6 +79,60 @@ def test_a_connection_without_the_magic_is_closed(server):
     s.sendall(b"GET / HTTP/1.1\r\n\r\n")
     with pytest.raises(ConnectionError):
         wire.recv_frame(s)
+
+
+def test_a_superseded_connection_neither_applies_nor_answers(server):
+    """The reviewer's trace: the link drops mid-batch, so the old serving
+    thread does not notice; the client reconnects and replays from where the
+    server got to. If the old thread is still allowed to apply a waited
+    message, it advances last_seq and writes the reply into the dead socket,
+    and the replay on the new connection is then deduped away - the client
+    waits for an answer nobody will ever send. The old connection must be
+    fenced off instead: it applies nothing more and stops serving."""
+    sid = os.urandom(16)
+    old, (_, resumed, _, _) = handshake(server, sid)
+    assert resumed is False
+    new, (_, resumed, last_seq, _) = handshake(server, sid)
+    assert resumed is True and last_seq == 0
+
+    batch = wire.encode([
+        [1, wire.RUN, "aten::ones", "default", [[3]],
+         {"dtype": torch.float32, "device": wire.Dev("rgpu")}, [1]],
+        [2, wire.DOWNLOAD, 1],
+    ])
+    old.settimeout(10)
+    wire.send_frame(old, batch)
+    with pytest.raises(ConnectionError):
+        wire.recv_frame(old)   # superseded: nothing applied, nothing answered
+
+    new.settimeout(10)
+    wire.send_frame(new, batch)   # the same messages, replayed after reconnecting
+    seq, status, host = wire.decode(wire.recv_frame(new))
+    assert (seq, status) == (2, wire.OK)
+    assert torch.equal(host.tensor(), torch.ones(3))
+
+
+def test_an_accepted_connection_is_kept_alive_by_the_kernel():
+    """Without SO_KEEPALIVE a thread stuck in recv_frame on a partitioned
+    link never reaches its finally, so registry.detach never runs and the
+    session's GPU memory is held for the life of the process."""
+    listener = socket.create_server(("127.0.0.1", 0))
+    client = socket.create_connection(listener.getsockname())
+    accepted, _ = listener.accept()
+    listener.close()
+    thread = threading.Thread(target=serve_connection,
+                              args=(accepted, Registry("cpu", 1.0), Drop(0)), daemon=True)
+    thread.start()
+    try:
+        client.sendall(wire.MAGIC)
+        wire.send_frame(client, wire.encode(
+            [wire.VERSION, os.urandom(16), 0, torch.__version__]))
+        wire.recv_frame(client)   # the handshake reply: the connection is being served
+        assert accepted.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE) != 0
+    finally:
+        client.close()
+        thread.join(10)
+    assert not thread.is_alive()
 
 
 def test_the_drop_hook_closes_mid_batch():

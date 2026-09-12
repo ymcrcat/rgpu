@@ -46,6 +46,7 @@ class Session:
         self.last_reply = None       # (seq, frame), resent after a reconnect
         self.graphs = {}             # graph id -> callable or Poison
         self.next_server_id = wire.SERVER_ID_BASE
+        self.generation = 0          # which attach owns this session now
         self.lock = threading.Lock()
 
     # --- arguments ---------------------------------------------------------
@@ -125,6 +126,9 @@ class Session:
             self.tensors.pop(tid, None)
 
     def _seed(self, seed):
+        # Process-global, so two sessions seeding at once interfere with each
+        # other's random ops. Giving each session a generator of its own would
+        # mean threading it through every factory op; out of scope for now.
         torch.manual_seed(seed)
 
     def _compile(self, gid, nodes, compiler, mode):
@@ -138,8 +142,15 @@ class Session:
 
     def _call(self, gid, in_ids, out_ids):
         fn = self.graphs.get(gid)
-        if fn is None or isinstance(fn, Poison):
-            self._poison(out_ids, fn or Poison(f"graph {gid}", "was never compiled"))
+        if isinstance(fn, Poison):
+            self._poison(out_ids, fn)   # already reported when the compile failed
+            return
+        if fn is None:
+            # A CALL for a gid nothing ever compiled is a failure of its own,
+            # not the echo of an earlier one, so it goes through the same
+            # bookkeeping as every other failure and is reported at the next
+            # wait rather than only if an output happens to be downloaded.
+            self._fail(f"graph {gid}", LookupError("was never compiled"), out_ids)
             return
         try:
             inputs = [self._arg(wire.Ref(i)) for i in in_ids]
