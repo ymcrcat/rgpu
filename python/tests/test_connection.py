@@ -88,6 +88,7 @@ def test_an_unsendable_argument_raises_at_the_call_and_leaves_the_queue_usable(c
 def test_a_rejected_message_takes_no_sequence_number(conn):
     """Sequence numbers have to stay contiguous: _reconnect reads a gap at the
     front of the replay queue as messages the server can never be sent again."""
+    conn.flush_ops, conn.flush_bytes = 1 << 30, 1 << 30   # nothing leaves the queue
     conn.post(wire.SEED, 10)
     with pytest.raises(wire.EncodeError):
         conn.post(wire.SEED, torch.Generator())
@@ -97,9 +98,30 @@ def test_a_rejected_message_takes_no_sequence_number(conn):
     assert [seq for seq, _ in conn.unacked] == seqs
 
 
+def test_a_refused_free_puts_its_ids_back(conn, monkeypatch):
+    """_queue takes the ids out of the only place that remembers them before
+    it queues the FREE, and _append can refuse a message now. If it ever
+    refuses this one the ids must come back, in order, or the tensors they
+    name leak on the server for the rest of the session."""
+    real = session.Connection._append
+
+    def refuse_the_free(self, kind, fields, size):
+        if kind == wire.FREE:
+            raise wire.EncodeError("pretend the free could not be encoded")
+        return real(self, kind, fields, size)
+    monkeypatch.setattr(session.Connection, "_append", refuse_the_free)
+
+    session.pending_frees.extend([7, 8, 9])
+    with pytest.raises(wire.EncodeError):
+        conn.post(wire.SEED, 1)
+    assert list(session.pending_frees) == [7, 8, 9]
+    session.pending_frees.clear()
+
+
 def test_a_rejected_message_leaves_a_replay_that_still_works(conn, monkeypatch):
     """The replay after a reconnect is built from the same queue, so a message
     that failed to encode must be absent from it and leave no hole either."""
+    conn.flush_ops, conn.flush_bytes = 1 << 30, 1 << 30   # nothing leaves the queue
     conn.had_session = True
     conn.post(wire.SEED, 10)
     with pytest.raises(wire.EncodeError):
@@ -118,8 +140,10 @@ def test_a_rejected_message_leaves_a_replay_that_still_works(conn, monkeypatch):
     conn._reconnect()
 
     assert len(sent) == 1
-    assert sent[0][-2:] == [[replayed[-2][0], wire.SEED, 10],
-                            [replayed[-1][0], wire.SEED, 30]]
+    # The two seeds, and nothing between them that carries the generator: a
+    # finalizer may have slipped a FREE in, so they are found by content.
+    seeds = [m for m in sent[0] if m[1] == wire.SEED]
+    assert seeds == [[seeds[0][0], wire.SEED, 10], [seeds[1][0], wire.SEED, 30]]
     assert [m[0] for m in sent[0]] == [seq for seq, _ in replayed]
 
 

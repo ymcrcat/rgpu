@@ -129,7 +129,17 @@ class Connection:
             ids = []
             while pending_frees:
                 ids.append(pending_frees.popleft())
-            self._append(wire.FREE, (ids,), 8 * len(ids))
+            try:
+                self._append(wire.FREE, (ids,), 8 * len(ids))
+            except wire.EncodeError:
+                # _append can refuse a message now, and these ids have already
+                # been taken out of the only place that remembers them: put
+                # them back rather than leak the tensors on the server for the
+                # rest of the session. (A list of small ints always encodes,
+                # so this is a guard on the invariant, not a path with a
+                # known trigger.)
+                pending_frees.extendleft(reversed(ids))
+                raise
         return self._append(kind, fields, size)
 
     def _append(self, kind, fields, size):
