@@ -206,6 +206,13 @@ CUresult w_cuDevicePrimaryCtxRelease_v2(CUdevice dev) {
 // because then there is nobody else to harm.
 CUresult w_cuDevicePrimaryCtxReset_v2(CUdevice dev) {
   REAL("cuDevicePrimaryCtxReset_v2", CUdevice);
+  // Held across the driver call below, deliberately, not just across the
+  // check. Letting go in between would let a session bind in the gap - binding
+  // takes this lock - start using the device, and then have the reset destroy
+  // what it had just been given. The price is that a new session waits for one
+  // reset to finish before it can start, which is rare and bounded. Lock order
+  // is this, then the inventory's own mutex in forget_primary; nothing takes
+  // them the other way round.
   std::lock_guard<std::mutex> lk(g_live_mu);
   const int live = g_live_sessions;
   if (live > 1) {
