@@ -168,6 +168,25 @@ def encode(value):
     return bytes(out)
 
 
+def encode_element(value):
+    """Encode one element of a list, for encode_elements() to join up.
+
+    A list is encoded as the "L" tag, a count, then its elements' encodings
+    end to end - nothing wraps an element - so a caller that has to encode
+    elements as they arrive (to reject an unsendable one at its own call) can
+    keep the bytes and build the frame later for free, instead of encoding
+    everything a second time.
+    """
+    out = bytearray()
+    _enc(value, out, 1)   # depth as if it were already inside the list
+    return bytes(out)
+
+
+def encode_elements(parts):
+    """The encoding of the list whose elements encode_element() produced."""
+    return b"L" + struct.pack("<I", len(parts)) + b"".join(parts)
+
+
 def _put_str(tag, s, out):
     b = s.encode()
     out += tag + struct.pack("<I", len(b)) + b

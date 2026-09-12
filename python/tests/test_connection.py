@@ -25,6 +25,11 @@ def conn():
     return session.Connection(os.environ["RGPU_OPSERVER"])
 
 
+def queued(seq, *fields):
+    """A queue entry the way Connection._append makes one: number and bytes."""
+    return (seq, wire.encode_element([seq, *fields]))
+
+
 def put(conn, tid, t):
     conn.post(wire.RUN, "aten::empty_strided", "default",
               [list(t.shape), list(t.stride())],
@@ -66,6 +71,56 @@ def test_frees_queued_by_finalizers_go_out_with_the_next_batch(conn):
     conn.post(wire.SEED, 0)   # a safe point: the free goes out first
     with pytest.raises(session.RemoteError):
         conn.request(wire.DOWNLOAD, 1)
+
+
+def test_an_unsendable_argument_raises_at_the_call_and_leaves_the_queue_usable(conn):
+    """A value the wire cannot carry must fail at the call that passed it, and
+    must not be left in the queue: a message that can never be encoded would
+    otherwise make every later flush raise for the rest of the process."""
+    put(conn, 1, torch.ones(3))
+    with pytest.raises(wire.EncodeError, match="Generator"):
+        conn.post(wire.RUN, "aten::normal", "default",
+                  [0.0, 1.0], {"generator": torch.Generator()}, [2])
+    back = conn.request(wire.DOWNLOAD, 1).tensor()
+    assert torch.equal(back, torch.ones(3))
+
+
+def test_a_rejected_message_takes_no_sequence_number(conn):
+    """Sequence numbers have to stay contiguous: _reconnect reads a gap at the
+    front of the replay queue as messages the server can never be sent again."""
+    conn.post(wire.SEED, 10)
+    with pytest.raises(wire.EncodeError):
+        conn.post(wire.SEED, torch.Generator())
+    conn.post(wire.SEED, 30)
+    seqs = [seq for seq, _ in conn.pending]
+    assert seqs == list(range(seqs[0], conn.seq + 1))   # contiguous, no hole
+    assert [seq for seq, _ in conn.unacked] == seqs
+
+
+def test_a_rejected_message_leaves_a_replay_that_still_works(conn, monkeypatch):
+    """The replay after a reconnect is built from the same queue, so a message
+    that failed to encode must be absent from it and leave no hole either."""
+    conn.had_session = True
+    conn.post(wire.SEED, 10)
+    with pytest.raises(wire.EncodeError):
+        conn.post(wire.SEED, torch.Generator())
+    conn.post(wire.SEED, 30)
+    replayed = list(conn.pending)
+
+    def fake_connect(self):
+        self.sock = object()
+        self.had_session = True
+        return True, 0   # resumed, the server got none of it
+    monkeypatch.setattr(session.Connection, "_connect", fake_connect)
+    sent = []
+    monkeypatch.setattr(wire, "send_frame", lambda sock, frame: sent.append(wire.decode(frame)))
+
+    conn._reconnect()
+
+    assert len(sent) == 1
+    assert sent[0][-2:] == [[replayed[-2][0], wire.SEED, 10],
+                            [replayed[-1][0], wire.SEED, 30]]
+    assert [m[0] for m in sent[0]] == [seq for seq, _ in replayed]
 
 
 def test_the_process_connection_is_reused():
@@ -169,14 +224,14 @@ def test_reconnect_replays_exactly_the_unacknowledged_messages(monkeypatch):
     conn = session.Connection("127.0.0.1:1")
     conn.seq = 3
     conn.unacked = collections.deque([
-        [1, wire.SEED, 10],
-        [2, wire.SEED, 20],
-        [3, wire.SEED, 30],
+        queued(1, wire.SEED, 10),
+        queued(2, wire.SEED, 20),
+        queued(3, wire.SEED, 30),
     ])
     conn.unacked_bytes = 300
     conn.replay_possible = True
     conn.had_session = True
-    conn.pending = [[3, wire.SEED, 30]]   # already duplicated into unacked
+    conn.pending = [queued(3, wire.SEED, 30)]   # already duplicated into unacked
     conn.pending_bytes = 64
 
     def fake_connect(self):
@@ -201,7 +256,7 @@ def test_reconnect_replays_exactly_the_unacknowledged_messages(monkeypatch):
 def test_reconnect_resets_replay_bookkeeping_once_everything_is_applied(monkeypatch):
     conn = session.Connection("127.0.0.1:1")
     conn.seq = 2
-    conn.unacked = collections.deque([[1, wire.SEED, 1], [2, wire.SEED, 2]])
+    conn.unacked = collections.deque([queued(1, wire.SEED, 1), queued(2, wire.SEED, 2)])
     conn.unacked_bytes = 200
     conn.replay_possible = False
     conn.had_session = True
@@ -231,7 +286,7 @@ def test_reconnect_retries_when_sending_the_replay_itself_fails(monkeypatch):
 
     conn = session.Connection("127.0.0.1:1")
     conn.seq = 1
-    conn.unacked = collections.deque([[1, wire.SEED, 1]])
+    conn.unacked = collections.deque([queued(1, wire.SEED, 1)])
     conn.unacked_bytes = 64
     conn.replay_possible = True
     conn.had_session = True
