@@ -69,7 +69,7 @@ training, mixed precision, `torch.compile`, and surviving a dropped
 connection (the same reconnect story as gap 2 below, ported to this path).
 156 tests pass this way.
 
-### Over a real network
+### Over a real network (op-level)
 
 One run, native macOS Python (the CPU-only wheel, no local GPU, no Docker)
 over an ssh tunnel to a RunPod A40: 44.7 ms measured SYNC round trip, and the

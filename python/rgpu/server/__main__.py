@@ -159,7 +159,7 @@ def main(argv=None):
     if torch.device(args.device).type == "cuda":
         # A client comparing against a CPU reference is comparing against
         # float32. TF32 quietly does the matmuls and convolutions in fewer
-        # mantissa bits, which moves a ResNet-18 logit by about 1e-3 - enough
+        # mantissa bits, which moves a ResNet-18 loss by about 5e-4 - enough
         # to look like a bug in the remoting. Correctness first; a client that
         # wants the speed can set RGPU_TF32=1.
         allow = os.environ.get("RGPU_TF32") == "1"
