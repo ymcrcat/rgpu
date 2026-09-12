@@ -16,3 +16,6 @@ __pycache__/
 build-macos/
 docker/*.so*
 docker/install.sh
+
+python/.venv/
+python/*.egg-info/
