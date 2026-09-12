@@ -626,6 +626,11 @@ CUresult cuLaunchKernel(CUfunction f, unsigned int gridDimX,
                        blockDimZ, sharedMemBytes, hStream, kernelParams, extra);
 }
 
+// Refused rather than forwarded. The launch message carries no way to say
+// "cooperative", so the server would run this through the ordinary
+// cuLaunchKernel and the co-residency the kernel was written around would not
+// be there: a grid-wide barrier would hang or, worse, return wrong numbers
+// that look right. An error the caller can see beats an answer it cannot check.
 CUresult cuLaunchCooperativeKernel(CUfunction f, unsigned int gridDimX,
                                    unsigned int gridDimY, unsigned int gridDimZ,
                                    unsigned int blockDimX,
@@ -633,11 +638,12 @@ CUresult cuLaunchCooperativeKernel(CUfunction f, unsigned int gridDimX,
                                    unsigned int blockDimZ,
                                    unsigned int sharedMemBytes,
                                    CUstream hStream, void** kernelParams) {
-  // Cooperative launch has stricter co-residency guarantees, which the remote
-  // driver still provides; only the marshalling differs.
-  return launch_common(f, gridDimX, gridDimY, gridDimZ, blockDimX, blockDimY,
-                       blockDimZ, sharedMemBytes, hStream, kernelParams,
-                       nullptr);
+  (void)f; (void)gridDimX; (void)gridDimY; (void)gridDimZ;
+  (void)blockDimX; (void)blockDimY; (void)blockDimZ;
+  (void)sharedMemBytes; (void)hStream; (void)kernelParams;
+  return rgpu::unimplemented(
+      "cuLaunchCooperativeKernel",
+      "cooperative launch guarantees cannot be preserved across the wire");
 }
 
 CUresult cuMemAllocHost_v2(void** pp, size_t bytesize) {

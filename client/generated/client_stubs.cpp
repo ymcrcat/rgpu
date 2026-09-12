@@ -1703,7 +1703,7 @@ extern "C" CUresult cuLaunch(CUfunction f) {
 }
 
 extern "C" CUresult cuLaunchCooperativeKernelMultiDevice(CUDA_LAUNCH_PARAMS *launchParamsList, unsigned int numDevices, unsigned int flags) {
-  return rgpu::unimplemented("cuLaunchCooperativeKernelMultiDevice", "struct-pointer:struct CUDA_LAUNCH_PARAMS_st");
+  return rgpu::unimplemented("cuLaunchCooperativeKernelMultiDevice", "cooperative launch guarantees cannot be preserved across the wire");
 }
 
 extern "C" CUresult cuLaunchGrid(CUfunction f, int grid_width, int grid_height) {

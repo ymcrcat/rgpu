@@ -17,6 +17,10 @@
 // from its own header is covered too: a wrong size truncates the image and the
 // load fails.
 //
+// It also pins down what the launch path refuses: a cooperative launch, whose
+// guarantees nothing here can carry, must come back as an error rather than as
+// an ordinary launch that looks like it worked.
+//
 //   LD_LIBRARY_PATH=build RGPU_SERVER=127.0.0.1:9713 ./launch_smoke
 
 #include <cstdio>
@@ -120,6 +124,30 @@ int main() {
   if (launch_rc == CUDA_SUCCESS && sync_rc == CUDA_SUCCESS) {
     std::fprintf(stderr, "FAIL: a launch with wrong arguments was never "
                          "reported, so the checks above prove nothing\n");
+    g_failures++;
+  }
+
+  // A cooperative launch is refused, not quietly turned into an ordinary one.
+  // Nothing on the wire says "cooperative", so forwarding it would run a
+  // kernel written around a grid-wide barrier without that barrier, and it
+  // would hang or produce wrong numbers rather than fail.
+  const CUresult coop =
+      cuLaunchCooperativeKernel(fn, 8, 1, 1, 256, 1, 1, 0, nullptr, args);
+  if (coop != CUDA_ERROR_NOT_SUPPORTED) {
+    std::fprintf(stderr, "FAIL: cuLaunchCooperativeKernel -> %d, expected "
+                         "CUDA_ERROR_NOT_SUPPORTED (%d)\n",
+                 coop, CUDA_ERROR_NOT_SUPPORTED);
+    g_failures++;
+  }
+  // The multi-device form is refused for the same reason, before it looks at
+  // anything in the launch parameters.
+  CUDA_LAUNCH_PARAMS one{};
+  one.function = fn;
+  const CUresult coop_multi = cuLaunchCooperativeKernelMultiDevice(&one, 1, 0);
+  if (coop_multi != CUDA_ERROR_NOT_SUPPORTED) {
+    std::fprintf(stderr, "FAIL: cuLaunchCooperativeKernelMultiDevice -> %d, "
+                         "expected CUDA_ERROR_NOT_SUPPORTED (%d)\n",
+                 coop_multi, CUDA_ERROR_NOT_SUPPORTED);
     g_failures++;
   }
 

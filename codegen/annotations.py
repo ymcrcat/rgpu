@@ -41,6 +41,8 @@ HANDWRITTEN = {
     # Argument marshalling depends on a per-function parameter layout the
     # server has to look up. See docs/.../design.md, hard problem 2.
     "cuLaunchKernel",
+    # Refused by hand rather than through UNSUPPORTED, so the refusal sits next
+    # to the ordinary launch it would otherwise be mistaken for.
     "cuLaunchCooperativeKernel",
     # Host allocations live on the client, not the server.
     "cuMemAllocHost_v2",
@@ -93,6 +95,11 @@ UNSUPPORTED = {
     # CUlaunchConfig carries an attribute array we do not marshal yet. Used for
     # thread-block clusters on Hopper and later; nothing in milestone 1 needs it.
     "cuLaunchKernelEx": "launch config attributes not marshalled yet",
+    # Named here so the refusal reads as a decision rather than as a struct we
+    # happen not to marshal. Its single-device counterpart is refused by hand
+    # in client/shim.cpp for the same reason.
+    "cuLaunchCooperativeKernelMultiDevice":
+        "cooperative launch guarantees cannot be preserved across the wire",
     "cuMemAllocManaged": "managed memory cannot span a network",
     "cuMemHostGetDevicePointer_v2": "zero-copy host mapping cannot span a network",
     "cuMemHostGetDevicePointer": "zero-copy host mapping cannot span a network",
