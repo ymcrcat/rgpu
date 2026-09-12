@@ -62,8 +62,22 @@ if [[ -x "$BUILD/reconnect_smoke" ]]; then
     fi
     sleep 0.1
   done
-  LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$DROP_PORT" \
-    "$BUILD/reconnect_smoke" || rc=1
+  # RGPU_BATCH=1 is already the default, but pinned here because the test
+  # depends on it: with batching off the launch that has to fail without a
+  # reply becomes a round trip, fails at the call site, and nothing is ever
+  # deferred. A stray environment variable should not produce a red that reads
+  # like a server regression.
+  drop_out=$(LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$DROP_PORT" \
+    RGPU_BATCH=1 "$BUILD/reconnect_smoke" 2>&1) || rc=1
+  printf '%s\n' "$drop_out"
+  # The break has to have actually happened. The test's checks all pass on a
+  # connection that was never dropped, so without this it would quietly stop
+  # testing anything the day the drop point moved.
+  if ! printf '%s\n' "$drop_out" | grep -q "and resumed"; then
+    echo "FAIL: the connection was never dropped and resumed, so reconnect_smoke"
+    echo "      proved nothing; check where RGPU_DROP_AFTER lands"
+    rc=1
+  fi
   kill $DROP_SRV 2>/dev/null
 fi
 

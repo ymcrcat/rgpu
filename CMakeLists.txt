@@ -199,6 +199,9 @@ target_link_libraries(rpc_smoke PRIVATE rgpu_client)
 # the extra[] handoff.
 add_executable(launch_smoke tests/launch_smoke.cpp)
 target_link_libraries(launch_smoke PRIVATE rgpu_client)
+# It calls the deprecated multi-device cooperative launch on purpose, to check
+# that the shim refuses it.
+target_compile_options(launch_smoke PRIVATE -Wno-deprecated-declarations)
 
 # Checks that cuBLAS and cuBLASLt arguments survive the wire. Needs both shims
 # and the fake libraries in the test server.

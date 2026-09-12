@@ -4,6 +4,8 @@
 
 #include <cstdint>
 
+#include "common/generated/api_ids.h"
+
 namespace rgpu {
 
 enum InternalId : uint32_t {
@@ -32,5 +34,21 @@ enum InternalId : uint32_t {
   // asked for mode zero whatever the caller wanted.
   API_rgpu_capture_mode = kInternalBase + 6,
 };
+
+// api_name() is generated from cuda.h and so knows only CUDA's own ids;
+// everything above comes out as "?". That includes the kernel launch, which is
+// the call a log line most needs to name, because it is the one that carries a
+// failure nothing else will report. Answers for both ranges.
+inline const char* call_name(uint32_t id) {
+  switch (id) {
+    case API_rgpu_param_layout: return "rgpu_param_layout";
+    case API_rgpu_launch: return "rgpu_launch";
+    case API_rgpu_hello: return "rgpu_hello";
+    case API_rgpu_capture_info: return "rgpu_capture_info";
+    case API_rgpu_graph_nodes: return "rgpu_graph_nodes";
+    case API_rgpu_capture_mode: return "rgpu_capture_mode";
+    default: return api_name(id);
+  }
+}
 
 }  // namespace rgpu

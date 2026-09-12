@@ -50,6 +50,10 @@ int main() {
   // that here; the failure waits on the server for the next call that does
   // reply. Nothing else after this point fails, so if the error is reported
   // later it can only be this one, carried across the break.
+  //
+  // That it returns success here is the premise of the rest, not an aside: a
+  // client that started rejecting a null handle locally would make everything
+  // below meaningless, and it should say so here rather than at the sync.
   CUdeviceptr scratch = 0;
   CHECK(cuMemAlloc(&scratch, n));
   unsigned char packed[28] = {0};
@@ -57,7 +61,7 @@ int main() {
   void* extra[] = {CU_LAUNCH_PARAM_BUFFER_POINTER, packed,
                    CU_LAUNCH_PARAM_BUFFER_SIZE, &packed_size,
                    CU_LAUNCH_PARAM_END};
-  cuLaunchKernel(nullptr, 8, 1, 1, 256, 1, 1, 0, nullptr, nullptr, extra);
+  CHECK(cuLaunchKernel(nullptr, 8, 1, 1, 256, 1, 1, 0, nullptr, nullptr, extra));
 
   // Then a stretch of asynchronous work that does succeed, long enough that
   // the server's drop point lands inside it. That is what makes this the

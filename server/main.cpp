@@ -320,26 +320,26 @@ void serve(int fd, const std::shared_ptr<Session>& session) {
       handled = true;
       result = CUDA_ERROR_OUT_OF_MEMORY;
       rsp = Buffer();
-      logf("%s asked for more memory than could be allocated", api_name(h.api_id));
+      logf("%s asked for more memory than could be allocated", call_name(h.api_id));
     } catch (const std::exception& e) {
       handled = true;
       result = CUDA_ERROR_UNKNOWN;
       rsp = Buffer();
-      logf("%s failed: %s", api_name(h.api_id), e.what());
+      logf("%s failed: %s", call_name(h.api_id), e.what());
     }
     if (!handled) {
-      logf("unknown api id %u (%s)", h.api_id, api_name(h.api_id));
+      logf("unknown api id %u (%s)", h.api_id, call_name(h.api_id));
       result = CUDA_ERROR_NOT_SUPPORTED;
     } else if (!req.ok()) {
       // A short read means client and server disagree about the wire layout,
       // which corrupts everything after it. Better to drop the connection.
       logf("malformed request for %s; dropping connection",
-           api_name(h.api_id));
+           call_name(h.api_id));
       break;
     }
 
     if (g_verbose) {
-      logf("%s -> %d (%zu bytes back)", api_name(h.api_id), result, rsp.size());
+      logf("%s -> %d (%zu bytes back)", call_name(h.api_id), result, rsp.size());
     }
 
     if (h.flags & kFlagNoReply) {
@@ -353,17 +353,29 @@ void serve(int fd, const std::shared_ptr<Session>& session) {
         }
       }
       if (held) {
-        // Always logged: an application that ignores the next return value
-        // would otherwise never learn this happened.
+        // Always logged: this is the only place the failure is named, and an
+        // application that ignores the next return value would otherwise never
+        // learn it happened at all.
         logf("%s failed with %d and had no reply to report it in; the next "
-             "call that replies will carry it", api_name(h.api_id), result);
+             "call that replies will carry it", call_name(h.api_id), result);
+      } else if (result != CUDA_SUCCESS && g_verbose) {
+        // One slot holds one error, so everything that fails behind the first
+        // one is dropped. CUDA's own sticky error behaves the same way, and
+        // the first is the one worth having, but a session that keeps failing
+        // looks silent from the outside unless we say so here.
+        logf("%s also failed with %d, behind an error already waiting",
+             call_name(h.api_id), result);
       }
       continue;
     }
 
     {
       std::lock_guard<std::mutex> lk(session->mu);
-      if (session->pending_async != CUDA_SUCCESS) {
+      // Only a call that succeeded on its own can carry someone else's error.
+      // Handing the older one to a call that just failed would report the
+      // wrong failure and lose the real one, which is the opposite of the
+      // point: the deferred error stays held for the next call that succeeds.
+      if (result == CUDA_SUCCESS && session->pending_async != CUDA_SUCCESS) {
         result = session->pending_async;
         session->pending_async = CUDA_SUCCESS;
       }
