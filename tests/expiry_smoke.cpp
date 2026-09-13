@@ -920,14 +920,15 @@ int capture(const char* self, bool relaxed) {
     return 1;
   }
   const std::string after = read_stats();
-  // The serving thread is put back in the default mode before the release:
-  // one exchange if C left it RELAXED, none if C left it in the default.
+  // The serving thread is put into RELAXED before the release, because a GLOBAL
+  // capture live on any other thread would otherwise restrict its frees: one
+  // exchange if C left it in GLOBAL, none if C already left it RELAXED.
   const long swaps = call_count("modeswaps") - swaps_with_c;
-  if (swaps != (relaxed ? 1 : 0)) {
+  if (swaps != (relaxed ? 0 : 1)) {
     std::fprintf(stderr, "FAIL: C's expiry made %ld capture-mode exchange(s); "
-                         "expected %d, putting the serving thread back in the "
-                         "default mode only if C left it elsewhere\n",
-                 swaps, relaxed ? 1 : 0);
+                         "expected %d, putting the serving thread into RELAXED "
+                         "only if C had left it elsewhere\n",
+                 swaps, relaxed ? 0 : 1);
     g_failures++;
   }
   for (const char* kind : {"allocs", "streams", "graphs", "execs", "captures",

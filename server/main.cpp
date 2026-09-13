@@ -879,10 +879,12 @@ void serve_session(std::shared_ptr<Session> session, SessionKey key) {
   // at which that can be put right, and it has to happen on this thread,
   // because the contexts they live in are this thread's.
   //
-  // In the default capture mode, not whatever mode the last client thread
-  // served left this thread in; the release then ends any capture the session
-  // left open before it frees anything (release_inventory).
-  client_threads_restore_default_mode(threads);
+  // In RELAXED capture mode, not whatever mode the last client thread served
+  // left this thread in: RELAXED is immune to the restrictions another
+  // session's live GLOBAL capture would put on this thread's frees. The release
+  // then ends any capture this session left open before it frees anything
+  // (release_inventory).
+  client_threads_relax_capture_mode(threads);
   const std::string summary = release_inventory(session->inventory);
   inventory_bind(nullptr);
   logf("session %llx expired; %s%s", (unsigned long long)key.first,

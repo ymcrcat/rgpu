@@ -291,16 +291,24 @@ CUresult client_thread_show(ClientThreads& threads, ClientThread& t) {
   return show_capture_mode(threads, t);
 }
 
-void client_threads_restore_default_mode(ClientThreads& threads) {
-  if (threads.applied_mode == CU_STREAM_CAPTURE_MODE_GLOBAL) return;
-  CUstreamCaptureMode mode = CU_STREAM_CAPTURE_MODE_GLOBAL;
+void client_threads_relax_capture_mode(ClientThreads& threads) {
+  if (threads.applied_mode == CU_STREAM_CAPTURE_MODE_RELAXED) return;
+  // RELAXED, not GLOBAL. The release below frees this session's memory, and the
+  // header says a GLOBAL capture active on any other thread restricts a
+  // potentially unsafe call - a free among them - made from a thread that is
+  // not itself RELAXED. On a multi-session server another session's live GLOBAL
+  // capture could therefore make this expiring session's frees fail. RELAXED is
+  // immune to every such restriction and just as deterministic, and this is a
+  // fresh per-session thread that dies with the session, so nothing else is
+  // affected by the choice.
+  CUstreamCaptureMode mode = CU_STREAM_CAPTURE_MODE_RELAXED;
   const CUresult r = cuThreadExchangeStreamCaptureMode(&mode);
   if (r == CUDA_SUCCESS) {
-    threads.applied_mode = CU_STREAM_CAPTURE_MODE_GLOBAL;
+    threads.applied_mode = CU_STREAM_CAPTURE_MODE_RELAXED;
     return;
   }
-  logf("session cleanup: could not put the serving thread back in the default "
-       "stream capture mode (%d); releasing in the mode a client left it in",
+  logf("session cleanup: could not put the serving thread into RELAXED stream "
+       "capture mode (%d); releasing in the mode a client left it in",
        r);
 }
 

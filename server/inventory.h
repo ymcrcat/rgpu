@@ -121,7 +121,7 @@ void* driver_wrapper(const char* name);
 // restricted by them, and their graphs released with the rest; what lives
 // inside a context before the context itself; and the shared primary context
 // last of all. The serving thread's own capture mode is the caller's to put
-// back first (client_threads_restore_default_mode). Every failure is logged and none of them stops
+// back first (client_threads_relax_capture_mode). Every failure is logged and none of them stops
 // the rest. Returns a description of what happened, for the caller's log.
 std::string release_inventory(Inventory& inv);
 

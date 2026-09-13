@@ -130,8 +130,8 @@ struct ClientThreads {
 
   // Forgets; releases nothing, and changes nothing in the driver. The
   // serving thread keeps whatever capture mode it last had, which is still
-  // recorded in applied_mode, until expiry puts it back
-  // (client_threads_restore_default_mode).
+  // recorded in applied_mode, until expiry puts it into RELAXED
+  // (client_threads_relax_capture_mode).
   void clear() {
     live.clear();
     retired.clear();
@@ -164,12 +164,13 @@ inline bool client_thread_shown(const ClientThread& t,
 // could not be left without a context or given the mode.
 CUresult client_thread_show(ClientThreads& threads, ClientThread& t);
 
-// Puts the serving thread back in the default capture mode, whatever the last
+// Puts the serving thread into RELAXED stream capture mode, whatever the last
 // client thread served left it in, and records that in applied_mode. For
-// expiry, before the session's inventory is released: the release then runs
-// in a known mode rather than in one a client chose. Logged if the driver
-// refuses.
-void client_threads_restore_default_mode(ClientThreads& threads);
+// expiry, before the session's inventory is released: RELAXED is immune to the
+// capture restrictions that another session's live GLOBAL capture would
+// otherwise impose on this thread's frees, and just as deterministic. Logged if
+// the driver refuses.
+void client_threads_relax_capture_mode(ClientThreads& threads);
 
 // cuThreadExchangeStreamCaptureMode for the thread whose request is running:
 // the driver's exchange on the serving thread, which already has that
