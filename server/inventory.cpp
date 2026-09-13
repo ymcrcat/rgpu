@@ -865,6 +865,11 @@ CUresult w_cuGraphClone(CUgraph* clone, CUgraph original) {
 // Everything whose result a client can still be holding when it dies. Calls
 // that are not here are not recorded, which is only safe because they create
 // nothing that outlives the call: a memcpy, a query, a launch.
+//
+// A few creators are left off deliberately, as untracked limits listed in the
+// README: among them cuTexRefCreate (deprecated, and needing a current context,
+// so its cuTexRefDestroy would too), whose texture references stay until the
+// server exits rather than being reclaimed at expiry.
 const NamedFn kWrappedCalls[] = {
     {"cuMemAlloc_v2", reinterpret_cast<void*>(&w_cuMemAlloc_v2)},
     {"cuMemAllocPitch_v2", reinterpret_cast<void*>(&w_cuMemAllocPitch_v2)},
