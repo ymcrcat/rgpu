@@ -1493,6 +1493,79 @@ void refusals_are_deferred_to_their_own_thread(CUcontext p0) {
   CHECK(s.set_current(kOther, nullptr));
 }
 
+// A call that mutates the thread's context stack - set-current, push, pop -
+// returns success once it has applied the change, and the client reads that
+// success to keep its own idea of the stack in step with the server's. A
+// deferred error held for the thread from an earlier no-reply call must not be
+// folded into that success: doing so would tell the client the stack op failed
+// while the server had already applied it, and the two would disagree about
+// the stack from then on. The held error waits for the thread's next call whose
+// reply the client reads as a plain result instead, and surfaces there once.
+void observed_state_replies_never_carry_a_deferred_error(CUcontext p0) {
+  std::printf("-- a held deferred error is not folded into a context-stack "
+              "call, whose reply the client reads as state\n");
+  constexpr uint32_t kActor = 41;
+  RawSession s;
+  if (!s.open()) {
+    fail_at(__FILE__, __LINE__, "could not open a session of our own");
+    return;
+  }
+  CHECK(s.set_current(kActor, p0));  // a stack to act on, no error held yet
+
+  // Arms a deferred error on kActor: a push of no context, which the server
+  // refuses itself (INVALID_CONTEXT), sent without a reply so the failure is
+  // held for the thread's next reply-bearing call.
+  auto arm = [&] {
+    rgpu::Buffer push_null;
+    push_null.put<uint64_t>(0);
+    EXPECT(s.send(rgpu::API_cuCtxPushCurrent_v2, kActor, push_null, true),
+           "could not arm a deferred error");
+  };
+  // The held error surfaces on the next plain call, once and only once.
+  auto surfaces_once = [&](const char* what) {
+    CUresult r = CUDA_ERROR_UNKNOWN;
+    s.get_current(kActor, &r);
+    if (r != CUDA_ERROR_INVALID_CONTEXT) {
+      char msg[200];
+      std::snprintf(msg, sizeof(msg),
+                    "%s: the held error did not surface on the next plain "
+                    "call (got %d)",
+                    what, (int)r);
+      fail_at(__FILE__, __LINE__, msg);
+    }
+    s.get_current(kActor, &r);
+    EXPECT(r == CUDA_SUCCESS, "the held error surfaced more than once");
+  };
+  auto not_folded = [&](CUresult got, const char* what) {
+    if (got != CUDA_SUCCESS) {
+      char msg[200];
+      std::snprintf(msg, sizeof(msg),
+                    "%s returned %d: a deferred error was folded into a reply "
+                    "the client reads as stack state, so the client would "
+                    "think it failed while the server applied it",
+                    what, (int)got);
+      fail_at(__FILE__, __LINE__, msg);
+    }
+  };
+
+  arm();
+  not_folded(s.push(kActor, p0), "a push");
+  surfaces_once("push");
+
+  arm();
+  not_folded(s.set_current(kActor, p0), "a set-current");
+  surfaces_once("set-current");
+
+  arm();
+  not_folded(s.pop(kActor), "a pop");
+  surfaces_once("pop");
+
+  // The sequence left the stack coherent: one push above what set-current
+  // seeded, so a last pop empties it and leaves the thread with no context.
+  CHECK(s.pop(kActor));
+  CHECK(s.set_current(kActor, nullptr));
+}
+
 // A thread's context stack lives in server memory, and the driver's own stack
 // on the serving thread stays one deep, so nothing but a cap stops a client
 // that pushes in a loop (RGPU_MAX_CONTEXT_STACK). A push or a create past it
@@ -1597,6 +1670,7 @@ int main(int argc, char** argv) {
   const char* stack_cap = std::getenv("RGPU_MAX_CONTEXT_STACK");
   context_stacks_are_capped(p0, stack_cap ? std::atol(stack_cap) : 0);
   refusals_are_deferred_to_their_own_thread(p0);
+  observed_state_replies_never_carry_a_deferred_error(p0);
   CHECK(cuDevicePrimaryCtxRelease(0));
   CHECK(cuDevicePrimaryCtxRelease(1));
 

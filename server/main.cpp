@@ -218,14 +218,27 @@ bool dispatch_internal(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
 // Whether a held deferred error must not be folded into this call's reply.
 // A call that succeeds can carry an earlier held error as its result (the
 // deferred-error contract), which is right when the client reads the reply
-// only as success or failure. But cuThreadExchangeStreamCaptureMode returns
-// the previous capture mode, which the client tracks to bracket a stream
-// capture: fold an error into it and the server has swapped the mode while the
-// client believes the call failed and keeps the old one, so the two disagree.
+// only as success or failure. It is wrong for a call whose success the client
+// reads as thread state it must mirror: fold an error in and the server has
+// applied the change while the client believes the call failed and does not,
+// so the two disagree from then on. Those calls:
+//   - cuThreadExchangeStreamCaptureMode returns the previous capture mode,
+//     which the client tracks to bracket a stream capture;
+//   - cuCtxSetCurrent, cuCtxPushCurrent and cuCtxPopCurrent each apply to the
+//     thread's server-side context stack before replying, and the client keeps
+//     its own idea of that stack in step from the success it reads back.
 // The held error is not lost - it stays for the thread's next call whose reply
 // is only success or failure - so it still surfaces exactly once.
 bool reply_carries_observed_state(uint32_t api_id) {
-  return api_id == API_rgpu_capture_mode;
+  switch (api_id) {
+    case API_rgpu_capture_mode:
+    case API_cuCtxSetCurrent:
+    case API_cuCtxPushCurrent_v2:
+    case API_cuCtxPopCurrent_v2:
+      return true;
+    default:
+      return false;
+  }
 }
 
 // --- client threads ---------------------------------------------------------
