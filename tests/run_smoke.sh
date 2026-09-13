@@ -197,6 +197,29 @@ if [[ -x "$BUILD/replay_smoke" ]]; then
   rm -f "$REPLAY_STATS" "$REPLAY_STATS.tmp" "$REPLAY_LOG"
 fi
 
+# A session lost while the server was busy with it. Its own server: a grace
+# period short enough to run out in the middle of a reconnect's hand-over, and
+# a hand-over held back past it (RGPU_TEST_HANDOFF_DELAY_MS, a test hook).
+# replay_smoke.cpp says more.
+if [[ -x "$BUILD/replay_smoke" ]]; then
+  echo
+  LOST_PORT=$((PORT + 18))
+  LOST_LOG=$(mktemp "${TMPDIR:-/tmp}/rgpu-lost-log.XXXXXX")
+  RGPU_SESSION_GRACE=1 RGPU_TEST_HANDOFF_DELAY_MS=2500 \
+    "$BUILD/rgpu-server-fake" "$LOST_PORT" >"$LOST_LOG" 2>&1 &
+  LOST_SRV=$!
+  for _ in $(seq 1 50); do
+    if (exec 3<>/dev/tcp/127.0.0.1/"$LOST_PORT") 2>/dev/null; then
+      exec 3<&- 3>&-
+      break
+    fi
+    sleep 0.1
+  done
+  RGPU_SERVER="127.0.0.1:$LOST_PORT" "$BUILD/replay_smoke" handoff || rc=1
+  kill $LOST_SRV 2>/dev/null
+  rm -f "$LOST_LOG"
+fi
+
 # Request ids wrapping past 0xFFFFFFFF, with the connection broken in a batch
 # that spans the wrap. Its own server: a break by frame count, which only means
 # something with one client on the server, and a stats file counting the calls

@@ -905,9 +905,34 @@ void accept_connection(int fd) {
       }
       logf("  resent the reply to request %u", unanswered_id);
     }
-    std::lock_guard<std::mutex> lk(session->mu);
-    session->fd = fd;
-    session->cv.notify_all();
+    // A test hook, off by default: holds the hand-over back, so that a test
+    // can have the session's grace period run out in the middle of it.
+    static const int handoff_delay_ms = [] {
+      const char* v = std::getenv("RGPU_TEST_HANDOFF_DELAY_MS");
+      return v ? std::atoi(v) : 0;
+    }();
+    if (handoff_delay_ms > 0) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(handoff_delay_ms));
+    }
+    // The session was live when it was looked up, but its grace period may
+    // have run out since: the check above and this hand-over are separate
+    // holds of the lock, with network writes between them. A connection handed
+    // to a session that has finished is never read, and the client, told it
+    // resumed, would wait on it forever. So the check is made again in the same
+    // hold as the hand-over, and a finished session gets the connection
+    // closed: the client comes back, and is told the session is gone.
+    {
+      std::lock_guard<std::mutex> lk(session->mu);
+      if (!session->finished) {
+        session->fd = fd;
+        session->cv.notify_all();
+        return;
+      }
+    }
+    logf("session %llx expired while a connection to it was being handed "
+         "over; closing that connection",
+         (unsigned long long)key.first);
+    ::close(fd);
     return;
   }
 

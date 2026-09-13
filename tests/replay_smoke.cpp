@@ -589,9 +589,75 @@ void claimed_progress_in_an_unknown_session() {
   ::close(fd);
 }
 
+// --- replay_smoke handoff -----------------------------------------------------
+//
+// The grace period running out while a reconnect is being handed over. The
+// handshake has told the client its session resumed; if the session then
+// expires before the connection reaches the thread that served it, nothing
+// will ever read from that connection, and the client waits forever for a
+// reply. The hand-over has to check, in the same step, that the session is
+// still there, and otherwise close the connection - the client then comes back
+// and is told the session is gone.
+//
+// The server runs with RGPU_SESSION_GRACE=1 and RGPU_TEST_HANDOFF_DELAY_MS
+// holding the hand-over back well past it, which makes the window wide enough
+// to land in every time.
+int expiry_during_handoff() {
+  std::printf("-- a session that expires while a reconnect is handed over "
+              "closes the connection\n");
+  const uint64_t session = 1;
+
+  rgpu::HandshakeReply hs{};
+  int fd = connect_session(session, 0, &hs);
+  EXPECT(fd >= 0 && hs.resumed == 0, "could not start a session");
+  if (fd < 0) return 1;
+  const Frame first = device_count(1);
+  EXPECT(send(fd, first), "could not send the first request");
+  expect_answer(fd, first, CUDA_SUCCESS, "the first request");
+  ::close(fd);
+
+  fd = connect_session(session, 1, &hs);
+  EXPECT(fd >= 0 && hs.resumed == 1,
+         "the reconnect was not told it resumed; the case needs the session "
+         "to expire after the handshake, not before");
+  if (fd < 0) return 1;
+  const auto start = std::chrono::steady_clock::now();
+  const Frame next = device_count(2);
+  send(fd, next);
+  Reply r = receive(fd);
+  const double waited = std::chrono::duration<double>(
+                            std::chrono::steady_clock::now() - start)
+                            .count();
+  std::printf("   the connection ended after %.1fs\n", waited);
+  EXPECT(!r.received,
+         "a session that expired during the hand-over answered a request");
+  // The receive times out after 10s (see dial). A connection nobody serves
+  // runs into that; one the server closed ends when the hand-over does.
+  EXPECT(waited < 8.0,
+         "the connection handed to an expired session was left open, and a "
+         "client would wait on it forever");
+  ::close(fd);
+
+  fd = connect_session(session, 1, &hs);
+  EXPECT(fd >= 0 && hs.resumed == 0,
+         "coming back after the hand-over failed resumed an expired session");
+  if (fd >= 0) ::close(fd);
+
+  if (g_failures) {
+    std::printf("\nFAILED: %d check(s)\n", g_failures);
+    return 1;
+  }
+  std::printf("\nPASS: a session that expires during a hand-over is not "
+              "handed a connection\n");
+  return 0;
+}
+
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
+  const std::string mode = argc > 1 ? argv[1] : "";
+  if (mode == "handoff") return expiry_during_handoff();
+
   reply_expected_request_in_flight();
   no_reply_request_in_flight();
   stale_reply_expected_copy();
