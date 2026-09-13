@@ -367,7 +367,17 @@ void queue_frame_locked(uint32_t api_id, const Buffer& req, uint32_t flags,
     {
       std::lock_guard<std::mutex> lk(g_retired_mu);
       gone.swap(g_retired);
-      g_have_retired.store(false, std::memory_order_relaxed);
+      // Never this thread's own id. A thread still calling is one whose
+      // thread-local destructors are running - any built before its first
+      // call run after the retirement - and announcing it ahead of those
+      // calls would have the server forget the context they are made in.
+      // It stays listed for the next frame another thread queues.
+      auto self = std::find(gone.begin(), gone.end(), thread_id);
+      if (self != gone.end()) {
+        gone.erase(self);
+        g_retired.push_back(thread_id);
+      }
+      g_have_retired.store(!g_retired.empty(), std::memory_order_relaxed);
     }
     if (!gone.empty()) {
       Buffer notice;

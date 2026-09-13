@@ -410,6 +410,57 @@ void wire_cases() {
              }
            });
 
+  // A thread can still call after its id has been retired: thread-local
+  // destructors run in reverse order of construction, so one built before the
+  // thread's first call - a cache that frees device memory, say - runs after
+  // the retirement. Those calls must keep the thread's id, and the thread must
+  // not announce its own retirement ahead of them, or the server would drop
+  // the context they need. Another thread announces it afterwards.
+  run_case("a thread calling after its retirement keeps its id",
+           [] {
+             std::thread e([] {
+               struct CallsOnExit {
+                 ~CallsOnExit() {
+                   EXPECT(sync_call(kApiD) == CUDA_SUCCESS,
+                          "the call from a thread-exit destructor failed");
+                 }
+               };
+               static thread_local CallsOnExit on_exit;
+               (void)on_exit;
+               EXPECT(sync_call(kApiC) == CUDA_SUCCESS, "E's call failed");
+             });
+             e.join();
+             EXPECT(sync_call(kApiMain) == CUDA_SUCCESS, "main's call failed");
+           },
+           [](int& lfd) {
+             int fd = accept_session(lfd, nullptr);
+             if (fd < 0) return;
+             std::vector<Frame> f = read_until_closed(fd);
+             ::close(fd);
+             const uint32_t want_api[] = {kApiC, kApiD,
+                                          rgpu::API_rgpu_thread_gone, kApiMain};
+             const uint32_t want_thread[] = {1, 1, 2, 2};
+             EXPECT(f.size() == 4, "expected four frames: E, E on exit, "
+                                   "notice, main");
+             if (f.size() != 4) {
+               for (const auto& x : f) {
+                 std::fprintf(stderr, "   got api %#x thread %u\n", x.h.api_id,
+                              x.h.thread_id);
+               }
+               return;
+             }
+             for (int i = 0; i < 4; i++) {
+               EXPECT(f[i].h.api_id == want_api[i],
+                      "frames arrived in the wrong order");
+               EXPECT(f[i].h.thread_id == want_thread[i],
+                      "a frame carried the wrong thread id");
+             }
+             Buffer b(f[2].payload);
+             uint32_t count = 0, id = 0;
+             EXPECT(b.get(&count) && count == 1 && b.get(&id) && id == 1,
+                    "the notice did not name the exited thread");
+           });
+
   // What a client of this version sees from a server that speaks another.
   // A server from before protocol 3 closes on a mismatch without a word.
   run_case("a server that closes on the handshake is refused cleanly",
