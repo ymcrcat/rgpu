@@ -1127,6 +1127,17 @@ void accept_connection(int fd) {
   logf("session %llx started", (unsigned long long)key.first);
   {
     std::lock_guard<std::mutex> lk(session->mu);
+    // A racing second connection with the same key can be treated as a resume
+    // of this just-created session and hand its own connection over first.
+    // Overwriting pending_fd would leak that fd and leave its client waiting
+    // forever on a connection nobody reads, so it is closed first - the same
+    // close-if-present guard the resumed hand-over above uses.
+    if (session->pending_fd >= 0) {
+      logf("session %llx: closing a connection handed over before this one "
+           "began serving it",
+           (unsigned long long)key.first);
+      ::close(session->pending_fd);
+    }
     session->pending_fd = fd;
   }
   std::thread(serve_session, session, key).detach();
