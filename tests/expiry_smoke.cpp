@@ -276,10 +276,19 @@ int hold_and_wait(int ready_fd) {
 
   // Two retains and one release: the session owns one, and the server has to
   // release exactly that many at the end.
+  //
+  // The release comes after resources are made in the primary context, and it
+  // is not the last release in the process - the parent holds a retain too -
+  // so it destroys nothing, and the server must go on owing every one of
+  // them. A server that forgot a primary context's contents on any release,
+  // rather than only the last, would leave them behind at expiry, and the
+  // counts would never come back to the parent's.
   CUcontext primary = nullptr;
   CHECK(cuDevicePrimaryCtxRetain(&primary, dev));
   CHECK(cuDevicePrimaryCtxRetain(&primary, dev));
   CHECK(cuCtxSetCurrent(primary));
+  Held in_primary;
+  take_driver_resources(&in_primary);
   CHECK(cuDevicePrimaryCtxRelease(dev));
 
   Held held;
