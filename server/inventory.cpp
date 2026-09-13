@@ -142,23 +142,22 @@ bool still_current(int dev, uint64_t gen) {
 
 // Where something made from another object is about to be made: where that
 // object was recorded. A graph captured on a stream, a clone of a graph and an
-// executable instantiated from one live in their source's context, not in
-// whatever context happens to be current, so they have to be recorded there -
-// otherwise the destruction of the source's primary context would go unseen
-// for them, and they would be freed again at expiry, while the destruction of
-// the current one would skip them and leak them. That they live in the
-// source's context is inferred, not documented; the fake driver models it the
-// same way.
+// executable instantiated from one in fact belong to no context at all - the
+// real-GPU probe (check 6) confirmed each outlives the destruction of both its
+// source's context and the current context. So this is not where they live; it
+// is only a heuristic for when to give up on them. Recording them against the
+// source rather than the current context means the server stops tracking them
+// when the source's context is destroyed - forgetting them, never freeing
+// them, so the failure mode is a leak, never a stale free of what may by then
+// be somebody else's. That is the direction every uncertainty in this file is
+// made to fail in. (The client is expected to destroy them itself; a real
+// driver does not take them with any context.)
 //
 // A null source is the current context's default stream, so it is recorded in
 // the current context. A non-null source this session has no record of - a
-// handle it never made, such as another session's - lives who knows where, and
-// whatever destroys that context will not be seen from here. Recorded in the
-// current context, the object would be freed at expiry even if its real
-// context had long since been destroyed with it: a stale free, of what may by
-// then be somebody else's. So it is recorded as made in a generation that has
-// already ended, and expiry skips it. The worst case is that the object leaks,
-// which is the direction every uncertainty in this file is made to fail in.
+// handle it never made, such as another session's - is recorded as made in a
+// generation that has already ended, and expiry skips it, so again the worst
+// case is a leak rather than a stale free.
 Stamp stamp_of(Inventory::Items Inventory::*which, uint64_t source) {
   Inventory* inv = t_inv;
   if (!inv || !source) return stamp();

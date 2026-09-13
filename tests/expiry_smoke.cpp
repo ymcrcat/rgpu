@@ -144,6 +144,15 @@ struct Held {
   CUdeviceptr a = 0, b = 0;
   CUstream stream = nullptr;
   CUevent event = nullptr;
+  // A captured graph, a clone of it and an executable made from it. These
+  // belong to no context (real-GPU probe, check 6), so a context destroy, a
+  // reset or a last release does not take them with it: a session that tears
+  // its context down while still holding them has to destroy them itself
+  // (destroy_held_graphs), or they leak. A session that simply holds them until
+  // it expires has the server release them like anything else.
+  CUgraph graph = nullptr;
+  CUgraphExec exec = nullptr;
+  CUgraph clone = nullptr;
 };
 
 // What the driver hands out, in whatever context is current.
@@ -159,13 +168,20 @@ void take_driver_resources(Held* held) {
   const std::vector<unsigned char> image = fake_fatbin();
   CUmodule mod = nullptr;
   CHECK(cuModuleLoadData(&mod, image.data()));
-  CUgraph graph = nullptr;
-  CUgraphExec exec = nullptr;
   CHECK(cuStreamBeginCapture(held->stream, CU_STREAM_CAPTURE_MODE_GLOBAL));
-  CHECK(cuStreamEndCapture(held->stream, &graph));
-  CHECK(cuGraphInstantiateWithFlags(&exec, graph, 0));
-  CUgraph clone = nullptr;
-  CHECK(cuGraphClone(&clone, graph));
+  CHECK(cuStreamEndCapture(held->stream, &held->graph));
+  CHECK(cuGraphInstantiateWithFlags(&held->exec, held->graph, 0));
+  CHECK(cuGraphClone(&held->clone, held->graph));
+}
+
+// Destroys the context-less graph objects a Held carries. No context teardown
+// takes them, so a session that is about to destroy, reset or release its
+// context while holding them destroys them here first. A context must be
+// current.
+void destroy_held_graphs(const Held& held) {
+  CHECK(cuGraphExecDestroy(held.exec));
+  CHECK(cuGraphDestroy(held.clone));
+  CHECK(cuGraphDestroy(held.graph));
 }
 
 void take_resources(CUdevice dev, Held* held, bool own_context) {
@@ -209,11 +225,13 @@ void take_resources(CUdevice dev, Held* held, bool own_context) {
 //
 // Not only memory. The server forgets every kind of thing it recorded in the
 // primary context when the device is reset, so every kind the driver hands
-// out is taken here: a driver whose reset left the streams, events, modules and
-// graphs behind would show them as held at the end, and a server that went on
-// to release them would show as stale. Library handles are not taken: they are
-// the libraries' objects, not the driver's, and the fake libraries do not
-// model a reset.
+// out is taken here: a driver whose reset left the streams, events and modules
+// behind would show them as held at the end, and a server that went on to
+// release them would show as stale. The captured graph, its clone and the
+// executable are the exception: they belong to no context (real-GPU probe,
+// check 6), so no reset takes them, and this session destroys them itself
+// before resetting. Library handles are not taken: they are the libraries'
+// objects, not the driver's, and the fake libraries do not model a reset.
 int reset_alone() {
   CHECK(cuInit(0));
   CUdevice dev = 0;
@@ -227,6 +245,9 @@ int reset_alone() {
   CHECK(cuMemAlloc(&b, kBytes));
   Held held;
   take_driver_resources(&held);
+  // The graph objects belong to no context, so the reset will not take them;
+  // destroy them here, while the primary context is still current.
+  destroy_held_graphs(held);
 
   const CUresult r = cuDevicePrimaryCtxReset(dev);
   if (r != CUDA_SUCCESS) {
@@ -283,6 +304,9 @@ int release_alone() {
   CHECK(cuCtxSetCurrent(primary));
   Held held;
   take_driver_resources(&held);
+  // The graph objects belong to no context, so the last release will not take
+  // them; destroy them here, while the primary context is still current.
+  destroy_held_graphs(held);
   CHECK(cuDevicePrimaryCtxRelease(dev));
 
   const std::string after = read_stats();
@@ -339,12 +363,13 @@ int detach_alone() {
 }
 
 // A graph captured on a stream, a clone of a graph and an executable made
-// from one belong to the context of the object they came from, not to
-// whatever context is current when they are made. Made here on device 0's
-// objects while device 1 is current, then device 0's primary context is
-// destroyed by this session's last release on it. The server has to have
-// recorded them as device 0's: recorded as device 1's, it would not see
-// them go, and would free all three again at expiry, which is stale.
+// from one belong to no context at all (real-GPU probe, check 6): they outlive
+// the capture context and every other. Made here on device 0's objects while
+// device 1 is current, they survive this session's last release on device 0 -
+// which does destroy device 0's stream - so this session destroys them itself
+// rather than leak them. The server records them under device 0 as a heuristic
+// for when to give up on them; it forgets them on the release and never frees
+// them again, so nothing is stale either way.
 //
 // Needs a server with two devices (RGPU_FAKE_DEVICES=2).
 int derived_alone() {
@@ -373,8 +398,17 @@ int derived_alone() {
   CHECK(cuStreamBeginCapture(s, CU_STREAM_CAPTURE_MODE_GLOBAL));
   CHECK(cuStreamEndCapture(s, &captured));
 
+  // The graph objects belong to no context, so releasing device 0 leaves them;
+  // destroy them here (device 1 is current), so only device 0's stream goes
+  // with the release.
+  CHECK(cuGraphExecDestroy(exec));
+  CHECK(cuGraphDestroy(clone));
+  CHECK(cuGraphDestroy(g));
+  CHECK(cuGraphDestroy(captured));
+
   CHECK(cuDevicePrimaryCtxRelease(0));
-  // The premise: all of it really was device 0's, and went with it.
+  // The premise: device 0's stream went with device 0, and freeing the
+  // context-less graph objects above was neither stale nor left anything.
   const std::string after = read_stats();
   for (const char* kind : {"streams", "graphs", "execs", "stale"}) {
     if (field(after, kind) != 0) {
@@ -389,7 +423,8 @@ int derived_alone() {
     return 1;
   }
   // Device 1's retain is left for expiry to release.
-  std::printf("PASS: objects made from device 0's objects went with device 0\n");
+  std::printf("PASS: graph objects made on device 0 belong to no context and "
+              "are freed by their maker\n");
   return 0;
 }
 
@@ -529,6 +564,10 @@ int tenant_a(int ready_fd) {
   CHECK(cuCtxSetCurrent(primary));
   Held held;
   take_driver_resources(&held);
+  // The graph objects belong to no context, so another tenant's last release
+  // will not take them with the primary context; destroy them here, while this
+  // tenant still has a current context, so they do not leak.
+  destroy_held_graphs(held);
   CHECK(cuDevicePrimaryCtxRelease(0));
   const char ok = g_failures ? 'x' : 'k';
   if (::write(ready_fd, &ok, 1) != 1) return 1;

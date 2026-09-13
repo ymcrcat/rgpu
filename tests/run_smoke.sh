@@ -404,8 +404,9 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
   #            must then free nothing (expiry_smoke.cpp says more). Three
   #            sessions to wait for.
   #   derived: graphs, clones and executables made from device 0's objects
-  #            while device 1 is current go with device 0's primary context,
-  #            and expiry must not free them again. Two devices.
+  #            while device 1 is current belong to no context, so releasing
+  #            device 0 leaves them and their maker destroys them; expiry must
+  #            free nothing again. Two devices.
   #   foreign: a graph captured on another session's stream is of unknown
   #            placement, so the capturing session's expiry leaves it alone.
   #            The other session cleans it up. Two sessions to wait for.

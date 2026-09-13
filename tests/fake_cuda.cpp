@@ -203,11 +203,13 @@ CUresult need_context() {
 //     read here as saying a null stream means the current context's.
 //
 // Objects made from other objects - a graph captured on a stream, a clone of
-// a graph, an executable instantiated from one - belong to the context of the
-// object they were made from, whichever context is current. That is also
-// INFERRED, not documented. The nearest text is cuGraphInstantiate's, for
-// graphs instantiated for device launch: "The graph's nodes must reside on a
-// single context".
+// a graph, an executable instantiated from one - belong to no context at all.
+// The real-GPU probe (check 6) confirmed that each survives the destruction of
+// both the capture context and the current context: it lives until it is
+// explicitly destroyed. So the fake records them under no context (nullptr),
+// and a context's destruction or a primary-context reset never takes them.
+// (A launch of such an object still needs some context current, as any call
+// here does.)
 //
 // What still needs a context is unchanged: a call the header documents
 // CUDA_ERROR_INVALID_CONTEXT for still needs one current and usable. A handle
@@ -1240,8 +1242,8 @@ CUresult cuStreamBeginCapture_v2(CUstream stream, CUstreamCaptureMode mode) {
   return CUDA_SUCCESS;
 }
 
-// The graph belongs to the stream's context, which is where it was captured
-// (inferred; see the note on what lives in a context).
+// The graph belongs to no context (see the note on what lives in a context):
+// it outlives the capture context and every other.
 CUresult cuStreamEndCapture(CUstream stream, CUgraph* graph) {
   unsigned long long h = 0;
   {
@@ -1256,7 +1258,7 @@ CUresult cuStreamEndCapture(CUstream stream, CUgraph* graph) {
       return CUDA_ERROR_STREAM_CAPTURE_WRONG_THREAD;
     }
     g_captures.erase(it);
-    if (graph) h = mint_in_locked(&g_graphs, 0xC0FFEEu, ctx);
+    if (graph) h = mint_in_locked(&g_graphs, 0xC0FFEEu, /*ctx=*/nullptr);
   }
   rgpu_fake::count(rgpu_fake::kCapture, -1);
   if (!graph) return CUDA_ERROR_INVALID_VALUE;
@@ -1298,19 +1300,18 @@ CUresult cuStreamGetCaptureInfo_v2(CUstream stream,
   return CUDA_SUCCESS;
 }
 
-// An executable, and a clone, belong to the graph's context (inferred; see
-// the note on what lives in a context).
+// An executable, and a clone, belong to no context (see the note on what
+// lives in a context): each outlives the graph's context and every other.
 CUresult cuGraphInstantiateWithFlags(CUgraphExec* exec, CUgraph graph,
                                      unsigned long long) {
   unsigned long long h = 0;
   {
     std::lock_guard<std::mutex> lk(g_mu);
-    CUcontext ctx = nullptr;
     CUresult r = owned_locked(g_graphs, reinterpret_cast<unsigned long long>(graph),
-                              CUDA_ERROR_INVALID_VALUE, &ctx);
+                              CUDA_ERROR_INVALID_VALUE);
     if (r != CUDA_SUCCESS) return r;
     if (!exec) return CUDA_ERROR_INVALID_VALUE;
-    h = mint_in_locked(&g_graph_execs, 0xE7E0u, ctx);
+    h = mint_in_locked(&g_graph_execs, 0xE7E0u, /*ctx=*/nullptr);
   }
   *exec = reinterpret_cast<CUgraphExec>(h);
   rgpu_fake::count(rgpu_fake::kGraphExec, 1);
@@ -1329,12 +1330,11 @@ CUresult cuGraphClone(CUgraph* clone, CUgraph original) {
   unsigned long long h = 0;
   {
     std::lock_guard<std::mutex> lk(g_mu);
-    CUcontext ctx = nullptr;
     CUresult r = owned_locked(g_graphs,
                               reinterpret_cast<unsigned long long>(original),
-                              CUDA_ERROR_INVALID_VALUE, &ctx);
+                              CUDA_ERROR_INVALID_VALUE);
     if (r != CUDA_SUCCESS) return r;
-    h = mint_in_locked(&g_graphs, 0xC0FFEEu, ctx);
+    h = mint_in_locked(&g_graphs, 0xC0FFEEu, /*ctx=*/nullptr);
   }
   *clone = reinterpret_cast<CUgraph>(h);
   rgpu_fake::count(rgpu_fake::kGraph, 1);

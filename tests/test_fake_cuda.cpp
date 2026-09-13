@@ -353,23 +353,31 @@ void handles_carry_their_context() {
   EXPECT(stat(rgpu_fake::kStale) == stale,
          "a handle used under another context is live, not stale");
 
-  // The clone and its executable were made from device 0's graph, so they
-  // live in device 0's primary context however they were reached: resetting
-  // device 0 takes them, the graph and the stream with it. The module was
-  // already unloaded above.
+  // The captured graph, its clone and the executable belong to no context:
+  // they outlive the reset of device 0, and every context's destruction, until
+  // they are explicitly destroyed (real-GPU probe, check 6). Only the stream is
+  // device 0's primary context's; the module was already unloaded above.
   CHECK(cuDevicePrimaryCtxReset(0));
-  // The module unloaded above no longer exists, so unloading it again is stale.
   CHECK(cuCtxSetCurrent(p0));
+  // The module unloaded above no longer exists, so unloading it again is stale.
   EXPECT_RC(cuModuleUnload(m), CUDA_ERROR_INVALID_VALUE);
   EXPECT(stat(rgpu_fake::kStale) == stale + 1,
          "unloading an already-unloaded module should count as stale");
   EXPECT(stat(rgpu_fake::kModule) == base[0] &&
-             stat(rgpu_fake::kGraph) == base[1] &&
-             stat(rgpu_fake::kGraphExec) == base[2] &&
              stat(rgpu_fake::kStream) == base[3] &&
              stat(rgpu_fake::kEvent) == base[4],
-         "everything made from device 0's objects should die with its "
-         "primary context");
+         "the reset should destroy what lived in device 0's primary context");
+  EXPECT(stat(rgpu_fake::kGraph) == base[1] + 2 &&
+             stat(rgpu_fake::kGraphExec) == base[2] + 1,
+         "a captured graph, its clone and its executable belong to no context "
+         "and outlive the reset");
+  // They belong to no context, so their owner destroys them explicitly.
+  CHECK(cuGraphExecDestroy(exec));
+  CHECK(cuGraphDestroy(clone));
+  CHECK(cuGraphDestroy(g));
+  EXPECT(stat(rgpu_fake::kGraph) == base[1] &&
+             stat(rgpu_fake::kGraphExec) == base[2],
+         "the graph objects are gone once destroyed");
 
   CHECK(cuCtxSetCurrent(nullptr));
   CHECK(cuDevicePrimaryCtxRelease(0));
@@ -520,9 +528,10 @@ void reset_empties_the_primary_context() {
   EXPECT(stat(rgpu_fake::kModule) == base[1], "reset should unload modules");
   EXPECT(stat(rgpu_fake::kStream) == base[2], "reset should destroy streams");
   EXPECT(stat(rgpu_fake::kEvent) == base[3], "reset should destroy events");
-  EXPECT(stat(rgpu_fake::kGraph) == base[4], "reset should destroy graphs");
-  EXPECT(stat(rgpu_fake::kGraphExec) == base[5],
-         "reset should destroy graph executables");
+  EXPECT(stat(rgpu_fake::kGraph) == base[4] + 1,
+         "a captured graph belongs to no context and outlives the reset");
+  EXPECT(stat(rgpu_fake::kGraphExec) == base[5] + 1,
+         "an executable belongs to no context and outlives the reset");
 
   // A reset does not release the context: "Resetting the primary context
   // does not release it, an application that has retained the primary
@@ -537,6 +546,11 @@ void reset_empties_the_primary_context() {
   CUdeviceptr after = 0;
   CHECK(cuMemAlloc(&after, 64));
   CHECK(cuMemFree(after));
+
+  // The graph and its executable belong to no context; the reset did not take
+  // them (real-GPU probe, check 6), so their owner destroys them explicitly.
+  CHECK(cuGraphExecDestroy(x));
+  CHECK(cuGraphDestroy(g));
 
   // What the reset destroyed is gone, and freeing it again is stale.
   const long stale = stat(rgpu_fake::kStale);
