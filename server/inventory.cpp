@@ -134,6 +134,32 @@ bool still_current(int dev, uint64_t gen) {
 
 // --- recording ------------------------------------------------------------
 
+// Where something made from another object is about to be made: where that
+// object was recorded. A graph captured on a stream, a clone of a graph and an
+// executable instantiated from one live in their source's context, not in
+// whatever context happens to be current, so they have to be recorded there -
+// otherwise the destruction of the source's primary context would go unseen
+// for them, and they would be freed again at expiry, while the destruction of
+// the current one would skip them and leak them. That they live in the
+// source's context is inferred, not documented; the fake driver models it the
+// same way. A source this session has no record of - the null default stream,
+// or a handle it never made - falls back to the current context.
+Stamp stamp_of(Inventory::Items Inventory::*which, uint64_t source) {
+  Inventory* inv = t_inv;
+  if (inv && source) {
+    std::lock_guard<std::mutex> lk(inv->mu);
+    auto it = (inv->*which).find(source);
+    if (it != (inv->*which).end()) {
+      Stamp st;
+      st.ctx = it->second.ctx;
+      st.dev = it->second.dev;
+      st.gen = it->second.gen;
+      return st;
+    }
+  }
+  return stamp();
+}
+
 void note(Inventory::Items Inventory::*which, uint64_t handle,
           const Stamp& st) {
   Inventory* inv = t_inv;
@@ -480,7 +506,8 @@ CUresult w_cuGraphCreate(CUgraph* graph, unsigned int flags) {
 // exactly as if it had created one.
 CUresult w_cuStreamEndCapture(CUstream stream, CUgraph* graph) {
   REAL("cuStreamEndCapture", CUstream, CUgraph*);
-  const Stamp st = stamp();
+  const Stamp st =
+      stamp_of(&Inventory::streams, reinterpret_cast<uint64_t>(stream));
   CUresult r = fn(stream, graph);
   if (r == CUDA_SUCCESS && graph) {
     note(&Inventory::graphs, reinterpret_cast<uint64_t>(*graph), st);
@@ -501,7 +528,8 @@ CUresult w_cuGraphInstantiateWithFlags(CUgraphExec* exec, CUgraph graph,
                                        unsigned long long flags) {
   REAL("cuGraphInstantiateWithFlags", CUgraphExec*, CUgraph,
        unsigned long long);
-  const Stamp st = stamp();
+  const Stamp st =
+      stamp_of(&Inventory::graphs, reinterpret_cast<uint64_t>(graph));
   CUresult r = fn(exec, graph, flags);
   if (r == CUDA_SUCCESS && exec) {
     note(&Inventory::graph_execs, reinterpret_cast<uint64_t>(*exec), st);
@@ -520,7 +548,8 @@ CUresult w_cuGraphExecDestroy(CUgraphExec exec) {
 
 CUresult w_cuGraphClone(CUgraph* clone, CUgraph original) {
   REAL("cuGraphClone", CUgraph*, CUgraph);
-  const Stamp st = stamp();
+  const Stamp st =
+      stamp_of(&Inventory::graphs, reinterpret_cast<uint64_t>(original));
   CUresult r = fn(clone, original);
   if (r == CUDA_SUCCESS && clone) {
     note(&Inventory::graphs, reinterpret_cast<uint64_t>(*clone), st);

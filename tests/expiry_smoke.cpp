@@ -266,6 +266,61 @@ int release_alone() {
   return 0;
 }
 
+// A graph captured on a stream, a clone of a graph and an executable made
+// from one belong to the context of the object they came from, not to
+// whatever context is current when they are made. Made here on device 0's
+// objects while device 1 is current, then device 0's primary context is
+// destroyed by this session's last release on it. The server has to have
+// recorded them as device 0's: recorded as device 1's, it would not see
+// them go, and would free all three again at expiry, which is stale.
+//
+// Needs a server with two devices (RGPU_FAKE_DEVICES=2).
+int derived_alone() {
+  CHECK(cuInit(0));
+  int count = 0;
+  CHECK(cuDeviceGetCount(&count));
+  if (count < 2) {
+    std::fprintf(stderr, "FAIL: derived needs a server with two devices\n");
+    return 1;
+  }
+  CUcontext p0 = nullptr, p1 = nullptr;
+  CHECK(cuDevicePrimaryCtxRetain(&p0, 0));
+  CHECK(cuDevicePrimaryCtxRetain(&p1, 1));
+  CHECK(cuCtxSetCurrent(p0));
+  CUstream s = nullptr;
+  CUgraph g = nullptr;
+  CHECK(cuStreamCreate(&s, 0));
+  CHECK(cuStreamBeginCapture(s, CU_STREAM_CAPTURE_MODE_GLOBAL));
+  CHECK(cuStreamEndCapture(s, &g));
+
+  CHECK(cuCtxSetCurrent(p1));
+  CUgraph clone = nullptr, captured = nullptr;
+  CUgraphExec exec = nullptr;
+  CHECK(cuGraphClone(&clone, g));
+  CHECK(cuGraphInstantiateWithFlags(&exec, clone, 0));
+  CHECK(cuStreamBeginCapture(s, CU_STREAM_CAPTURE_MODE_GLOBAL));
+  CHECK(cuStreamEndCapture(s, &captured));
+
+  CHECK(cuDevicePrimaryCtxRelease(0));
+  // The premise: all of it really was device 0's, and went with it.
+  const std::string after = read_stats();
+  for (const char* kind : {"streams", "graphs", "execs", "stale"}) {
+    if (field(after, kind) != 0) {
+      std::fprintf(stderr,
+                   "FAIL: releasing device 0 left %s behind: %s\n", kind,
+                   after.c_str());
+      g_failures++;
+    }
+  }
+  if (g_failures) {
+    std::printf("\nFAILED: %d check(s)\n", g_failures);
+    return 1;
+  }
+  // Device 1's retain is left for expiry to release.
+  std::printf("PASS: objects made from device 0's objects went with device 0\n");
+  return 0;
+}
+
 // --- three tenants on one primary context -----------------------------------
 //
 // A session may release its retain while still holding what it made in the
@@ -511,6 +566,7 @@ int main(int argc, char** argv) {
   }
   if (argc > 1 && std::strcmp(argv[1], "reset") == 0) return reset_alone();
   if (argc > 1 && std::strcmp(argv[1], "release") == 0) return release_alone();
+  if (argc > 1 && std::strcmp(argv[1], "derived") == 0) return derived_alone();
   if (argc > 3 && std::strcmp(argv[1], "tenant-b") == 0) {
     return tenant_b(std::atoi(argv[2]), std::atoi(argv[3]));
   }

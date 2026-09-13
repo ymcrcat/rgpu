@@ -123,12 +123,15 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
   #            another's last release, or another's expiry; its own expiry
   #            must then free nothing (expiry_smoke.cpp says more). Three
   #            sessions to wait for.
+  #   derived: graphs, clones and executables made from device 0's objects
+  #            while device 1 is current go with device 0's primary context,
+  #            and expiry must not free them again. Two devices.
   then_expire() {
-    local mode=$1 port=$2 sessions=$3
+    local mode=$1 port=$2 sessions=$3 devices=${4:-1}
     local stats log
     stats=$(mktemp "${TMPDIR:-/tmp}/rgpu-stats.XXXXXX")
     log=$(mktemp "${TMPDIR:-/tmp}/rgpu-$mode-log.XXXXXX")
-    RGPU_SESSION_GRACE=3 RGPU_FAKE_STATS="$stats" \
+    RGPU_SESSION_GRACE=3 RGPU_FAKE_STATS="$stats" RGPU_FAKE_DEVICES="$devices" \
       "$BUILD/rgpu-server-fake" "$port" >"$log" 2>&1 &
     local srv=$!
     for _ in $(seq 1 50); do
@@ -171,6 +174,7 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
   then_expire release $((PORT + 5)) 1
   then_expire "tenants release" $((PORT + 6)) 3
   then_expire "tenants expire" $((PORT + 7)) 3
+  then_expire derived $((PORT + 8)) 1 2
 fi
 
 # Hostile requests get a server of their own: if one of them does take the
