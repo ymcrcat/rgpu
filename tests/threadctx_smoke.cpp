@@ -17,9 +17,11 @@
 // handles reused, and batching on:
 //
 //   RGPU_FAKE_DEVICES=2 RGPU_FAKE_STATS=/tmp/s RGPU_MAX_CLIENT_THREADS=16
-//     RGPU_FAKE_REUSE_CONTEXTS=1 rgpu-server-fake 9723 &
+//     RGPU_MAX_CONTEXT_STACK=16 RGPU_FAKE_REUSE_CONTEXTS=1
+//     rgpu-server-fake 9723 &
 //   LD_LIBRARY_PATH=build RGPU_SERVER=127.0.0.1:9723 RGPU_BATCH=1
-//     RGPU_FAKE_STATS=/tmp/s RGPU_MAX_CLIENT_THREADS=16 ./threadctx_smoke
+//     RGPU_FAKE_STATS=/tmp/s RGPU_MAX_CLIENT_THREADS=16
+//     RGPU_MAX_CONTEXT_STACK=16 ./threadctx_smoke
 //
 // `threadctx_smoke reset` runs the device-reset case alone, and needs a server
 // of its own with no other session on it.
@@ -941,6 +943,18 @@ class RawSession {
     return call(rgpu::API_cuMemFree_v2, thread, req, &rsp);
   }
 
+  CUresult push(uint32_t thread, CUcontext ctx) {
+    rgpu::Buffer req, rsp;
+    req.put<uint64_t>(reinterpret_cast<uint64_t>(ctx));
+    return call(rgpu::API_cuCtxPushCurrent_v2, thread, req, &rsp);
+  }
+
+  CUresult pop(uint32_t thread) {
+    rgpu::Buffer req, rsp;
+    req.put<uint8_t>(0);
+    return call(rgpu::API_cuCtxPopCurrent_v2, thread, req, &rsp);
+  }
+
   // Announces threads gone, sent by `sender` without a reply, as the client
   // sends it.
   bool gone(uint32_t sender, const std::vector<uint32_t>& ids) {
@@ -1104,6 +1118,57 @@ void live_slots_are_capped() {
          "a notice from a thread past the cap did not make room for it");
 }
 
+// A thread's context stack lives in server memory, and the driver's own stack
+// on the serving thread stays one deep, so nothing but a cap stops a client
+// that pushes in a loop (RGPU_MAX_CONTEXT_STACK). A push or a create past it
+// is refused with CUDA_ERROR_INVALID_VALUE, one of the codes cuCtxPushCurrent
+// documents, and leaves the stack as it was; a pop makes room again.
+void context_stacks_are_capped(CUcontext p0) {
+  std::printf("-- a client thread's context stack is capped\n");
+  const char* env = std::getenv("RGPU_MAX_CONTEXT_STACK");
+  const long cap = env ? std::atol(env) : 0;
+  if (cap < 2 || cap > 1024) {
+    fail_at(__FILE__, __LINE__,
+            "RGPU_MAX_CONTEXT_STACK must name the server's cap, and a small "
+            "one");
+    return;
+  }
+  constexpr uint32_t kPusher = 5;
+  RawSession s;
+  if (!s.open()) {
+    fail_at(__FILE__, __LINE__, "could not open a session of our own");
+    return;
+  }
+  CHECK(s.set_current(kPusher, p0));
+  for (long depth = 1; depth < cap; depth++) {
+    if (s.push(kPusher, p0) != CUDA_SUCCESS) {
+      fail_at(__FILE__, __LINE__, "a push within the cap was refused");
+      return;
+    }
+  }
+  const long contexts = fake_counter("contexts");
+  const CUresult over = s.push(kPusher, p0);
+  CUcontext made = nullptr;
+  const CUresult created = s.create(kPusher, 0, &made);
+  if (created == CUDA_SUCCESS) s.destroy(kPusher, made);
+  EXPECT(over == CUDA_ERROR_INVALID_VALUE,
+         "a push past the cap was not refused with CUDA_ERROR_INVALID_VALUE");
+  EXPECT(created == CUDA_ERROR_INVALID_VALUE,
+         "a create past the cap was not refused with CUDA_ERROR_INVALID_VALUE");
+  EXPECT(fake_counter("contexts") == contexts,
+         "a create past the cap made a context");
+  CUresult r = CUDA_ERROR_UNKNOWN;
+  EXPECT(s.get_current(kPusher, &r) == p0,
+         "a refused push changed the thread's current context");
+  CHECK(r);
+  CHECK(s.pop(kPusher));
+  EXPECT(s.push(kPusher, p0) == CUDA_SUCCESS,
+         "a pop did not make room for another push");
+  long popped = 0;
+  while (popped <= cap && s.pop(kPusher) == CUDA_SUCCESS) popped++;
+  EXPECT(popped == cap, "the stack did not hold exactly the cap's entries");
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1144,6 +1209,7 @@ int main(int argc, char** argv) {
   late_call_after_notice(p0, p1);
   retired_slots_are_bounded(p0, p1);
   live_slots_are_capped();
+  context_stacks_are_capped(p0);
   CHECK(cuDevicePrimaryCtxRelease(0));
   CHECK(cuDevicePrimaryCtxRelease(1));
 

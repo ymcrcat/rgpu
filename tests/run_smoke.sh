@@ -284,8 +284,9 @@ if [[ -x "$BUILD/thread_id_smoke" ]]; then
 fi
 
 # Each client thread keeps its own context on the server. Its own server: two
-# devices, a stats file the test reads the fake's call counters from, and a
-# low cap on live client threads so the cap can be reached, and destroyed
+# devices, a stats file the test reads the fake's call counters from, low caps
+# on live client threads and on each one's context stack so the caps can be
+# reached, and destroyed
 # context handles handed out again so a stale one can be shown never to bind
 # the context that took its address. RGPU_BATCH=1 is the default, pinned
 # because the batch-flushed-by-another-thread case means nothing without
@@ -296,7 +297,7 @@ if [[ -x "$BUILD/threadctx_smoke" ]]; then
   CTX_STATS=$(mktemp "${TMPDIR:-/tmp}/rgpu-stats.XXXXXX")
   CTX_LOG=$(mktemp "${TMPDIR:-/tmp}/rgpu-threadctx-log.XXXXXX")
   RGPU_FAKE_DEVICES=2 RGPU_FAKE_STATS="$CTX_STATS" RGPU_MAX_CLIENT_THREADS=16 \
-    RGPU_FAKE_REUSE_CONTEXTS=1 \
+    RGPU_MAX_CONTEXT_STACK=16 RGPU_FAKE_REUSE_CONTEXTS=1 \
     "$BUILD/rgpu-server-fake" "$CTX_PORT" >"$CTX_LOG" 2>&1 &
   CTX_SRV=$!
   for _ in $(seq 1 50); do
@@ -308,7 +309,7 @@ if [[ -x "$BUILD/threadctx_smoke" ]]; then
   done
   LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$CTX_PORT" RGPU_BATCH=1 \
     RGPU_FAKE_STATS="$CTX_STATS" RGPU_MAX_CLIENT_THREADS=16 \
-    "$BUILD/threadctx_smoke" || rc=1
+    RGPU_MAX_CONTEXT_STACK=16 "$BUILD/threadctx_smoke" || rc=1
   kill $CTX_SRV 2>/dev/null
   # Said once per session, and said at all: nobody should have to diagnose
   # serialized multithreaded clients as a mystery.

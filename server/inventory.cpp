@@ -406,6 +406,9 @@ CUresult w_cuDevicePrimaryCtxReset_v2(CUdevice dev) {
 
 CUresult w_cuCtxCreate_v2(CUcontext* pctx, unsigned int flags, CUdevice dev) {
   REAL("cuCtxCreate_v2", CUcontext*, unsigned int, CUdevice);
+  // Creating pushes, so a thread whose stack is full is refused before the
+  // driver makes anything, with a code the call documents.
+  if (!client_threads_may_create()) return CUDA_ERROR_INVALID_VALUE;
   CUresult r = fn(pctx, flags, dev);
   // Creating a context makes it current, so it is its own context: recorded
   // that way, destroying it is enough to account for everything in it.

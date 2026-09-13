@@ -86,6 +86,7 @@ struct ClientThreads {
   bool said_full = false;
   bool said_zero = false;
   bool said_stuck = false;
+  bool said_deep = false;
 
   void clear() {
     live.clear();
@@ -131,6 +132,11 @@ void* client_threads_wrapper(const char* name);
 // was created, and pushed on the calling thread as CUDA does; a context was
 // destroyed, by cuCtxDestroy or cuCtxDetach.
 void client_threads_created(CUcontext ctx);
+// Asked by the cuCtxCreate wrapper before the driver call: whether the calling
+// thread's stack has room for the context a create pushes. A thread's stack is
+// capped at RGPU_MAX_CONTEXT_STACK entries (1024 by default); a push or create
+// past it is refused with CUDA_ERROR_INVALID_VALUE.
+bool client_threads_may_create();
 void client_threads_destroyed(CUcontext ctx);
 
 }  // namespace rgpu

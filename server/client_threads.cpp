@@ -68,6 +68,32 @@ CUresult clear(ClientThreads& threads) {
   return r != CUDA_SUCCESS ? r : CUDA_ERROR_INVALID_CONTEXT;
 }
 
+// How deep a client thread's context stack may grow. It is server memory, the
+// driver's own stack on the serving thread stays one deep and so never limits
+// it, and every destroy sweeps every entry, so a client pushing in a loop
+// must be stopped here. CUDA programs push a handful deep at most.
+size_t max_stack_depth() {
+  static const size_t n = [] {
+    const char* v = std::getenv("RGPU_MAX_CONTEXT_STACK");
+    const long parsed = v ? std::atol(v) : 0;
+    return parsed > 0 ? static_cast<size_t>(parsed) : size_t{1024};
+  }();
+  return n;
+}
+
+// Whether `t` may have one more context pushed. Said once per session when it
+// may not.
+bool may_push(ClientThreads& threads, const ClientThread& t) {
+  if (t.stack.size() < max_stack_depth()) return true;
+  if (!threads.said_deep) {
+    threads.said_deep = true;
+    logf("refusing to push a context onto a client thread's stack %zu deep, "
+         "the most allowed (RGPU_MAX_CONTEXT_STACK)",
+         t.stack.size());
+  }
+  return false;
+}
+
 // Every entry naming a context that is gone, in every thread this session
 // knows, live or recently retired.
 template <typename Match>
@@ -128,6 +154,8 @@ CUresult w_cuCtxPushCurrent_v2(CUcontext ctx) {
   // Not a context. Setting null would pop instead, so it is refused here with
   // the code the call documents for a context it cannot push.
   if (!ctx) return CUDA_ERROR_INVALID_CONTEXT;
+  // Past the cap: one of the codes the call documents, and nothing changes.
+  if (!may_push(*threads, *t)) return CUDA_ERROR_INVALID_VALUE;
   const SavedContext s = saved(ctx);
   CUresult r = cuCtxSetCurrent(ctx);
   if (r != CUDA_SUCCESS) {
@@ -265,6 +293,12 @@ void* client_threads_wrapper(const char* name) {
     if (std::strcmp(w.name, name) == 0) return w.fn;
   }
   return nullptr;
+}
+
+bool client_threads_may_create() {
+  ClientThreads* threads = t_threads;
+  ClientThread* t = threads ? threads->caller : nullptr;
+  return !t || may_push(*threads, *t);
 }
 
 // The driver pushed the new context onto the serving thread's stack; it goes
