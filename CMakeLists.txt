@@ -261,6 +261,8 @@ add_test(NAME thread_id COMMAND thread_id_smoke wire)
 add_executable(threadctx_smoke tests/threadctx_smoke.cpp)
 target_link_libraries(threadctx_smoke PRIVATE rgpu_cudart rgpu_client
                       Threads::Threads)
+# It calls cuCtxAttach and cuCtxDetach, which the header marks deprecated.
+target_compile_options(threadctx_smoke PRIVATE -Wno-deprecated-declarations)
 
 # Checks that a dropped connection does not lose the session.
 add_executable(reconnect_smoke tests/reconnect_smoke.cpp)
@@ -283,6 +285,7 @@ target_link_libraries(wrap_smoke PRIVATE rgpu_client)
 # a second client process, so it needs nothing from the shell but a server.
 add_executable(expiry_smoke tests/expiry_smoke.cpp)
 target_link_libraries(expiry_smoke PRIVATE rgpu_client)
+target_compile_options(expiry_smoke PRIVATE -Wno-deprecated-declarations)
 if(TARGET rgpu_cublas)
   target_link_libraries(expiry_smoke PRIVATE rgpu_cublas)
   target_include_directories(expiry_smoke PRIVATE ${CUBLAS_INCLUDE_DIR})

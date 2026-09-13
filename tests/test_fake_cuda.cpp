@@ -408,6 +408,26 @@ void destroyed_under_another_thread() {
   CHECK(cuCtxSetCurrent(nullptr));
 }
 
+// cuCtxDetach of a created context is a destroy: its usage count is 1. It must
+// be current to the calling thread, and it is popped as a destroy pops it.
+void detach_destroys() {
+  CUcontext c = nullptr;
+  CHECK(cuCtxCreate(&c, 0, 0));
+  CUdeviceptr d = 0;
+  CHECK(cuMemAlloc(&d, 64));
+  const long contexts = stat(rgpu_fake::kContext);
+  const long allocs = stat(rgpu_fake::kAlloc);
+  on_other_thread(
+      [&] { EXPECT_RC(cuCtxDetach(c), CUDA_ERROR_INVALID_CONTEXT); });
+  CHECK(cuCtxDetach(c));
+  EXPECT(stat(rgpu_fake::kContext) == contexts - 1,
+         "detaching a created context should destroy it");
+  EXPECT(stat(rgpu_fake::kAlloc) == allocs - 1,
+         "detaching a created context should free what was in it");
+  EXPECT(current() == nullptr, "a detached context should be popped");
+  EXPECT_RC(cuCtxSetCurrent(c), CUDA_ERROR_INVALID_CONTEXT);
+}
+
 // Device pointers are never handed out twice, so a free of an address that
 // was freed before is always recognisably stale.
 void addresses_are_not_reused() {
@@ -544,6 +564,7 @@ int main() {
   handles_carry_their_context();
   stack_is_per_thread();
   destroyed_under_another_thread();
+  detach_destroys();
   addresses_are_not_reused();
   reset_empties_the_primary_context();
   last_release_resets();

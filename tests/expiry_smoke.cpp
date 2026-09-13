@@ -291,6 +291,39 @@ int release_alone() {
   return 0;
 }
 
+// cuCtxDetach destroys a created context, whose usage count is 1, and
+// everything in it, as cuCtxDestroy does. The server has to forget the context
+// and what was in it: if it did not, it would free the memory and destroy the
+// context again at expiry - stale calls, and once the driver hands the
+// context's address to another session's cuCtxCreate, a destroy of that
+// session's context.
+int detach_alone() {
+  CHECK(cuInit(0));
+  CUcontext ctx = nullptr;
+  CHECK(cuCtxCreate(&ctx, 0, 0));
+  CUdeviceptr d = 0;
+  CHECK(cuMemAlloc(&d, kBytes));
+  CHECK(cuCtxDetach(ctx));
+
+  const std::string after = read_stats();
+  if (!after.empty()) {
+    for (const char* kind : {"allocs", "contexts"}) {
+      if (field(after, kind) != 0) {
+        std::fprintf(stderr,
+                     "FAIL: detaching the context left %s behind: %s\n", kind,
+                     after.c_str());
+        g_failures++;
+      }
+    }
+  }
+  if (g_failures) {
+    std::printf("\nFAILED: %d check(s)\n", g_failures);
+    return 1;
+  }
+  std::printf("PASS: detaching a created context destroys what was in it\n");
+  return 0;
+}
+
 // A graph captured on a stream, a clone of a graph and an executable made
 // from one belong to the context of the object they came from, not to
 // whatever context is current when they are made. Made here on device 0's
@@ -699,6 +732,7 @@ int main(int argc, char** argv) {
   }
   if (argc > 1 && std::strcmp(argv[1], "reset") == 0) return reset_alone();
   if (argc > 1 && std::strcmp(argv[1], "release") == 0) return release_alone();
+  if (argc > 1 && std::strcmp(argv[1], "detach") == 0) return detach_alone();
   if (argc > 1 && std::strcmp(argv[1], "derived") == 0) return derived_alone();
   if (argc > 3 && std::strcmp(argv[1], "tenant-b") == 0) {
     return tenant_b(std::atoi(argv[2]), std::atoi(argv[3]));

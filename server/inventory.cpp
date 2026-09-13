@@ -1,5 +1,6 @@
 #include "server/inventory.h"
 
+#include <atomic>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -426,6 +427,88 @@ CUresult w_cuCtxDestroy_v2(CUcontext ctx) {
   return r;
 }
 
+// Deprecated, and a destroy: "Decrements the usage count of the context ctx,
+// and destroys the context if the usage count goes to 0". A created context's
+// count is 1, and cuCtxAttach, the only call that raises it, is refused below,
+// so every detach that succeeds destroyed the context. It is accounted for
+// exactly as cuCtxDestroy is: left on the list, the context would be destroyed
+// again at expiry, by which time its address may be another session's
+// context; left in the client threads' stacks, it would be made current again
+// at that address.
+CUresult w_cuCtxDetach(CUcontext ctx) {
+  REAL("cuCtxDetach", CUcontext);
+  CUresult r = fn(ctx);
+  if (r == CUDA_SUCCESS) {
+    forget_context(ctx);
+    client_threads_destroyed(ctx);
+  }
+  return r;
+}
+
+// --- refused ----------------------------------------------------------------
+//
+// Calls that would hand a client a context the server cannot account for.
+// Refused with CUDA_ERROR_NOT_SUPPORTED, and said once, in the same spirit as
+// the reset refusal above.
+//
+//   - cuCtxAttach (deprecated) raises a context's usage count, which would
+//     make cuCtxDetach something other than a destroy, and whether one was
+//     could not be seen.
+//   - Green contexts. cuCtxFromGreenCtx hands out a CUcontext that can be made
+//     current and carries no record here, and cuGreenCtxDestroy destroys it -
+//     "releasing the primary context of the device that this green context
+//     was created for" - with no sweep of the client threads' stacks and no
+//     new generation for that primary context. The whole family is refused,
+//     so that no green context exists to use.
+
+void say_refused(std::atomic<bool>& said, const char* what) {
+  if (!said.exchange(true)) logf("%s", what);
+}
+
+std::atomic<bool> g_said_attach{false};
+std::atomic<bool> g_said_green{false};
+
+void say_green_refused() {
+  say_refused(g_said_green,
+              "refusing green contexts (cuGreenCtx*, cuCtxFromGreenCtx): a "
+              "context made from one is not tracked, and destroying one "
+              "releases a primary context unseen");
+}
+
+CUresult w_cuCtxAttach(CUcontext*, unsigned int) {
+  say_refused(g_said_attach,
+              "refusing cuCtxAttach: it is deprecated, and a context whose "
+              "usage count it raised would not be destroyed by cuCtxDetach, "
+              "which the server could not tell");
+  return CUDA_ERROR_NOT_SUPPORTED;
+}
+
+CUresult w_cuGreenCtxCreate(CUgreenCtx*, CUdevResourceDesc, CUdevice,
+                            unsigned int) {
+  say_green_refused();
+  return CUDA_ERROR_NOT_SUPPORTED;
+}
+CUresult w_cuGreenCtxDestroy(CUgreenCtx) {
+  say_green_refused();
+  return CUDA_ERROR_NOT_SUPPORTED;
+}
+CUresult w_cuCtxFromGreenCtx(CUcontext*, CUgreenCtx) {
+  say_green_refused();
+  return CUDA_ERROR_NOT_SUPPORTED;
+}
+CUresult w_cuGreenCtxStreamCreate(CUstream*, CUgreenCtx, unsigned int, int) {
+  say_green_refused();
+  return CUDA_ERROR_NOT_SUPPORTED;
+}
+CUresult w_cuGreenCtxRecordEvent(CUgreenCtx, CUevent) {
+  say_green_refused();
+  return CUDA_ERROR_NOT_SUPPORTED;
+}
+CUresult w_cuGreenCtxWaitEvent(CUgreenCtx, CUevent) {
+  say_green_refused();
+  return CUDA_ERROR_NOT_SUPPORTED;
+}
+
 CUresult w_cuModuleLoad(CUmodule* mod, const char* path) {
   REAL("cuModuleLoad", CUmodule*, const char*);
   const Stamp st = stamp();
@@ -603,7 +686,17 @@ const Tracked kTracked[] = {
      reinterpret_cast<void*>(&w_cuDevicePrimaryCtxReset_v2)},
     {"cuCtxCreate_v2", reinterpret_cast<void*>(&w_cuCtxCreate_v2)},
     {"cuCtxDestroy_v2", reinterpret_cast<void*>(&w_cuCtxDestroy_v2)},
-    {"cuModuleLoad", reinterpret_cast<void*>(&w_cuModuleLoad)},
+    {"cuCtxDetach", reinterpret_cast<void*>(&w_cuCtxDetach)},
+    // Refused, not tracked; see above.
+    {"cuCtxAttach", reinterpret_cast<void*>(&w_cuCtxAttach)},
+    {"cuGreenCtxCreate", reinterpret_cast<void*>(&w_cuGreenCtxCreate)},
+    {"cuGreenCtxDestroy", reinterpret_cast<void*>(&w_cuGreenCtxDestroy)},
+    {"cuCtxFromGreenCtx", reinterpret_cast<void*>(&w_cuCtxFromGreenCtx)},
+    {"cuGreenCtxStreamCreate",
+     reinterpret_cast<void*>(&w_cuGreenCtxStreamCreate)},
+    {"cuGreenCtxRecordEvent", reinterpret_cast<void*>(&w_cuGreenCtxRecordEvent)},
+    {"cuGreenCtxWaitEvent", reinterpret_cast<void*>(&w_cuGreenCtxWaitEvent)},
+    {"cuModuleLoad",reinterpret_cast<void*>(&w_cuModuleLoad)},
     {"cuModuleLoadData", reinterpret_cast<void*>(&w_cuModuleLoadData)},
     {"cuModuleLoadFatBinary",
      reinterpret_cast<void*>(&w_cuModuleLoadFatBinary)},

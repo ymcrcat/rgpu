@@ -215,7 +215,10 @@ CUDA libraries by absolute path. Use `LD_PRELOAD`, or install without the stock
 `nvidia-cuda-runtime` package.
 
 Managed memory and zero-copy host mapping cannot work across a network and are
-refused explicitly. Kernel launches with `cuLaunchKernelEx` launch
+refused explicitly. So are the deprecated `cuCtxAttach` and the green-context
+calls (`cuGreenCtx*` and `cuCtxFromGreenCtx`), which would hand a client a
+context the server cannot account for; `cuCtxDetach` works, and destroys the
+context as `cuCtxDestroy` does. Kernel launches with `cuLaunchKernelEx` launch
 configurations are not marshalled yet. A dropped connection loses all
 server-side GPU state, so the client fails subsequent calls rather than
 silently reconnecting to an empty GPU.

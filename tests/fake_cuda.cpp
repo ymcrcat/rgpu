@@ -520,6 +520,23 @@ CUresult cuCtxDestroy_v2(CUcontext ctx) {
   return CUDA_SUCCESS;
 }
 
+// Deprecated. "Decrements the usage count of the context ctx, and destroys the
+// context if the usage count goes to 0. The context must be a handle that was
+// passed back by cuCtxCreate() or cuCtxAttach(), and must be current to the
+// calling thread." A created context's count is 1, and cuCtxAttach, the only
+// thing that raises it, is not modelled, so a detach that is allowed at all is
+// a destroy.
+CUresult cuCtxDetach(CUcontext ctx) {
+  {
+    std::lock_guard<std::mutex> lk(g_mu);
+    if (!ctx || current() != ctx ||
+        !g_contexts.count(reinterpret_cast<unsigned long long>(ctx))) {
+      return CUDA_ERROR_INVALID_CONTEXT;
+    }
+  }
+  return cuCtxDestroy_v2(ctx);
+}
+
 CUresult cuCtxSynchronize(void) { return need_context(); }
 
 // Binds a context to the calling thread by replacing the top of its stack, and

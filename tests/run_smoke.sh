@@ -185,6 +185,9 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
   #   foreign: a graph captured on another session's stream is of unknown
   #            placement, so the capturing session's expiry leaves it alone.
   #            The other session cleans it up. Two sessions to wait for.
+  #   detach:  cuCtxDetach destroys a created context and what is in it, so
+  #            expiry must not destroy or free any of it again, which would
+  #            be stale.
   then_expire() {
     local mode=$1 port=$2 sessions=$3 devices=${4:-1}
     local stats log
@@ -238,6 +241,7 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
   then_expire "tenants expire" $((PORT + 7)) 3
   then_expire derived $((PORT + 8)) 1 2
   then_expire foreign $((PORT + 11)) 2
+  then_expire detach $((PORT + 15)) 1
 fi
 
 # Hostile requests get a server of their own: if one of them does take the
@@ -310,6 +314,16 @@ if [[ -x "$BUILD/threadctx_smoke" ]]; then
   # serialized multithreaded clients as a mystery.
   if ! grep -q "has more than one client thread" "$CTX_LOG"; then
     echo "FAIL: the server never said a session had more than one client thread"
+    rc=1
+  fi
+  # The fake has no cuCtxAttach and no green contexts either, so the result
+  # alone cannot show whose refusal it was. The server says it, once each.
+  if [[ $(grep -c "refusing cuCtxAttach" "$CTX_LOG") -ne 1 ]]; then
+    echo "FAIL: the server did not say, once, that it refuses cuCtxAttach"
+    rc=1
+  fi
+  if [[ $(grep -c "refusing green contexts" "$CTX_LOG") -ne 1 ]]; then
+    echo "FAIL: the server did not say, once, that it refuses green contexts"
     rc=1
   fi
   rm -f "$CTX_STATS" "$CTX_STATS.tmp" "$CTX_LOG"

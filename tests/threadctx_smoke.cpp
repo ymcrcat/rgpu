@@ -473,6 +473,104 @@ void recovery_after_destroy() {
   CHECK(cuDevicePrimaryCtxRelease(1));
 }
 
+// cuCtxDetach destroys a created context - its usage count is 1, and the
+// server refuses cuCtxAttach, the only call that raises it - so it has to be
+// seen as a destroy just as cuCtxDestroy is. Thread A creates a context;
+// thread B makes it current, detaches it, and creates another on device 1,
+// which the fake hands the detached context's handle. A's next call must not
+// run under the new context.
+void detached_context_is_never_rebound() {
+  std::printf("-- a detached context is not replaced by the context that "
+              "took its address\n");
+  CUcontext p1 = nullptr;
+  CHECK(cuDevicePrimaryCtxRetain(&p1, 1));
+
+  Turns turns;
+  CUcontext made = nullptr, other = nullptr;
+  CUresult detached = CUDA_ERROR_UNKNOWN;
+  CUresult after = CUDA_SUCCESS, device_query = CUDA_SUCCESS;
+  int landed_on = -1;
+  CUdevice device = -1;
+  std::thread a([&] {
+    CHECK(cuCtxCreate(&made, 0, 0));
+    turns.advance(1);
+    turns.await(2);
+    CUdeviceptr d = 0;
+    after = cuMemAlloc(&d, 64);
+    if (after == CUDA_SUCCESS) {
+      landed_on = ordinal_of(d);
+      cuMemFree(d);
+    }
+    device_query = cuCtxGetDevice(&device);
+    CHECK(cuCtxSetCurrent(nullptr));
+    turns.advance(3);
+  });
+  std::thread b([&] {
+    turns.await(1);
+    CHECK(cuCtxSetCurrent(made));
+    detached = cuCtxDetach(made);
+    CHECK(cuCtxSetCurrent(p1));
+    CHECK(cuCtxCreate(&other, 0, 1));
+    turns.advance(2);
+    turns.await(3);
+    CHECK(cuCtxDestroy(other));
+    CHECK(cuCtxSetCurrent(nullptr));
+  });
+  a.join();
+  b.join();
+  EXPECT(detached == CUDA_SUCCESS, "cuCtxDetach of a created context failed");
+  EXPECT(other == made,
+         "the fake did not reuse the detached context's handle (is "
+         "RGPU_FAKE_REUSE_CONTEXTS=1 set on the server?)");
+  if (after != CUDA_ERROR_CONTEXT_IS_DESTROYED) {
+    char msg[200];
+    std::snprintf(msg, sizeof(msg),
+                  "a call after another thread detached this thread's context "
+                  "returned %d (on device %d), not "
+                  "CUDA_ERROR_CONTEXT_IS_DESTROYED",
+                  (int)after, landed_on);
+    fail_at(__FILE__, __LINE__, msg);
+  }
+  EXPECT(device_query != CUDA_SUCCESS,
+         "a thread whose context was detached was bound to the context that "
+         "took its address");
+  CHECK(cuDevicePrimaryCtxRelease(1));
+}
+
+// Calls the server refuses because they would put a context beyond what it
+// tracks: cuCtxAttach, which would make cuCtxDetach something other than a
+// destroy, and the green-context family, whose contexts carry no record and
+// whose destroy releases a primary context unseen. Refused with
+// CUDA_ERROR_NOT_SUPPORTED. The fake has none of them either, so run_smoke.sh
+// checks the server's log for the refusals too.
+void refused_context_calls() {
+  std::printf("-- cuCtxAttach and green contexts are refused\n");
+  CUcontext p0 = nullptr;
+  CHECK(cuDevicePrimaryCtxRetain(&p0, 0));
+  CHECK(cuCtxSetCurrent(p0));
+  CUcontext attached = nullptr;
+  EXPECT(cuCtxAttach(&attached, 0) == CUDA_ERROR_NOT_SUPPORTED,
+         "cuCtxAttach was not refused with CUDA_ERROR_NOT_SUPPORTED");
+  CUgreenCtx green = nullptr;
+  EXPECT(cuGreenCtxCreate(&green, nullptr, 0, 0) == CUDA_ERROR_NOT_SUPPORTED,
+         "cuGreenCtxCreate was not refused");
+  CUcontext from_green = nullptr;
+  EXPECT(cuCtxFromGreenCtx(&from_green, green) == CUDA_ERROR_NOT_SUPPORTED,
+         "cuCtxFromGreenCtx was not refused");
+  CUstream stream = nullptr;
+  EXPECT(cuGreenCtxStreamCreate(&stream, green, 0, 0) ==
+             CUDA_ERROR_NOT_SUPPORTED,
+         "cuGreenCtxStreamCreate was not refused");
+  EXPECT(cuGreenCtxRecordEvent(green, nullptr) == CUDA_ERROR_NOT_SUPPORTED,
+         "cuGreenCtxRecordEvent was not refused");
+  EXPECT(cuGreenCtxWaitEvent(green, nullptr) == CUDA_ERROR_NOT_SUPPORTED,
+         "cuGreenCtxWaitEvent was not refused");
+  EXPECT(cuGreenCtxDestroy(green) == CUDA_ERROR_NOT_SUPPORTED,
+         "cuGreenCtxDestroy was not refused");
+  CHECK(cuCtxSetCurrent(nullptr));
+  CHECK(cuDevicePrimaryCtxRelease(0));
+}
+
 // Issue #2's regression in C1, exactly: a thread that creates a context and
 // pushes another on top of it, with a background thread's context-free call in
 // between, pops back to the context it created. The background thread has no
@@ -1029,6 +1127,8 @@ int main(int argc, char** argv) {
   one_thread_costs_no_switches();
   context_destroyed_by_another_thread();
   recovery_after_destroy();
+  detached_context_is_never_rebound();
+  refused_context_calls();
   push_pop_across_a_background_call();
   stacks_are_per_thread();
   deep_stack_of_created_contexts();
