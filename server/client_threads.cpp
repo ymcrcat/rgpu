@@ -1,32 +1,17 @@
 #include "server/client_threads.h"
 
-#include <cstdarg>
-#include <cstdio>
 #include <cstdlib>
-#include <cstring>
+#include <iterator>
 
 #include "common/cublas_ids.h"
 #include "common/generated/api_ids.h"
 #include "common/internal_ids.h"
+#include "server/server_util.h"
 
 namespace rgpu {
 namespace {
 
 thread_local ClientThreads* t_threads = nullptr;
-
-bool verbose() {
-  static const bool on = std::getenv("RGPU_VERBOSE") != nullptr;
-  return on;
-}
-
-void logf(const char* fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  std::fprintf(stderr, "[rgpu-server] ");
-  std::vfprintf(stderr, fmt, ap);
-  std::fprintf(stderr, "\n");
-  va_end(ap);
-}
 
 SavedContext saved(CUcontext ctx) {
   SavedContext s;
@@ -209,12 +194,7 @@ CUresult w_cuCtxGetCurrent(CUcontext* pctx) {
   return CUDA_SUCCESS;
 }
 
-struct Wrapper {
-  const char* name;
-  void* fn;
-};
-
-const Wrapper kWrappers[] = {
+const NamedFn kWrappers[] = {
     {"cuCtxSetCurrent", reinterpret_cast<void*>(&w_cuCtxSetCurrent)},
     {"cuCtxPushCurrent_v2", reinterpret_cast<void*>(&w_cuCtxPushCurrent_v2)},
     {"cuCtxPopCurrent_v2", reinterpret_cast<void*>(&w_cuCtxPopCurrent_v2)},
@@ -248,7 +228,7 @@ CUresult show_context(ClientThreads& threads, ClientThread& t) {
     // other error the driver may return: mark the entry gone and go on as for a
     // destroyed context.
     top->gone = true;
-    if (verbose()) {
+    if (g_verbose) {
       logf("context %p could not be made current again; treating it as gone",
            (void*)top->ctx);
     }
@@ -398,10 +378,7 @@ void client_thread_after(ClientThreads& threads, ClientThread& t,
 }
 
 void* client_threads_wrapper(const char* name) {
-  for (const Wrapper& w : kWrappers) {
-    if (std::strcmp(w.name, name) == 0) return w.fn;
-  }
-  return nullptr;
+  return lookup(kWrappers, std::size(kWrappers), name);
 }
 
 bool client_threads_may_create() {

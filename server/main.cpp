@@ -33,6 +33,7 @@
 #include "common/wire.h"
 #include "server/client_threads.h"
 #include "server/inventory.h"
+#include "server/server_util.h"
 
 namespace rgpu {
 
@@ -48,18 +49,10 @@ bool dispatch_cublaslt(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out)
 bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out)
     __attribute__((weak));
 
-namespace {
-
+// The one verbose flag, set from RGPU_VERBOSE in main(); see server_util.h.
 bool g_verbose = false;
 
-void logf(const char* fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  std::fprintf(stderr, "[rgpu-server] ");
-  std::vfprintf(stderr, fmt, ap);
-  std::fprintf(stderr, "\n");
-  va_end(ap);
-}
+namespace {
 
 // --- internal calls -------------------------------------------------------
 
