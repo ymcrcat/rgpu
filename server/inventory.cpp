@@ -9,6 +9,7 @@
 
 #include "server/client_threads.h"
 #include "server/driver_syms.h"
+#include "server/server_util.h"
 
 namespace rgpu {
 namespace {
@@ -27,15 +28,6 @@ thread_local Inventory* t_inv = nullptr;
 // behind its back.
 std::mutex g_live_mu;
 int g_live_sessions = 0;
-
-void logf(const char* fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  std::fprintf(stderr, "[rgpu-server] ");
-  std::vfprintf(stderr, fmt, ap);
-  std::fprintf(stderr, "\n");
-  va_end(ap);
-}
 
 // Resolves an entry point without the tracking wrapper. Everything in this
 // file is either recording a call it is about to make or undoing one, so going
@@ -182,7 +174,7 @@ void note(Inventory::Items Inventory::*which, uint64_t handle,
   Inventory* inv = t_inv;
   if (!inv || !handle) return;
   std::lock_guard<std::mutex> lk(inv->mu);
-  (inv->*which)[handle] = Inventory::Item{st.ctx, st.dev, st.gen};
+  (inv->*which)[handle] = st;
 }
 
 void forget(Inventory::Items Inventory::*which, uint64_t handle) {
@@ -215,7 +207,7 @@ void forget_under(Inventory* inv, CUcontext ctx) {
     }
   }
   for (auto it = inv->handles.begin(); it != inv->handles.end();) {
-    it = it->second.ctx == ctx ? inv->handles.erase(it) : std::next(it);
+    it = it->second.made.ctx == ctx ? inv->handles.erase(it) : std::next(it);
   }
   for (auto it = inv->captures.begin(); it != inv->captures.end();) {
     it = it->where.ctx == ctx ? inv->captures.erase(it) : std::next(it);
@@ -264,7 +256,7 @@ void forget_primary(CUdevice dev) {
     }
   }
   for (auto it = inv->handles.begin(); it != inv->handles.end();) {
-    const bool gone = it->second.dev == dev && it->second.gen != now;
+    const bool gone = it->second.made.dev == dev && it->second.made.gen != now;
     it = gone ? inv->handles.erase(it) : std::next(it);
   }
   for (auto it = inv->captures.begin(); it != inv->captures.end();) {
@@ -491,31 +483,21 @@ CUresult w_cuCtxAttach(CUcontext*, unsigned int) {
   return CUDA_ERROR_NOT_SUPPORTED;
 }
 
-CUresult w_cuGreenCtxCreate(CUgreenCtx*, CUdevResourceDesc, CUdevice,
-                            unsigned int) {
-  say_green_refused();
-  return CUDA_ERROR_NOT_SUPPORTED;
-}
-CUresult w_cuGreenCtxDestroy(CUgreenCtx) {
-  say_green_refused();
-  return CUDA_ERROR_NOT_SUPPORTED;
-}
-CUresult w_cuCtxFromGreenCtx(CUcontext*, CUgreenCtx) {
-  say_green_refused();
-  return CUDA_ERROR_NOT_SUPPORTED;
-}
-CUresult w_cuGreenCtxStreamCreate(CUstream*, CUgreenCtx, unsigned int, int) {
-  say_green_refused();
-  return CUDA_ERROR_NOT_SUPPORTED;
-}
-CUresult w_cuGreenCtxRecordEvent(CUgreenCtx, CUevent) {
-  say_green_refused();
-  return CUDA_ERROR_NOT_SUPPORTED;
-}
-CUresult w_cuGreenCtxWaitEvent(CUgreenCtx, CUevent) {
-  say_green_refused();
-  return CUDA_ERROR_NOT_SUPPORTED;
-}
+// One refusing stub per green-context API. Each is only ever reached through
+// the wrapper table, which takes its address and casts it to void*, and a
+// refusal reads none of its arguments, so the variadic signature is enough.
+#define REFUSE_GREEN(name)         \
+  CUresult name(...) {             \
+    say_green_refused();           \
+    return CUDA_ERROR_NOT_SUPPORTED; \
+  }
+REFUSE_GREEN(w_cuGreenCtxCreate)
+REFUSE_GREEN(w_cuGreenCtxDestroy)
+REFUSE_GREEN(w_cuCtxFromGreenCtx)
+REFUSE_GREEN(w_cuGreenCtxStreamCreate)
+REFUSE_GREEN(w_cuGreenCtxRecordEvent)
+REFUSE_GREEN(w_cuGreenCtxWaitEvent)
+#undef REFUSE_GREEN
 
 CUresult w_cuModuleLoad(CUmodule* mod, const char* path) {
   REAL("cuModuleLoad", CUmodule*, const char*);
@@ -688,7 +670,7 @@ CUresult w_cuStreamBeginCapture_v2(CUstream stream, CUstreamCaptureMode mode) {
     std::lock_guard<std::mutex> lk(inv->mu);
     Inventory::OpenCapture c;
     c.stream = reinterpret_cast<uint64_t>(stream);
-    c.where = Inventory::Item{st.ctx, st.dev, st.gen};
+    c.where = st;
     inv->captures.push_back(c);
   }
   return r;
@@ -752,15 +734,10 @@ CUresult w_cuGraphClone(CUgraph* clone, CUgraph original) {
   return r;
 }
 
-struct Tracked {
-  const char* name;
-  void* fn;
-};
-
 // Everything whose result a client can still be holding when it dies. Calls
 // that are not here are not recorded, which is only safe because they create
 // nothing that outlives the call: a memcpy, a query, a launch.
-const Tracked kTracked[] = {
+const NamedFn kWrappedCalls[] = {
     {"cuMemAlloc_v2", reinterpret_cast<void*>(&w_cuMemAlloc_v2)},
     {"cuMemAllocPitch_v2", reinterpret_cast<void*>(&w_cuMemAllocPitch_v2)},
     {"cuMemAllocAsync", reinterpret_cast<void*>(&w_cuMemAllocAsync)},
@@ -777,7 +754,6 @@ const Tracked kTracked[] = {
     {"cuCtxCreate_v2", reinterpret_cast<void*>(&w_cuCtxCreate_v2)},
     {"cuCtxDestroy_v2", reinterpret_cast<void*>(&w_cuCtxDestroy_v2)},
     {"cuCtxDetach", reinterpret_cast<void*>(&w_cuCtxDetach)},
-    // Refused, not tracked; see above.
     {"cuCtxAttach", reinterpret_cast<void*>(&w_cuCtxAttach)},
     {"cuGreenCtxCreate", reinterpret_cast<void*>(&w_cuGreenCtxCreate)},
     {"cuGreenCtxDestroy", reinterpret_cast<void*>(&w_cuGreenCtxDestroy)},
@@ -988,8 +964,7 @@ void inventory_note_handle(uint64_t handle, const InventoryStamp& made,
   Inventory* inv = t_inv;
   if (!inv || !handle) return;
   std::lock_guard<std::mutex> lk(inv->mu);
-  inv->handles[handle] =
-      Inventory::LibHandle{made.ctx, made.dev, made.gen, what, destroy};
+  inv->handles[handle] = Inventory::LibHandle{made, what, destroy};
 }
 
 void inventory_forget_handle(uint64_t handle) {
@@ -1003,10 +978,7 @@ void* driver_wrapper(const char* name) {
   // Calls that change which context a client thread has current, carried out
   // on that thread's own stack. None of them is also tracked here.
   if (void* fn = client_threads_wrapper(name)) return fn;
-  for (const Tracked& t : kTracked) {
-    if (std::strcmp(t.name, name) == 0) return t.fn;
-  }
-  return nullptr;
+  return lookup(kWrappedCalls, std::size(kWrappedCalls), name);
 }
 
 std::string release_inventory(Inventory& inv) {
@@ -1104,15 +1076,15 @@ std::string release_inventory(Inventory& inv) {
   for (const auto& entry : handles) {
     CUresult r = CUDA_SUCCESS;
     const bool ran =
-        unless_destroyed(entry.second.dev, entry.second.gen, [&] {
-          current.use(entry.second.ctx);
+        unless_destroyed(entry.second.made.dev, entry.second.made.gen, [&] {
+          current.use(entry.second.made.ctx);
           r = entry.second.destroy ? entry.second.destroy(entry.first)
                                    : CUDA_ERROR_NOT_SUPPORTED;
         });
     if (!ran) {
       skipped++;
-      log_skipped(entry.second.what, entry.first, entry.second.dev,
-                  entry.second.gen);
+      log_skipped(entry.second.what, entry.first, entry.second.made.dev,
+                  entry.second.made.gen);
       continue;
     }
     if (r == CUDA_SUCCESS) {

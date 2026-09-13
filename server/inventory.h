@@ -30,27 +30,31 @@
 
 namespace rgpu {
 
+// Which context was current when a resource was made. Releasing it has to
+// happen under that context, and destroying the context makes it moot.
+//
+// If that was a primary context, also its device and the generation of that
+// device's primary context at the time. A primary context is destroyed by
+// whichever session makes the last release in the process, or by a reset, and
+// every session that still lists something made in it has to stop treating it
+// as its own - including sessions that had nothing to do with the release. The
+// generation is how they find out: see release_inventory.
+//
+// It is both what an inventory entry records (Inventory::Item) and what
+// inventory_stamp() takes just before a resource is made.
+struct InventoryStamp {
+  CUcontext ctx = nullptr;
+  int dev = -1;
+  uint64_t gen = 0;
+};
+
 struct Inventory {
-  // Which context was current when this was created. Releasing it has to
-  // happen under that context, and destroying the context makes it moot.
-  //
-  // If that was a primary context, also its device and the generation of that
-  // device's primary context at the time. A primary context is destroyed by
-  // whichever session makes the last release in the process, or by a reset,
-  // and every session that still lists something made in it has to stop
-  // treating it as its own - including sessions that had nothing to do with
-  // the release. The generation is how they find out: see release_inventory.
-  struct Item {
-    CUcontext ctx = nullptr;
-    int dev = -1;
-    uint64_t gen = 0;
-  };
+  using Item = InventoryStamp;
   // A maths-library handle. The library that minted it is the only thing that
-  // knows how to destroy it, so it leaves a way to do that behind.
+  // knows how to destroy it, so it leaves a way to do that behind. Where it
+  // was made is kept the same way as any other entry.
   struct LibHandle {
-    CUcontext ctx = nullptr;
-    int dev = -1;  // as for Item
-    uint64_t gen = 0;
+    Item made;
     const char* what = "";
     CUresult (*destroy)(uint64_t) = nullptr;
   };
@@ -91,17 +95,11 @@ struct Inventory {
 // what makes it possible to refuse a call that would reach into all of them.
 void inventory_bind(Inventory* inv);
 
-// Where a resource is about to be made: the current context and, if that is a
-// primary context, its device and generation. Take one immediately before the
-// call that makes the resource, not after it: creating a library handle can
-// take hundreds of milliseconds on hardware, and a primary context destroyed
-// in that time must be charged to the handle, so that expiry skips it rather
-// than destroying it again.
-struct InventoryStamp {
-  CUcontext ctx = nullptr;
-  int dev = -1;
-  uint64_t gen = 0;
-};
+// Takes an InventoryStamp for the resource about to be made. Take one
+// immediately before the call that makes the resource, not after it: creating
+// a library handle can take hundreds of milliseconds on hardware, and a
+// primary context destroyed in that time must be charged to the handle, so
+// that expiry skips it rather than destroying it again.
 InventoryStamp inventory_stamp();
 
 // Records a maths-library handle against the session being served here, where
