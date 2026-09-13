@@ -139,6 +139,27 @@ void currency_is_per_thread() {
   CHECK(cuDevicePrimaryCtxRelease(1));
 }
 
+// The stream capture mode is the calling thread's too: "A thread's mode is one
+// of the following", GLOBAL being "the default mode".
+void capture_mode_is_per_thread() {
+  CUstreamCaptureMode mode = CU_STREAM_CAPTURE_MODE_RELAXED;
+  CHECK(cuThreadExchangeStreamCaptureMode(&mode));
+  EXPECT(mode == CU_STREAM_CAPTURE_MODE_GLOBAL,
+         "a thread's capture mode must start as the default, GLOBAL");
+  on_other_thread([&] {
+    CUstreamCaptureMode other = CU_STREAM_CAPTURE_MODE_THREAD_LOCAL;
+    CHECK(cuThreadExchangeStreamCaptureMode(&other));
+    EXPECT(other == CU_STREAM_CAPTURE_MODE_GLOBAL,
+           "another thread's capture mode changed this thread's");
+  });
+  mode = CU_STREAM_CAPTURE_MODE_GLOBAL;
+  CHECK(cuThreadExchangeStreamCaptureMode(&mode));
+  EXPECT(mode == CU_STREAM_CAPTURE_MODE_RELAXED,
+         "a thread's capture mode was changed by another thread's");
+  mode = static_cast<CUstreamCaptureMode>(7);
+  EXPECT_RC(cuThreadExchangeStreamCaptureMode(&mode), CUDA_ERROR_INVALID_VALUE);
+}
+
 // A pointer carries its context with it. The header's Unified Addressing
 // overview says "Since pointers are unique, it is not necessary to specify
 // information about the pointers specified to the various copy functions",
@@ -560,6 +581,7 @@ int main() {
   devices();
   primary_per_device();
   currency_is_per_thread();
+  capture_mode_is_per_thread();
   pointers_carry_their_context();
   handles_carry_their_context();
   stack_is_per_thread();
@@ -572,7 +594,7 @@ int main() {
   for (int k = 0; k < rgpu_fake::kKindCount; k++) {
     if (k == rgpu_fake::kStale || k == rgpu_fake::kOverRelease ||
         k == rgpu_fake::kCtxSetCurrent || k == rgpu_fake::kCrossContextUse ||
-        k == rgpu_fake::kTotalMem) {
+        k == rgpu_fake::kTotalMem || k == rgpu_fake::kCaptureModeExchange) {
       continue;  // mistakes and observations, not resources
     }
     if (rgpu_fake::value(static_cast<rgpu_fake::Kind>(k)) != 0) {

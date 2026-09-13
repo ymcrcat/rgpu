@@ -192,7 +192,9 @@ CUresult handle_capture_mode(Buffer& req, Buffer* rsp) {
   int32_t wanted = 0;
   if (!req.get(&wanted)) return CUDA_ERROR_INVALID_VALUE;
   auto mode = static_cast<CUstreamCaptureMode>(wanted);
-  CUresult r = cuThreadExchangeStreamCaptureMode(&mode);
+  // The mode is the issuing client thread's, kept with its context. See
+  // server/client_threads.h.
+  CUresult r = client_threads_exchange_capture_mode(&mode);
   if (r != CUDA_SUCCESS) return r;
   rsp->put<int32_t>(static_cast<int32_t>(mode));
   return CUDA_SUCCESS;
@@ -582,10 +584,11 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
       if (!thread) {
         refused = true;
         result = CUDA_ERROR_INVALID_VALUE;
-      } else if (!client_thread_shown(*thread, threads.applied)) {
-        // Only when the thread's context is not already current, so a client
-        // with one thread - or a burst of calls from one thread, or threads
-        // sharing a context - never pays for a switch.
+      } else if (!client_thread_shown(*thread, threads)) {
+        // Only when the thread's context or capture mode is not already the
+        // serving thread's, so a client with one thread - or a burst of calls
+        // from one thread, or threads sharing a context and a mode - never
+        // pays for a switch.
         result = client_thread_show(threads, *thread);
         refused = result != CUDA_SUCCESS;
       }

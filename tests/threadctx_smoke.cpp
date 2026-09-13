@@ -346,6 +346,63 @@ void deferred_error_stays_with_its_thread() {
   CHECK(cuDevicePrimaryCtxRelease(0));
 }
 
+// The stream capture mode is thread state in CUDA too - "A thread's mode is one
+// of the following", GLOBAL being "the default mode" - so each client thread
+// keeps its own, and the mode one thread exchanges is not the mode another
+// thread is given back. Both threads have the same context current, so the
+// server cannot learn from the context alone that it has a different thread's
+// state to put back.
+void capture_modes_are_per_thread() {
+  std::printf("-- each thread keeps its own stream capture mode, even on a "
+              "shared context\n");
+  CUcontext p0 = nullptr;
+  CHECK(cuDevicePrimaryCtxRetain(&p0, 0));
+
+  Turns turns;
+  CUstreamCaptureMode a_first = CU_STREAM_CAPTURE_MODE_RELAXED;
+  CUstreamCaptureMode a_second = CU_STREAM_CAPTURE_MODE_GLOBAL;
+  CUstreamCaptureMode b_first = CU_STREAM_CAPTURE_MODE_THREAD_LOCAL;
+  CUstreamCaptureMode b_second = CU_STREAM_CAPTURE_MODE_GLOBAL;
+  std::thread a([&] {
+    CHECK(cuCtxSetCurrent(p0));
+    turns.advance(1);
+    turns.await(2);
+    a_first = CU_STREAM_CAPTURE_MODE_THREAD_LOCAL;
+    CHECK(cuThreadExchangeStreamCaptureMode(&a_first));
+    turns.advance(3);
+    turns.await(4);
+    a_second = CU_STREAM_CAPTURE_MODE_GLOBAL;
+    CHECK(cuThreadExchangeStreamCaptureMode(&a_second));
+    CHECK(cuCtxSetCurrent(nullptr));
+    turns.advance(5);
+  });
+  std::thread b([&] {
+    turns.await(1);
+    CHECK(cuCtxSetCurrent(p0));
+    turns.advance(2);
+    turns.await(3);
+    b_first = CU_STREAM_CAPTURE_MODE_RELAXED;
+    CHECK(cuThreadExchangeStreamCaptureMode(&b_first));
+    turns.advance(4);
+    turns.await(5);
+    b_second = CU_STREAM_CAPTURE_MODE_GLOBAL;
+    CHECK(cuThreadExchangeStreamCaptureMode(&b_second));
+    CHECK(cuCtxSetCurrent(nullptr));
+  });
+  a.join();
+  b.join();
+  EXPECT(a_first == CU_STREAM_CAPTURE_MODE_GLOBAL,
+         "thread A's capture mode did not start as the default");
+  EXPECT(b_first == CU_STREAM_CAPTURE_MODE_GLOBAL,
+         "thread B was given back the capture mode thread A chose");
+  EXPECT(a_second == CU_STREAM_CAPTURE_MODE_THREAD_LOCAL,
+         "thread A was not given back its own capture mode after thread B "
+         "chose another");
+  EXPECT(b_second == CU_STREAM_CAPTURE_MODE_RELAXED,
+         "thread B was not given back its own capture mode");
+  CHECK(cuDevicePrimaryCtxRelease(0));
+}
+
 // The price of all this for a client with one thread: nothing. The server only
 // makes a thread's context current when it differs from the one it last made
 // current, so a thread calling on its own pays no cuCtxSetCurrent beyond the
@@ -355,7 +412,12 @@ void one_thread_costs_no_switches() {
   CUcontext p0 = nullptr;
   CHECK(cuDevicePrimaryCtxRetain(&p0, 0));
   CHECK(cuCtxSetCurrent(p0));
+  // A mode other than the default, so that a server putting it back before
+  // every request would show.
+  CUstreamCaptureMode mode = CU_STREAM_CAPTURE_MODE_RELAXED;
+  CHECK(cuThreadExchangeStreamCaptureMode(&mode));
   const long before = fake_counter("ctxsets");
+  const long swaps_before = fake_counter("modeswaps");
   constexpr size_t kBytes = 256;
   for (int i = 0; i < 20; i++) {
     CUdeviceptr d = 0;
@@ -371,7 +433,8 @@ void one_thread_costs_no_switches() {
     CHECK(cuMemFree(d));
   }
   const long after = fake_counter("ctxsets");
-  EXPECT(before >= 0 && after >= 0,
+  const long swaps_after = fake_counter("modeswaps");
+  EXPECT(before >= 0 && after >= 0 && swaps_before >= 0 && swaps_after >= 0,
          "could not read the fake's counters (is RGPU_FAKE_STATS set?)");
   if (after != before) {
     char msg[160];
@@ -380,6 +443,15 @@ void one_thread_costs_no_switches() {
                   after - before);
     fail_at(__FILE__, __LINE__, msg);
   }
+  if (swaps_after != swaps_before) {
+    char msg[160];
+    std::snprintf(msg, sizeof(msg),
+                  "a single thread's 120 calls cost %ld capture mode exchanges",
+                  swaps_after - swaps_before);
+    fail_at(__FILE__, __LINE__, msg);
+  }
+  mode = CU_STREAM_CAPTURE_MODE_GLOBAL;
+  CHECK(cuThreadExchangeStreamCaptureMode(&mode));
   CHECK(cuCtxSetCurrent(nullptr));
   CHECK(cuDevicePrimaryCtxRelease(0));
 }
@@ -1381,6 +1453,7 @@ int main(int argc, char** argv) {
   issue_scenario_by_placement();
   batch_flushed_by_another_thread();
   deferred_error_stays_with_its_thread();
+  capture_modes_are_per_thread();
   one_thread_costs_no_switches();
   context_destroyed_by_another_thread();
   recovery_after_destroy();

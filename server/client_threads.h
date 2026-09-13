@@ -77,6 +77,12 @@ struct ClientThread {
   // completing a request and holding or reporting its failure are one step.
   // Nothing else reads it.
   CUresult pending_async = CUDA_SUCCESS;
+  // The stream capture mode, which CUDA keeps per thread too ("A thread's mode
+  // is one of the following"), starting at what the header calls the default.
+  // Only cuThreadExchangeStreamCaptureMode changes it, and it is intercepted
+  // (client_threads_exchange_capture_mode), so unlike the context nothing has
+  // to be read back.
+  CUstreamCaptureMode capture_mode = CU_STREAM_CAPTURE_MODE_GLOBAL;
 };
 
 // A session's client threads, and what the serving thread has current.
@@ -95,6 +101,9 @@ struct ClientThreads {
   // with a connection, because the thread, and so the driver's idea of its
   // current context, outlasts every connection the session has.
   SavedContext applied;
+  // The serving thread's own capture mode. A new thread starts at the
+  // default, as a new client thread does, and so does this one.
+  CUstreamCaptureMode applied_mode = CU_STREAM_CAPTURE_MODE_GLOBAL;
   // The thread whose request is running, for the intercepted calls. Null
   // outside a request.
   ClientThread* caller = nullptr;
@@ -104,7 +113,11 @@ struct ClientThreads {
   bool said_zero = false;
   bool said_stuck = false;
   bool said_deep = false;
+  bool said_mode = false;
 
+  // Forgets; releases nothing, and changes nothing in the driver. The
+  // serving thread keeps whatever capture mode it last had, which is still
+  // recorded in applied_mode.
   void clear() {
     live.clear();
     retired.clear();
@@ -118,19 +131,29 @@ struct ClientThreads {
 // stack. nullptr unbinds.
 void client_threads_bind(ClientThreads* threads);
 
-// Whether the serving thread already shows `t`'s current context, so nothing
-// need happen before its request. Inline, because it is every request.
+// Whether the serving thread already shows `t`'s thread state - its current
+// context and its capture mode - so nothing need happen before its request.
+// Inline, because it is every request. The two are checked apart: threads
+// sharing a context still each have a capture mode of their own.
 inline bool client_thread_shown(const ClientThread& t,
-                                const SavedContext& applied) {
-  if (t.stack.empty() || t.stack.back().gone) return applied.ctx == nullptr;
-  const SavedContext& top = t.stack.back();
-  return top.ctx == applied.ctx;
+                                const ClientThreads& threads) {
+  if (t.capture_mode != threads.applied_mode) return false;
+  if (t.stack.empty() || t.stack.back().gone) {
+    return threads.applied.ctx == nullptr;
+  }
+  return t.stack.back().ctx == threads.applied.ctx;
 }
 
 // Makes `t`'s current context current on the serving thread, or none if its
-// top is destroyed. CUDA_SUCCESS, or the error to refuse the request with if
-// the serving thread could not be left without a context.
+// top is destroyed, and gives the serving thread `t`'s capture mode.
+// CUDA_SUCCESS, or the error to refuse the request with if the serving thread
+// could not be left without a context or given the mode.
 CUresult client_thread_show(ClientThreads& threads, ClientThread& t);
+
+// cuThreadExchangeStreamCaptureMode for the thread whose request is running:
+// the driver's exchange on the serving thread, which already has that
+// thread's mode, recorded as the thread's new mode.
+CUresult client_threads_exchange_capture_mode(CUstreamCaptureMode* mode);
 
 // After a request: what the driver says is current, recorded as `t`'s top if
 // something the interception does not cover changed it, and the request's

@@ -221,7 +221,11 @@ const Wrapper kWrappers[] = {
 
 void client_threads_bind(ClientThreads* threads) { t_threads = threads; }
 
-CUresult client_thread_show(ClientThreads& threads, ClientThread& t) {
+namespace {
+
+// Makes `t`'s current context current on the serving thread, or leaves it
+// with none.
+CUresult show_context(ClientThreads& threads, ClientThread& t) {
   SavedContext* top = t.stack.empty() ? nullptr : &t.stack.back();
   if (top && !top->gone) {
     if (top->ctx == threads.applied.ctx) {
@@ -243,6 +247,51 @@ CUresult client_thread_show(ClientThreads& threads, ClientThread& t) {
   // Nothing current, or a destroyed context: the thread has no context, and a
   // call that needs one fails on its own with nothing current to misuse.
   return clear(threads);
+}
+
+// Gives the serving thread `t`'s capture mode. One exchange, and only when it
+// differs, so threads that keep to one mode pay nothing.
+CUresult show_capture_mode(ClientThreads& threads, const ClientThread& t) {
+  if (t.capture_mode == threads.applied_mode) return CUDA_SUCCESS;
+  CUstreamCaptureMode mode = t.capture_mode;
+  const CUresult r = cuThreadExchangeStreamCaptureMode(&mode);
+  if (r == CUDA_SUCCESS) {
+    threads.applied_mode = t.capture_mode;
+    return CUDA_SUCCESS;
+  }
+  // Refused rather than run under another thread's mode, which would not fail
+  // anything obvious: it would invalidate a capture, or let a call through
+  // that the thread's own mode forbids. An exchange that fails leaves the
+  // mode as it was, so the next request tries again.
+  if (!threads.said_mode) {
+    threads.said_mode = true;
+    logf("could not give the serving thread a client thread's stream capture "
+         "mode (%d), so its request is refused rather than run under another "
+         "thread's mode",
+         r);
+  }
+  return r;
+}
+
+}  // namespace
+
+CUresult client_thread_show(ClientThreads& threads, ClientThread& t) {
+  CUresult r = show_context(threads, t);
+  if (r != CUDA_SUCCESS) return r;
+  return show_capture_mode(threads, t);
+}
+
+CUresult client_threads_exchange_capture_mode(CUstreamCaptureMode* mode) {
+  ClientThreads* threads = t_threads;
+  ClientThread* t = threads ? threads->caller : nullptr;
+  if (!t || !mode) return cuThreadExchangeStreamCaptureMode(mode);
+  const CUstreamCaptureMode wanted = *mode;
+  const CUresult r = cuThreadExchangeStreamCaptureMode(mode);
+  if (r == CUDA_SUCCESS) {
+    t->capture_mode = wanted;
+    threads->applied_mode = wanted;
+  }
+  return r;
 }
 
 void client_thread_after(ClientThreads& threads, ClientThread& t,

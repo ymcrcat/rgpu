@@ -1074,7 +1074,29 @@ namespace {
 bool g_capturing = false;
 CUgraphNode g_nodes[2] = {reinterpret_cast<CUgraphNode>(0xDEB1),
                           reinterpret_cast<CUgraphNode>(0xDEB2)};
+
+// The calling thread's stream capture mode, which the header describes as the
+// thread's own ("A thread's mode is one of the following"), starting at the
+// mode it calls the default. Only the thread itself touches it. The fake keeps
+// the mode and gives it back; it does not enforce what a mode permits during a
+// capture.
+thread_local CUstreamCaptureMode t_capture_mode = CU_STREAM_CAPTURE_MODE_GLOBAL;
+
 }  // namespace
+
+CUresult cuThreadExchangeStreamCaptureMode(CUstreamCaptureMode* mode) {
+  rgpu_fake::count(rgpu_fake::kCaptureModeExchange, 1);
+  if (!mode) return CUDA_ERROR_INVALID_VALUE;
+  if (*mode != CU_STREAM_CAPTURE_MODE_GLOBAL &&
+      *mode != CU_STREAM_CAPTURE_MODE_THREAD_LOCAL &&
+      *mode != CU_STREAM_CAPTURE_MODE_RELAXED) {
+    return CUDA_ERROR_INVALID_VALUE;
+  }
+  const CUstreamCaptureMode previous = t_capture_mode;
+  t_capture_mode = *mode;
+  *mode = previous;
+  return CUDA_SUCCESS;
+}
 
 CUresult cuStreamBeginCapture_v2(CUstream stream, CUstreamCaptureMode mode) {
   if (mode != CU_STREAM_CAPTURE_MODE_GLOBAL &&

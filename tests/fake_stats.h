@@ -50,6 +50,11 @@ enum Kind {
   // test gets a request still running when its client reconnects, and this is
   // how it sees whether the server ran the request again.
   kTotalMem,
+  // Not a resource: how many times cuThreadExchangeStreamCaptureMode ran. The
+  // server puts a client thread's capture mode back before its request only
+  // when it differs from the serving thread's, and this is how a test sees
+  // that a client whose threads keep one mode pays nothing for it.
+  kCaptureModeExchange,
   kKindCount,
 };
 

@@ -236,7 +236,7 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
     # The call counters at the end of the line count calls, not resources, so
     # they are not part of what has to come back to zero.
     got=$(sed -e 's/ ctxsets=[0-9]*//' -e 's/ crossctx=[0-9]*//' \
-      -e 's/ totalmem=[0-9]*//' "$stats" 2>/dev/null)
+      -e 's/ totalmem=[0-9]*//' -e 's/ modeswaps=[0-9]*//' "$stats" 2>/dev/null)
     if [[ "$got" != "$want" ]]; then
       echo "FAIL: after a $mode and an expiry the server should hold nothing"
       echo "      and have released nothing it no longer owned"
