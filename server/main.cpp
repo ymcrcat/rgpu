@@ -344,7 +344,9 @@ struct Session {
   std::condition_variable cv;
   int fd = -1;                 // the current connection, -1 while waiting
   bool finished = false;       // the serving thread has given up and gone
-  uint32_t last_req = 0;       // last request this session actually completed
+  // Last request this session actually completed; 0 while it has completed
+  // none. Request ids wrap, so compare with req_at_or_before, never with <.
+  uint32_t last_req = 0;
   // A call sent without expecting a reply has nowhere to report a failure, so
   // we hold the first one and hand it to the next call that does reply. CUDA
   // reports asynchronous failures the same way, at a later call rather than
@@ -359,7 +361,7 @@ struct Session {
   // the call and answering it. Without this the client has a request that was
   // executed and never answered: resending it would run it twice, and not
   // resending it would wait forever.
-  uint32_t last_reply_id = 0;
+  uint32_t last_reply_id = 0;  // 0 while there is none
   std::vector<uint8_t> last_reply;
   // Everything the client asked the driver for and has not given back. It is
   // this process that holds it, so when the session finally expires this is
@@ -432,7 +434,9 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
     // client thread's slot and no deferred error; it is only answered.
     //
     // Relies on the client numbering requests in the order it sends them and
-    // sending a copy with its original id, which client/rpc.cpp does.
+    // sending a copy with its original id, which client/rpc.cpp does. Ids
+    // wrap, so the order is req_at_or_before's (common/wire.h). A request
+    // naming id 0, which is no request, is never run.
     {
       bool already_ran = false;
       bool answer = false;
@@ -440,10 +444,11 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
       std::vector<uint8_t> cached;
       {
         std::lock_guard<std::mutex> lk(session->mu);
-        if (h.req_id <= session->last_req) {
+        if (req_at_or_before(h.req_id, session->last_req)) {
           already_ran = true;
           kept = session->last_reply_id;
-          if (!(h.flags & kFlagNoReply) && h.req_id == session->last_reply_id) {
+          if (!(h.flags & kFlagNoReply) && h.req_id == session->last_reply_id &&
+              !session->last_reply.empty()) {
             answer = true;
             cached = session->last_reply;
           }
@@ -744,7 +749,8 @@ void accept_connection(int fd) {
     // A reply the client never received. It is safe to send again and it is
     // the only way that request can be answered, because running it a second
     // time would not be the same thing.
-    if (resumed && session->last_reply_id > hello.last_req_id &&
+    if (resumed &&
+        !req_at_or_before(session->last_reply_id, hello.last_req_id) &&
         !session->last_reply.empty()) {
       unanswered = session->last_reply;
       unanswered_id = session->last_reply_id;
@@ -756,7 +762,7 @@ void accept_connection(int fd) {
   }
 
   if (resumed) {
-    logf("session %llx resumed; %u requests completed before the break",
+    logf("session %llx resumed; the last request it completed was %u",
          (unsigned long long)key.first, reply.last_req_id);
     if (!unanswered.empty()) {
       if (!write_exact(fd, unanswered.data(), unanswered.size())) {

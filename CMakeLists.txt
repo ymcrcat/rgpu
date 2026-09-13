@@ -272,6 +272,12 @@ target_link_libraries(reconnect_smoke PRIVATE rgpu_client)
 add_executable(replay_smoke tests/replay_smoke.cpp)
 target_link_libraries(replay_smoke PRIVATE rgpu_client)
 
+# Checks that request ids wrapping past 0xFFFFFFFF break nothing, a reconnect
+# across the wrap included. Needs a fake server that breaks the connection;
+# run from run_smoke.sh.
+add_executable(wrap_smoke tests/wrap_smoke.cpp)
+target_link_libraries(wrap_smoke PRIVATE rgpu_client)
+
 # Checks that a session which never comes back gives its GPU resources up, and
 # that a session which is still there keeps its own. Re-executes itself to get
 # a second client process, so it needs nothing from the shell but a server.

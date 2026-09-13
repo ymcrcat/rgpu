@@ -95,6 +95,16 @@ int main() {
   assert(!h.get_sized(&evil, &evil_n));
   assert(!h.ok());
 
+  // Request-id order, across the 32-bit wrap. 0 is no request.
+  assert(rgpu::req_at_or_before(5, 5));
+  assert(rgpu::req_at_or_before(4, 5) && !rgpu::req_at_or_before(5, 4));
+  assert(rgpu::req_at_or_before(0xFFFFFFFFu, 1));
+  assert(!rgpu::req_at_or_before(1, 0xFFFFFFFFu));
+  assert(rgpu::req_at_or_before(0xFFFFFFF7u, 5));
+  assert(rgpu::req_at_or_before(0, 1) && rgpu::req_at_or_before(0, 0xFFFFFFFFu));
+  assert(!rgpu::req_at_or_before(1, 0) && !rgpu::req_at_or_before(0xFFFFFFFFu, 0));
+  assert(rgpu::req_at_or_before(0, 0));
+
   std::printf("wire round-trip OK\n");
   return 0;
 }

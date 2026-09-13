@@ -16,6 +16,34 @@ constexpr uint32_t kMagicReq = 0x52475155;  // "RGQU"
 constexpr uint32_t kMagicRsp = 0x52475250;  // "RGRP"
 constexpr uint32_t kMagicHello = 0x52474845;  // "RGHE"
 
+// --- request ids -------------------------------------------------------------
+//
+// A client numbers its requests 1, 2, 3, ... in the order it sends them, and
+// the numbers are 32 bits, so a client that lives long enough wraps. 0 is never
+// a request's id: it means "no request" - a session that has completed none, a
+// client that has had no reply - and minting skips it, so after 0xFFFFFFFF
+// comes 1.
+//
+// Ordering ids therefore uses sequence-number arithmetic (RFC 1982): b is at
+// or after a when the distance from a forward to b, modulo 2^32, is under half
+// the id space. That is right for any two ids less than 2^31 requests apart,
+// and every pair ever compared is far closer: the frames outstanding between
+// a client and its server are the ones since the last reply, which the client
+// caps at 64 MiB - under three million frames - and a copy of a request is
+// never older than that. Past the window an old id reads as a new one, so a
+// comparison must never be asked of ids that far apart.
+//
+// Every ordering of request ids, on either side, goes through this. Equality
+// needs nothing special.
+
+// Whether request `a` is at or before request `b`. No request (0) is before
+// every request, and no request but itself is before it.
+constexpr bool req_at_or_before(uint32_t a, uint32_t b) {
+  if (a == 0) return true;
+  if (b == 0) return false;
+  return static_cast<uint32_t>(b - a) < 0x80000000u;
+}
+
 // Sent once, before any frames. The session id is the client process, not the
 // connection: a connection that drops takes no state with it, because the
 // server keeps the session alive for a while and hands the next connection
@@ -34,7 +62,7 @@ struct Handshake {
   uint32_t version;
   uint64_t session_hi;
   uint64_t session_lo;
-  uint32_t last_req_id;  // last reply the client received; 0 for a new session
+  uint32_t last_req_id;  // last reply the client received; 0 if none yet
   uint32_t reserved;
 };
 
@@ -42,7 +70,7 @@ struct HandshakeReply {
   uint32_t magic;
   uint32_t version;
   uint32_t resumed;      // 1 if this attached to a session that already existed
-  uint32_t last_req_id;  // last request that session actually completed
+  uint32_t last_req_id;  // last request that session completed; 0 if none
 };
 
 // Flags on a request frame.

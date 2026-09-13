@@ -34,9 +34,10 @@ namespace {
 
 auto& g_mu = *new std::mutex();  // the socket, the counter and the send queue
 int g_fd = -1;
-uint32_t g_next_req = 1;
+uint32_t g_next_req = 0;       // the next request id; see mint_req_id_locked
+bool g_req_ids_started = false;
 bool g_connect_failed = false;
-uint32_t g_last_reply = 0;   // last request id we have seen a reply for
+uint32_t g_last_reply = 0;   // last request id we have seen a reply for; 0: none
 bool g_had_session = false;  // we have talked to this server before
 
 // Frames queued by call_async and not yet written. Holding them lets a run of
@@ -198,8 +199,11 @@ size_t g_unacked_bytes = 0;
 constexpr size_t kMaxUnackedBytes = 64u << 20;
 bool g_replay_possible = true;
 
+// Request ids wrap, so "up to" is req_at_or_before's order (common/wire.h),
+// not <=. `up_to` 0 is no request, and forgets nothing.
 void forget_acked_locked(uint32_t up_to) {
-  while (!g_unacked.empty() && g_unacked.front().req_id <= up_to) {
+  while (!g_unacked.empty() &&
+         req_at_or_before(g_unacked.front().req_id, up_to)) {
     g_unacked_bytes -= g_unacked.front().bytes.size();
     g_unacked.pop_front();
   }
@@ -364,15 +368,35 @@ void log(const char* fmt, ...) {
   va_end(ap);
 }
 
-void queue_one_locked(uint32_t api_id, const Buffer& req, uint32_t flags,
-                      uint32_t thread_id);
+uint32_t queue_one_locked(uint32_t api_id, const Buffer& req, uint32_t flags,
+                          uint32_t thread_id);
+
+// The next request id, in the order frames are queued. 32 bits, so it wraps,
+// and 0 is skipped: 0 means "no request" in the handshake and in the session's
+// record of what it completed (see req_at_or_before in common/wire.h).
+//
+// Ids start at 1, unless RGPU_TEST_FIRST_REQ_ID says otherwise: a test hook,
+// off by default, that starts them just short of the wrap so a test can cross
+// it without first sending four billion requests.
+uint32_t mint_req_id_locked() {
+  if (!g_req_ids_started) {
+    g_req_ids_started = true;
+    const char* v = std::getenv("RGPU_TEST_FIRST_REQ_ID");
+    g_next_req = (v && *v) ? static_cast<uint32_t>(std::strtoul(v, nullptr, 0))
+                           : 1u;
+  }
+  if (g_next_req == 0) g_next_req = 1;
+  return g_next_req++;
+}
 
 // Appends one frame to the queue rather than writing it. `thread_id` is the
 // thread that issued the call, which is not necessarily the thread that will
 // write it: a batch queued by one thread goes out with the next call any
 // thread makes, and each frame has to keep its own issuer.
-void queue_frame_locked(uint32_t api_id, const Buffer& req, uint32_t flags,
-                        uint32_t thread_id) {
+// Returns the id of the frame queued for this call, not of any notice queued
+// ahead of it.
+uint32_t queue_frame_locked(uint32_t api_id, const Buffer& req, uint32_t flags,
+                            uint32_t thread_id) {
   if (g_have_retired.load(std::memory_order_relaxed)) {
     // Threads have exited since the last frame. Tell the server first, so it
     // can drop what it keeps for them; no reply, and nothing lost but a little
@@ -400,7 +424,7 @@ void queue_frame_locked(uint32_t api_id, const Buffer& req, uint32_t flags,
       queue_one_locked(API_rgpu_thread_gone, notice, kFlagNoReply, thread_id);
     }
   }
-  queue_one_locked(api_id, req, flags, thread_id);
+  const uint32_t id = queue_one_locked(api_id, req, flags, thread_id);
 
   if (t_retired) {
     // A call from a thread already retired. Its notice may well have gone out
@@ -416,14 +440,15 @@ void queue_frame_locked(uint32_t api_id, const Buffer& req, uint32_t flags,
     }
     g_have_retired.store(true, std::memory_order_relaxed);
   }
+  return id;
 }
 
-void queue_one_locked(uint32_t api_id, const Buffer& req, uint32_t flags,
-                      uint32_t thread_id) {
+uint32_t queue_one_locked(uint32_t api_id, const Buffer& req, uint32_t flags,
+                          uint32_t thread_id) {
   ReqHeader h{};
   h.magic = kMagicReq;
   h.api_id = api_id;
-  h.req_id = g_next_req++;
+  h.req_id = mint_req_id_locked();
   h.flags = flags;
   h.thread_id = thread_id;
   h.payload_len = static_cast<uint32_t>(req.size());
@@ -449,6 +474,7 @@ void queue_one_locked(uint32_t api_id, const Buffer& req, uint32_t flags,
       g_unacked_bytes = 0;
     }
   }
+  return h.req_id;
 }
 
 // Writes everything queued as a single write. Returns false if the connection
@@ -495,8 +521,7 @@ CUresult call(uint32_t api_id, const Buffer& req, Buffer* rsp) {
 
   // Anything queued goes out ahead of this call, in one write, so the server
   // sees the same order the application issued.
-  queue_frame_locked(api_id, req, 0, thread_id);
-  const uint32_t expect_id = g_next_req - 1;
+  const uint32_t expect_id = queue_frame_locked(api_id, req, 0, thread_id);
 
   // Two goes: one on the connection we have, and if that breaks, one on a
   // connection to the same session. The replay makes the second attempt the

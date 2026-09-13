@@ -346,12 +346,105 @@ void stale_reply_expected_copy() {
   ::close(fd);
 }
 
+// Request ids are 32 bits, and a long-lived client wraps them: after
+// 0xFFFFFFFF comes 1 (0 names no request and is never used). Every ordering of
+// ids has to survive that.
+
+// A reply lost to a broken connection, for a request just past the wrap. The
+// client last heard the reply to 0xFFFFFFFF, and the session completed 1: 1 is
+// the later of the two, so the handshake resends its reply.
+void handshake_resends_across_the_wrap() {
+  std::printf("-- a lost reply to the first request past the id wrap is "
+              "resent at the handshake\n");
+  const uint64_t session = 4;
+
+  rgpu::HandshakeReply hs{};
+  int fd = connect_session(session, 0, &hs);
+  EXPECT(fd >= 0 && hs.resumed == 0, "could not start a session");
+  if (fd < 0) return;
+
+  // A new session whose first request is not 1 still runs it.
+  const Frame a = device_count(0xFFFFFFFEu);
+  EXPECT(send(fd, a), "could not send a request");
+  expect_answer(fd, a, CUDA_SUCCESS, "a new session's first request, id 0xFFFFFFFE");
+  const Frame b = device_count(0xFFFFFFFFu);
+  EXPECT(send(fd, b), "could not send a request");
+  expect_answer(fd, b, CUDA_SUCCESS, "request 0xFFFFFFFF");
+
+  const Frame lost = device_count(1);
+  EXPECT(send(fd, lost), "could not send the first request past the wrap");
+  // Long enough for a call with no delay to run and its reply to be kept;
+  // the reply is never read.
+  std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  ::close(fd);
+
+  fd = connect_session(session, 0xFFFFFFFFu, &hs);
+  EXPECT(fd >= 0 && hs.resumed == 1, "the session did not resume");
+  if (fd < 0) return;
+  EXPECT(hs.last_req_id == 1,
+         "the handshake did not report request 1, past the wrap, as completed");
+  expect_answer(fd, lost, CUDA_SUCCESS,
+                "the resent reply to the first request past the wrap");
+
+  const Frame next = device_count(2);
+  EXPECT(send(fd, next), "could not send a request after the resent reply");
+  expect_answer(fd, next, CUDA_SUCCESS, "the request after the resent reply");
+  ::close(fd);
+}
+
+// A replay that straddles the wrap: a failing call without a reply, id
+// 0xFFFFFFFF, still running when the connection drops, and a call that replies
+// behind it, id 1. The client is told 0xFFFFFFFE completed and sends both
+// again; neither runs again.
+void replay_across_the_wrap() {
+  std::printf("-- a replay that straddles the id wrap runs nothing twice\n");
+  const uint64_t session = 5;
+  const long before = totalmem_runs();
+
+  rgpu::HandshakeReply hs{};
+  int fd = connect_session(session, 0, &hs);
+  EXPECT(fd >= 0 && hs.resumed == 0, "could not start a session");
+  if (fd < 0) return;
+
+  const Frame warm = device_count(0xFFFFFFFEu);
+  EXPECT(send(fd, warm), "could not send the first request");
+  expect_answer(fd, warm, CUDA_SUCCESS, "the first request");
+
+  const Frame failing = total_mem(0xFFFFFFFFu, 99, true);
+  const Frame behind = device_count(1);
+  EXPECT(send(fd, failing) && send(fd, behind),
+         "could not send the calls either side of the wrap");
+  EXPECT(await_runs(before + 1), "the call without a reply never started");
+  ::close(fd);
+
+  fd = connect_session(session, 0xFFFFFFFEu, &hs);
+  EXPECT(fd >= 0 && hs.resumed == 1, "the session did not resume");
+  if (fd < 0) return;
+  EXPECT(hs.last_req_id == 0xFFFFFFFEu,
+         "the handshake did not report the call without a reply as still "
+         "running; the reconnect missed the window this case needs");
+
+  EXPECT(send(fd, failing) && send(fd, behind), "could not replay");
+  expect_answer(fd, behind, CUDA_ERROR_INVALID_DEVICE,
+                "the call past the wrap, behind the failed one");
+  const Frame next = device_count(2);
+  EXPECT(send(fd, next), "could not send a request after the replay");
+  expect_answer(fd, next, CUDA_SUCCESS, "the call after the replay");
+
+  const long runs = totalmem_runs() - before;
+  std::printf("   the call without a reply ran %ld time(s)\n", runs);
+  EXPECT(runs == 1, "a call replayed across the wrap ran again");
+  ::close(fd);
+}
+
 }  // namespace
 
 int main() {
   reply_expected_request_in_flight();
   no_reply_request_in_flight();
   stale_reply_expected_copy();
+  handshake_resends_across_the_wrap();
+  replay_across_the_wrap();
 
   if (g_failures) {
     std::printf("\nFAILED: %d check(s)\n", g_failures);

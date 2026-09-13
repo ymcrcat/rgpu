@@ -105,6 +105,38 @@ if [[ -x "$BUILD/replay_smoke" ]]; then
   rm -f "$REPLAY_STATS" "$REPLAY_STATS.tmp"
 fi
 
+# Request ids wrapping past 0xFFFFFFFF, with the connection broken in a batch
+# that spans the wrap. Its own server: a break by frame count, which only means
+# something with one client on the server, and a stats file counting the calls
+# that ran. wrap_smoke.cpp explains the numbers.
+if [[ -x "$BUILD/wrap_smoke" ]]; then
+  echo
+  WRAP_PORT=$((PORT + 14))
+  WRAP_STATS=$(mktemp "${TMPDIR:-/tmp}/rgpu-stats.XXXXXX")
+  RGPU_DROP_AFTER=16 RGPU_SESSION_GRACE=30 RGPU_FAKE_STATS="$WRAP_STATS" \
+    "$BUILD/rgpu-server-fake" "$WRAP_PORT" &
+  WRAP_SRV=$!
+  for _ in $(seq 1 50); do
+    if (exec 3<>/dev/tcp/127.0.0.1/"$WRAP_PORT") 2>/dev/null; then
+      exec 3<&- 3>&-
+      break
+    fi
+    sleep 0.1
+  done
+  wrap_out=$(LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$WRAP_PORT" \
+    RGPU_BATCH=1 RGPU_TEST_FIRST_REQ_ID=4294967286 \
+    RGPU_FAKE_STATS="$WRAP_STATS" "$BUILD/wrap_smoke" 2>&1) || rc=1
+  printf '%s\n' "$wrap_out"
+  # As for reconnect_smoke: without the break this proves only half of it.
+  if ! printf '%s\n' "$wrap_out" | grep -q "and resumed"; then
+    echo "FAIL: the connection was never dropped and resumed, so wrap_smoke"
+    echo "      never replayed across the wrap; check where RGPU_DROP_AFTER lands"
+    rc=1
+  fi
+  kill $WRAP_SRV 2>/dev/null
+  rm -f "$WRAP_STATS" "$WRAP_STATS.tmp"
+fi
+
 # What an expired session leaves behind. Its own server, with a grace period
 # short enough to wait out and a file the fake driver publishes its outstanding
 # resource counts to; both are server-wide settings that the other tests want
