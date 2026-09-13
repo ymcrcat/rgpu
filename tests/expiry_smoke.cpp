@@ -24,6 +24,9 @@
 //   LD_LIBRARY_PATH=build RGPU_SERVER=127.0.0.1:9713 ./expiry_smoke
 
 #include <signal.h>
+#ifdef __linux__
+#include <sys/prctl.h>
+#endif
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -96,6 +99,24 @@ long field(const std::string& stats, const char* name) {
   size_t at = stats.find(key);
   if (at == std::string::npos) return -1;
   return std::strtol(stats.c_str() + at + key.size(), nullptr, 10);
+}
+
+// Called in a freshly forked child, before it execs. The children wait in
+// pause() for the parent to kill them, so a parent that crashes instead would
+// leave them running, holding sessions and pipe ends open. On Linux, where
+// these tests run, they are made to die with it: the death signal survives
+// the exec, and the parent is checked again in case it died before the signal
+// was armed.
+void die_with_parent(pid_t parent) {
+#ifdef __linux__
+  if (::prctl(PR_SET_PDEATHSIG, SIGKILL) != 0) {
+    std::perror("prctl");
+    ::_exit(127);
+  }
+  if (::getppid() != parent) ::_exit(127);
+#else
+  (void)parent;
+#endif
 }
 
 // Everything a client can take and then die holding. Called in both processes:
@@ -380,8 +401,10 @@ int tenant_a(int ready_fd) {
 // Starts this binary again as `role`, with the given descriptors passed on
 // the command line.
 pid_t spawn(const char* self, const char* role, std::vector<int> fds) {
+  const pid_t parent = ::getpid();
   const pid_t pid = ::fork();
   if (pid != 0) return pid;
+  die_with_parent(parent);
   std::vector<std::string> strs;
   for (int fd : fds) strs.push_back(std::to_string(fd));
   std::vector<char*> args = {const_cast<char*>(self), const_cast<char*>(role)};
@@ -617,12 +640,14 @@ int main(int argc, char** argv) {
     std::perror("pipe");
     return 1;
   }
+  const pid_t parent = ::getpid();
   const pid_t child = ::fork();
   if (child < 0) {
     std::perror("fork");
     return 1;
   }
   if (child == 0) {
+    die_with_parent(parent);
     ::close(ready[0]);
     char fd[16];
     std::snprintf(fd, sizeof(fd), "%d", ready[1]);
