@@ -84,6 +84,16 @@ struct InventoryStamp {
 };
 InventoryStamp inventory_stamp();
 
+// The same for a context named by a handle rather than the current one: its
+// device and generation if the server has seen it retained as a primary
+// context, otherwise device -1. And whether a primary context's generation is
+// still `gen`, which is false once the context has been destroyed - by a last
+// release or a reset in any session - since that stamp was taken. See
+// server/client_threads.h, which keeps these for every context a client
+// thread has current or stacked.
+InventoryStamp inventory_stamp_context(CUcontext ctx);
+bool inventory_generation_is(int dev, uint64_t gen);
+
 // Records a maths-library handle against the session being served here, where
 // `made` says it was made, and forgets one the client destroyed itself. `what`
 // is used in the log and must outlive the session, so a string literal.

@@ -6,6 +6,7 @@
 #include <iterator>
 #include <vector>
 
+#include "server/client_threads.h"
 #include "server/driver_syms.h"
 
 namespace rgpu {
@@ -113,9 +114,9 @@ void bump_generation(int dev) {
 // that something made in the new generation is skipped and leaks.
 using Stamp = InventoryStamp;  // see inventory.h
 
-Stamp stamp() {
+Stamp stamp_context(CUcontext ctx) {
   Stamp st;
-  st.ctx = current_ctx();
+  st.ctx = ctx;
   std::lock_guard<std::mutex> lk(g_gen_mu);
   auto d = g_primary_dev.find(st.ctx);
   if (d != g_primary_dev.end()) {
@@ -125,6 +126,8 @@ Stamp stamp() {
   }
   return st;
 }
+
+Stamp stamp() { return stamp_context(current_ctx()); }
 
 // Whether an entry is still what it was when it was made: always, unless it
 // was made in a primary context whose generation has since ended, or it was
@@ -396,6 +399,7 @@ CUresult w_cuDevicePrimaryCtxReset_v2(CUdevice dev) {
   if (r == CUDA_SUCCESS) {
     bump_generation(dev);
     forget_primary(dev);
+    client_threads_reset(dev);
   }
   return r;
 }
@@ -407,6 +411,7 @@ CUresult w_cuCtxCreate_v2(CUcontext* pctx, unsigned int flags, CUdevice dev) {
   // that way, destroying it is enough to account for everything in it.
   if (r == CUDA_SUCCESS && pctx) {
     note(&Inventory::contexts, reinterpret_cast<uint64_t>(*pctx), stamp());
+    client_threads_created(*pctx);
   }
   return r;
 }
@@ -414,7 +419,10 @@ CUresult w_cuCtxCreate_v2(CUcontext* pctx, unsigned int flags, CUdevice dev) {
 CUresult w_cuCtxDestroy_v2(CUcontext ctx) {
   REAL("cuCtxDestroy_v2", CUcontext);
   CUresult r = fn(ctx);
-  if (r == CUDA_SUCCESS) forget_context(ctx);
+  if (r == CUDA_SUCCESS) {
+    forget_context(ctx);
+    client_threads_destroyed(ctx);
+  }
   return r;
 }
 
@@ -778,6 +786,15 @@ void inventory_bind(Inventory* inv) {
 
 InventoryStamp inventory_stamp() { return stamp(); }
 
+InventoryStamp inventory_stamp_context(CUcontext ctx) {
+  if (!ctx) return Stamp{};
+  return stamp_context(ctx);
+}
+
+bool inventory_generation_is(int dev, uint64_t gen) {
+  return generation(dev) == gen;
+}
+
 void inventory_note_handle(uint64_t handle, const InventoryStamp& made,
                            const char* what, CUresult (*destroy)(uint64_t)) {
   Inventory* inv = t_inv;
@@ -795,6 +812,9 @@ void inventory_forget_handle(uint64_t handle) {
 }
 
 void* driver_wrapper(const char* name) {
+  // Calls that change which context a client thread has current, carried out
+  // on that thread's own stack. None of them is also tracked here.
+  if (void* fn = client_threads_wrapper(name)) return fn;
   for (const Tracked& t : kTracked) {
     if (std::strcmp(t.name, name) == 0) return t.fn;
   }

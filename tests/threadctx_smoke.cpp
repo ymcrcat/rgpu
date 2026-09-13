@@ -1,10 +1,11 @@
 // Checks that each client thread keeps its own CUDA context across the wire,
 // without a GPU.
 //
-// CUDA's current context belongs to the calling thread, but one server thread
-// serves every thread of a client process. So the server keeps what each
-// client thread last made current, puts it back before running that thread's
-// request, and reads it back afterwards. Without that, the last thread to
+// CUDA's current context - and the stack it is the top of - belongs to the
+// calling thread, but one server thread serves every thread of a client
+// process. So the server keeps each client thread's context stack, puts its
+// top back before running that thread's request, and reads it back
+// afterwards. Without that, the last thread to
 // select a context wins for everybody, silently: issue #2.
 //
 // Every case asserts what the driver documents - what cuCtxGetCurrent returns,
@@ -12,10 +13,11 @@
 // context fails, because on hardware with unified addressing it most likely
 // does not.
 //
-// Runs against its own rgpu-server-fake with two devices and batching on:
+// Runs against its own rgpu-server-fake with two devices, destroyed context
+// handles reused, and batching on:
 //
 //   RGPU_FAKE_DEVICES=2 RGPU_FAKE_STATS=/tmp/s RGPU_MAX_CLIENT_THREADS=16
-//     rgpu-server-fake 9723 &
+//     RGPU_FAKE_REUSE_CONTEXTS=1 rgpu-server-fake 9723 &
 //   LD_LIBRARY_PATH=build RGPU_SERVER=127.0.0.1:9723 RGPU_BATCH=1
 //     RGPU_FAKE_STATS=/tmp/s RGPU_MAX_CLIENT_THREADS=16 ./threadctx_smoke
 
@@ -313,20 +315,27 @@ void one_thread_costs_no_switches() {
   CHECK(cuDevicePrimaryCtxRelease(0));
 }
 
-// A context one thread made current and another thread then destroyed. The
-// first thread's next call must not run under whatever the other thread left
-// current: it fails with CUDA_ERROR_INVALID_CONTEXT, as CUDA fails a thread
-// whose context went away under it, and the thread can select again.
+// A context one thread made current and another thread then destroyed, and
+// whose address the next context created then got. The first thread's next
+// call must not run under that new context, nor under whatever the other
+// thread left current: CUDA leaves a destroyed context current to the threads
+// it was current to and fails their calls with
+// CUDA_ERROR_CONTEXT_IS_DESTROYED, and the thread can select again.
+//
+// The server runs with RGPU_FAKE_REUSE_CONTEXTS=1, so the fake hands the
+// destroyed context's handle to the next create, as a real driver may.
 void context_destroyed_by_another_thread() {
   std::printf("-- a context destroyed by another thread is not replaced by "
-              "that thread's\n");
+              "the context that took its address\n");
   CUcontext p0 = nullptr, p1 = nullptr;
   CHECK(cuDevicePrimaryCtxRetain(&p0, 0));
   CHECK(cuDevicePrimaryCtxRetain(&p1, 1));
 
   Turns turns;
-  CUcontext made = nullptr;
+  CUcontext made = nullptr, other = nullptr;
   CUresult after_destroy = CUDA_SUCCESS;
+  int landed_on = -1;
+  CUcontext a_sees = reinterpret_cast<CUcontext>(0xbadull);
   int reselected_on = -1;
   std::thread a([&] {
     CHECK(cuCtxCreate(&made, 0, 0));
@@ -334,7 +343,11 @@ void context_destroyed_by_another_thread() {
     turns.await(2);
     CUdeviceptr d = 0;
     after_destroy = cuMemAlloc(&d, 64);
-    if (after_destroy == CUDA_SUCCESS) cuMemFree(d);
+    if (after_destroy == CUDA_SUCCESS) {
+      landed_on = ordinal_of(d);
+      cuMemFree(d);
+    }
+    CHECK(cuCtxGetCurrent(&a_sees));
     CHECK(cuCtxSetCurrent(p0));
     CUdeviceptr e = 0;
     CHECK(cuMemAlloc(&e, 64));
@@ -349,22 +362,195 @@ void context_destroyed_by_another_thread() {
     turns.await(1);
     CHECK(cuCtxSetCurrent(p1));
     CHECK(cuCtxDestroy(made));
+    // Pushed on top of p1, on device 1, so that running under it shows.
+    CHECK(cuCtxCreate(&other, 0, 1));
+    turns.advance(2);
+    turns.await(3);
+    CHECK(cuCtxDestroy(other));
+    CHECK(cuCtxSetCurrent(nullptr));
+  });
+  a.join();
+  b.join();
+  EXPECT(other == made,
+         "the fake did not reuse the destroyed context's handle (is "
+         "RGPU_FAKE_REUSE_CONTEXTS=1 set on the server?)");
+  if (after_destroy != CUDA_ERROR_CONTEXT_IS_DESTROYED) {
+    char msg[200];
+    std::snprintf(msg, sizeof(msg),
+                  "a call after another thread destroyed this thread's context "
+                  "returned %d (on device %d), not "
+                  "CUDA_ERROR_CONTEXT_IS_DESTROYED",
+                  (int)after_destroy, landed_on);
+    fail_at(__FILE__, __LINE__, msg);
+  }
+  EXPECT(a_sees != other && a_sees != p1,
+         "a thread whose context was destroyed was bound to another thread's "
+         "context");
+  EXPECT(reselected_on == 0,
+         "a thread whose context was destroyed could not select another");
+  CHECK(cuDevicePrimaryCtxRelease(0));
+  CHECK(cuDevicePrimaryCtxRelease(1));
+}
+
+// A thread whose context was destroyed under it recovers the way it would in
+// CUDA: its very first call can be a selection, which succeeds, and what it
+// pushes on top of the destroyed context can be popped to find the destroyed
+// one current again.
+void recovery_after_destroy() {
+  std::printf("-- a thread recovers from a context destroyed under it\n");
+  CUcontext p0 = nullptr, p1 = nullptr;
+  CHECK(cuDevicePrimaryCtxRetain(&p0, 0));
+  CHECK(cuDevicePrimaryCtxRetain(&p1, 1));
+
+  Turns turns;
+  CUcontext made = nullptr, popped = nullptr;
+  CUresult pushed = CUDA_ERROR_UNKNOWN;
+  CUresult under_push = CUDA_ERROR_UNKNOWN, after_pop = CUDA_SUCCESS;
+  int pushed_on = -1, set_on = -1;
+  CUcontext at_end = reinterpret_cast<CUcontext>(0xbadull);
+  std::thread a([&] {
+    CHECK(cuCtxCreate(&made, 0, 0));
+    turns.advance(1);
+    turns.await(2);
+    pushed = cuCtxPushCurrent(p0);
+    CUdeviceptr d = 0;
+    under_push = cuMemAlloc(&d, 64);
+    if (under_push == CUDA_SUCCESS) {
+      pushed_on = ordinal_of(d);
+      CHECK(cuMemFree(d));
+    }
+    CHECK(cuCtxPopCurrent(&popped));
+    CUdeviceptr e = 0;
+    after_pop = cuMemAlloc(&e, 64);
+    if (after_pop == CUDA_SUCCESS) cuMemFree(e);
+    // Replaces the destroyed context at the top of the stack.
+    CHECK(cuCtxSetCurrent(p1));
+    CUdeviceptr f = 0;
+    CHECK(cuMemAlloc(&f, 64));
+    if (f) {
+      set_on = ordinal_of(f);
+      CHECK(cuMemFree(f));
+    }
+    CHECK(cuCtxSetCurrent(nullptr));
+    CHECK(cuCtxGetCurrent(&at_end));
+    turns.advance(3);
+  });
+  std::thread b([&] {
+    turns.await(1);
+    CHECK(cuCtxDestroy(made));
+    turns.advance(2);
+    turns.await(3);
+  });
+  a.join();
+  b.join();
+  if (pushed != CUDA_SUCCESS) {
+    char msg[160];
+    std::snprintf(msg, sizeof(msg),
+                  "the first call after this thread's context was destroyed, a "
+                  "push, returned %d",
+                  (int)pushed);
+    fail_at(__FILE__, __LINE__, msg);
+  }
+  EXPECT(under_push == CUDA_SUCCESS && pushed_on == 0,
+         "an allocation under the pushed context did not land on its device");
+  EXPECT(popped == p0, "the pop did not return the pushed context");
+  if (after_pop != CUDA_ERROR_CONTEXT_IS_DESTROYED) {
+    char msg[160];
+    std::snprintf(msg, sizeof(msg),
+                  "after popping back to the destroyed context an allocation "
+                  "returned %d, not CUDA_ERROR_CONTEXT_IS_DESTROYED",
+                  (int)after_pop);
+    fail_at(__FILE__, __LINE__, msg);
+  }
+  EXPECT(set_on == 1,
+         "selecting over a destroyed context did not take effect");
+  EXPECT(at_end == nullptr,
+         "the thread's stack was not empty after it popped everything");
+  CHECK(cuDevicePrimaryCtxRelease(0));
+  CHECK(cuDevicePrimaryCtxRelease(1));
+}
+
+// Issue #2's regression in C1, exactly: a thread that creates a context and
+// pushes another on top of it, with a background thread's context-free call in
+// between, pops back to the context it created. The background thread has no
+// context of its own, and making that true on the one server thread must not
+// throw away the first thread's stack.
+void push_pop_across_a_background_call() {
+  std::printf("-- a thread's context stack survives another thread's "
+              "context-free call\n");
+  CUcontext p1 = nullptr;
+  CHECK(cuDevicePrimaryCtxRetain(&p1, 1));
+
+  Turns turns;
+  CUcontext made = nullptr, popped = nullptr;
+  CUcontext after_pop = reinterpret_cast<CUcontext>(0xbadull);
+  std::thread a([&] {
+    CHECK(cuCtxCreate(&made, 0, 0));
+    CHECK(cuCtxPushCurrent(p1));
+    turns.advance(1);
+    turns.await(2);
+    CHECK(cuCtxPopCurrent(&popped));
+    CHECK(cuCtxGetCurrent(&after_pop));
+    CHECK(cuCtxDestroy(made));
+    turns.advance(3);
+  });
+  std::thread b([&] {
+    turns.await(1);
+    int count = 0;
+    CHECK(cuDeviceGetCount(&count));
+    turns.advance(2);
+    turns.await(3);
+  });
+  a.join();
+  b.join();
+  EXPECT(popped == p1, "the pop did not return the pushed context");
+  EXPECT(after_pop == made,
+         "popping did not make the context underneath current again: another "
+         "thread's call threw the stack away");
+  CHECK(cuDevicePrimaryCtxRelease(1));
+}
+
+// Test 3 of the design: context stacks are per thread. A pushes one context
+// over its own; B, with a different context of its own, pushes and pops; A
+// pops and is back where it started, and so is B.
+void stacks_are_per_thread() {
+  std::printf("-- each thread pops back to its own context\n");
+  CUcontext p0 = nullptr, p1 = nullptr;
+  CHECK(cuDevicePrimaryCtxRetain(&p0, 0));
+  CHECK(cuDevicePrimaryCtxRetain(&p1, 1));
+
+  Turns turns;
+  CUcontext a_popped = nullptr, b_popped = nullptr;
+  CUcontext a_after = reinterpret_cast<CUcontext>(0xbadull);
+  CUcontext b_after = reinterpret_cast<CUcontext>(0xbadull);
+  std::thread a([&] {
+    CHECK(cuCtxSetCurrent(p0));
+    CHECK(cuCtxPushCurrent(p1));
+    turns.advance(1);
+    turns.await(2);
+    CHECK(cuCtxPopCurrent(&a_popped));
+    CHECK(cuCtxGetCurrent(&a_after));
+    CHECK(cuCtxSetCurrent(nullptr));
+    turns.advance(3);
+  });
+  std::thread b([&] {
+    turns.await(1);
+    CHECK(cuCtxSetCurrent(p1));
+    CHECK(cuCtxPushCurrent(p0));
+    CHECK(cuCtxPopCurrent(&b_popped));
+    CHECK(cuCtxGetCurrent(&b_after));
     turns.advance(2);
     turns.await(3);
     CHECK(cuCtxSetCurrent(nullptr));
   });
   a.join();
   b.join();
-  if (after_destroy != CUDA_ERROR_INVALID_CONTEXT) {
-    char msg[200];
-    std::snprintf(msg, sizeof(msg),
-                  "a call after another thread destroyed this thread's context "
-                  "returned %d, not CUDA_ERROR_INVALID_CONTEXT",
-                  (int)after_destroy);
-    fail_at(__FILE__, __LINE__, msg);
-  }
-  EXPECT(reselected_on == 0,
-         "a thread whose context was destroyed could not select another");
+  EXPECT(b_popped == p0, "thread B's pop did not return what it pushed");
+  EXPECT(b_after == p1, "thread B did not pop back to its own context");
+  EXPECT(a_popped == p1, "thread A's pop did not return what it pushed");
+  EXPECT(a_after == p0,
+         "thread A did not pop back to its own context after thread B pushed "
+         "and popped");
   CHECK(cuDevicePrimaryCtxRelease(0));
   CHECK(cuDevicePrimaryCtxRelease(1));
 }
@@ -462,6 +648,54 @@ class RawSession {
     return reinterpret_cast<CUcontext>(h);
   }
 
+  CUresult retain(uint32_t thread, int dev, CUcontext* ctx) {
+    rgpu::Buffer req, rsp;
+    req.put<uint8_t>(1);
+    req.put<int>(dev);
+    const CUresult r = call(rgpu::API_cuDevicePrimaryCtxRetain, thread, req, &rsp);
+    uint64_t h = 0;
+    if (r == CUDA_SUCCESS && rsp.get(&h)) *ctx = reinterpret_cast<CUcontext>(h);
+    return r;
+  }
+
+  CUresult release(uint32_t thread, int dev) {
+    rgpu::Buffer req, rsp;
+    req.put<int>(dev);
+    return call(rgpu::API_cuDevicePrimaryCtxRelease_v2, thread, req, &rsp);
+  }
+
+  CUresult create(uint32_t thread, int dev, CUcontext* ctx) {
+    rgpu::Buffer req, rsp;
+    req.put<uint8_t>(1);
+    req.put<unsigned int>(0);
+    req.put<int>(dev);
+    const CUresult r = call(rgpu::API_cuCtxCreate_v2, thread, req, &rsp);
+    uint64_t h = 0;
+    if (r == CUDA_SUCCESS && rsp.get(&h)) *ctx = reinterpret_cast<CUcontext>(h);
+    return r;
+  }
+
+  CUresult destroy(uint32_t thread, CUcontext ctx) {
+    rgpu::Buffer req, rsp;
+    req.put<uint64_t>(reinterpret_cast<uint64_t>(ctx));
+    return call(rgpu::API_cuCtxDestroy_v2, thread, req, &rsp);
+  }
+
+  CUresult alloc(uint32_t thread, size_t bytes, CUdeviceptr* ptr) {
+    rgpu::Buffer req, rsp;
+    req.put<uint8_t>(1);
+    req.put<size_t>(bytes);
+    const CUresult r = call(rgpu::API_cuMemAlloc_v2, thread, req, &rsp);
+    if (r == CUDA_SUCCESS && !rsp.get(ptr)) return CUDA_ERROR_UNKNOWN;
+    return r;
+  }
+
+  CUresult free(uint32_t thread, CUdeviceptr ptr) {
+    rgpu::Buffer req, rsp;
+    req.put<CUdeviceptr>(ptr);
+    return call(rgpu::API_cuMemFree_v2, thread, req, &rsp);
+  }
+
   // Announces threads gone, sent by `sender` without a reply, as the client
   // sends it.
   bool gone(uint32_t sender, const std::vector<uint32_t>& ids) {
@@ -475,6 +709,63 @@ class RawSession {
   int fd_ = -1;
   uint32_t next_ = 1;
 };
+
+// A primary context one session's thread had current, destroyed by another
+// session's last release, and brought back by a third session that then also
+// creates a context of its own. The first thread never learns of any of it:
+// its session saw neither the release nor the retain. Its next call must not
+// run under whatever now answers to the handle it saved - on hardware that
+// could be a new context at the old address, on the fake it is the revived
+// primary context the third session holds - but fail the way a call on a
+// destroyed context fails.
+//
+// Runs before anything in this process retains device 0, so that the second
+// session's release really is the last one.
+void primary_destroyed_by_another_session() {
+  std::printf("-- a primary context destroyed by another session is not "
+              "rebound by its old handle\n");
+  constexpr uint32_t kHolder = 1, kOther = 2;
+  RawSession s1, s2, s3;
+  if (!s1.open() || !s2.open() || !s3.open()) {
+    fail_at(__FILE__, __LINE__, "could not open sessions of our own");
+    return;
+  }
+  CUcontext p0 = nullptr, s2_p0 = nullptr, s3_p0 = nullptr, s3_made = nullptr;
+  CHECK(s1.retain(kHolder, 0, &p0));
+  CHECK(s1.set_current(kHolder, p0));
+  CHECK(s2.retain(kHolder, 0, &s2_p0));
+  // Not the last release: the second session still holds one.
+  CHECK(s1.release(kHolder, 0));
+  // Another thread of the first session calls, so the holder's context is no
+  // longer the one its session's server thread has current.
+  CUresult r = CUDA_ERROR_UNKNOWN;
+  s1.get_current(kOther, &r);
+  CHECK(r);
+  // The last release in the process: device 0's primary context is destroyed.
+  CHECK(s2.release(kHolder, 0));
+  CHECK(s3.retain(kHolder, 0, &s3_p0));
+  CHECK(s3.create(kHolder, 0, &s3_made));
+
+  CUdeviceptr d = 0;
+  const CUresult alloc = s1.alloc(kHolder, 64, &d);
+  if (alloc == CUDA_SUCCESS) s1.free(kHolder, d);
+  if (alloc != CUDA_ERROR_CONTEXT_IS_DESTROYED) {
+    char msg[200];
+    std::snprintf(msg, sizeof(msg),
+                  "a call from a thread whose primary context another session "
+                  "destroyed returned %d, not CUDA_ERROR_CONTEXT_IS_DESTROYED",
+                  (int)alloc);
+    fail_at(__FILE__, __LINE__, msg);
+  }
+  const CUcontext sees = s1.get_current(kHolder, &r);
+  CHECK(r);
+  EXPECT(sees != p0 && sees != s3_made,
+         "a thread whose primary context another session destroyed was bound "
+         "to a context by its old handle");
+
+  CHECK(s3.destroy(kHolder, s3_made));
+  CHECK(s3.release(kHolder, 0));
+}
 
 // Late thread-local destructors on a client thread can call after the client
 // has announced the thread gone. Such a call finds the context its thread had,
@@ -581,11 +872,15 @@ int main() {
     return 1;
   }
 
+  primary_destroyed_by_another_session();
   currency_is_read_back();
   issue_scenario_by_placement();
   batch_flushed_by_another_thread();
   one_thread_costs_no_switches();
   context_destroyed_by_another_thread();
+  recovery_after_destroy();
+  push_pop_across_a_background_call();
+  stacks_are_per_thread();
 
   CUcontext p0 = nullptr, p1 = nullptr;
   CHECK(cuDevicePrimaryCtxRetain(&p0, 0));

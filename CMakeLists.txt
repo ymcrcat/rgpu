@@ -150,7 +150,8 @@ find_library(CUDA_DRIVER_LIB NAMES cuda libcuda.so.1
         /usr/local/cuda/lib64/stubs /usr/local/cuda/lib64)
 
 if(CUDA_DRIVER_LIB)
-  set(SERVER_SOURCES server/main.cpp server/inventory.cpp ${GEN_SERVER}
+  set(SERVER_SOURCES server/main.cpp server/inventory.cpp
+      server/client_threads.cpp ${GEN_SERVER}
       ${GEN_NAMES})
   if(EXISTS ${CUBLAS_INCLUDE_DIR}/cublas_v2.h)
     list(APPEND SERVER_SOURCES server/cublas_server.cpp)
@@ -298,6 +299,7 @@ target_link_libraries(graph_smoke PRIVATE rgpu_cudart rgpu_client)
 add_executable(rgpu_server_fake
   server/main.cpp
   server/inventory.cpp
+  server/client_threads.cpp
   ${GEN_SERVER}
   ${GEN_NAMES}
   tests/generated/fake_driver.cpp
