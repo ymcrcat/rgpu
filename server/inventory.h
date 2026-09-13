@@ -32,13 +32,24 @@ namespace rgpu {
 struct Inventory {
   // Which context was current when this was created. Releasing it has to
   // happen under that context, and destroying the context makes it moot.
+  //
+  // If that was a primary context, also its device and the generation of that
+  // device's primary context at the time. A primary context is destroyed by
+  // whichever session makes the last release in the process, or by a reset,
+  // and every session that still lists something made in it has to stop
+  // treating it as its own - including sessions that had nothing to do with
+  // the release. The generation is how they find out: see release_inventory.
   struct Item {
     CUcontext ctx = nullptr;
+    int dev = -1;
+    uint64_t gen = 0;
   };
   // A maths-library handle. The library that minted it is the only thing that
   // knows how to destroy it, so it leaves a way to do that behind.
   struct LibHandle {
     CUcontext ctx = nullptr;
+    int dev = -1;  // as for Item
+    uint64_t gen = 0;
     const char* what = "";
     CUresult (*destroy)(uint64_t) = nullptr;
   };
@@ -52,10 +63,6 @@ struct Inventory {
   // the session owns: exactly this many releases are owed at the end and not
   // one more, or a session still using the device loses it.
   std::unordered_map<int, int> primary_retains;
-  // The primary context handle per device, learned when it was retained. Only
-  // used to find what a reset of that device, or the last release of its
-  // primary context, threw away.
-  std::unordered_map<int, CUcontext> primary_ctx;
 };
 
 // Binds this thread to the session it is serving, so the recording underneath

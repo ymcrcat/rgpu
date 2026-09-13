@@ -105,8 +105,8 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
   kill $EXPIRY_SRV 2>/dev/null
   rm -f "$EXPIRY_STATS" "$EXPIRY_STATS.tmp"
 
-  # A session alone on a server that destroys its own primary context, then
-  # expires. Its own server each time, since both need nobody else on it.
+  # Sessions that destroy a primary context, then expire. Each scenario gets a
+  # server of its own, since each needs nobody else on it.
   # Everything has to be back to zero afterwards - including the count of
   # releases the fake driver had to refuse, and the count of frees of things
   # already destroyed.
@@ -118,8 +118,13 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
   #            over-release.
   #   release: releasing the only retain destroys what is in the context, so
   #            expiry must not free any of it again, which would be stale.
-  alone_then_expire() {
-    local mode=$1 port=$2
+  #   tenants: three sessions share the primary context, and one that released
+  #            its retain but kept its resources has them destroyed by
+  #            another's last release, or another's expiry; its own expiry
+  #            must then free nothing (expiry_smoke.cpp says more). Three
+  #            sessions to wait for.
+  then_expire() {
+    local mode=$1 port=$2 sessions=$3
     local stats log
     stats=$(mktemp "${TMPDIR:-/tmp}/rgpu-stats.XXXXXX")
     log=$(mktemp "${TMPDIR:-/tmp}/rgpu-$mode-log.XXXXXX")
@@ -133,12 +138,15 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
       fi
       sleep 0.1
     done
+    # $mode may be two words.
+    # shellcheck disable=SC2086
     LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$port" \
-      RGPU_FAKE_STATS="$stats" "$BUILD/expiry_smoke" "$mode" || rc=1
-    # Wait for the session to expire rather than for the counters, which may
+      RGPU_SESSION_GRACE=3 RGPU_FAKE_STATS="$stats" RGPU_SERVER_LOG="$log" \
+      "$BUILD/expiry_smoke" $mode || rc=1
+    # Wait for every session to expire rather than for the counters, which may
     # already look right: the mistakes being looked for happen at expiry.
-    for _ in $(seq 1 200); do
-      grep -q "expired" "$log" && break
+    for _ in $(seq 1 300); do
+      [[ $(grep -c " expired;" "$log") -ge $sessions ]] && break
       sleep 0.1
     done
     local want="allocs=0 retains=0 contexts=0 modules=0 streams=0 events=0"
@@ -159,8 +167,10 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
     kill $srv 2>/dev/null
     rm -f "$stats" "$stats.tmp" "$log"
   }
-  alone_then_expire reset $((PORT + 4))
-  alone_then_expire release $((PORT + 5))
+  then_expire reset $((PORT + 4)) 1
+  then_expire release $((PORT + 5)) 1
+  then_expire "tenants release" $((PORT + 6)) 3
+  then_expire "tenants expire" $((PORT + 7)) 3
 fi
 
 # Hostile requests get a server of their own: if one of them does take the

@@ -51,16 +51,95 @@ CUcontext current_ctx() {
   return ctx;
 }
 
+// --- primary-context generations -------------------------------------------
+//
+// A primary context is shared by every session in the process, and it is
+// destroyed with everything in it by the last release anywhere in the process,
+// or by a reset. The session that made that release can correct its own
+// record, but other sessions may still list things they made in the context
+// before releasing their own retains, and if one of them freed those at expiry
+// it would be freeing destroyed state - or, once a third session has retained
+// the context again and allocated, that session's memory.
+//
+// So each device's primary context has a generation, bumped whenever the
+// server sees it destroyed, and every entry made in a primary context records
+// the generation it was made in. At expiry an entry from an older generation is
+// skipped, not freed.
+
+// Serialises everything that can end a primary context's generation or start a
+// new one - a session's retain, a release together with the question whether
+// it was the last, a reset, and the releases and generation-checked frees at
+// expiry - so that nothing can revive a context between its destruction and
+// the bump that records it, or destroy one between the check and a free. It is
+// held across those driver calls, which is the point. Lock order: g_live_mu,
+// then this, then g_gen_mu, then an inventory's own mutex.
+std::mutex g_primary_mu;
+
+// The tables themselves. Their own lock, and never held across a driver call,
+// because they are read on every allocation, which must not wait for another
+// session's retain or release.
+std::mutex g_gen_mu;
+std::unordered_map<CUcontext, int> g_primary_dev;  // handle -> device
+std::unordered_map<int, uint64_t> g_primary_gen;   // device -> generation
+
+void learn_primary(CUcontext ctx, int dev) {
+  if (!ctx) return;
+  std::lock_guard<std::mutex> lk(g_gen_mu);
+  g_primary_dev[ctx] = dev;
+}
+
+uint64_t generation(int dev) {
+  std::lock_guard<std::mutex> lk(g_gen_mu);
+  auto it = g_primary_gen.find(dev);
+  return it == g_primary_gen.end() ? 0 : it->second;
+}
+
+// Called with g_primary_mu held, straight after the driver call that destroyed
+// the context.
+void bump_generation(int dev) {
+  std::lock_guard<std::mutex> lk(g_gen_mu);
+  g_primary_gen[dev]++;
+}
+
+// Where something is about to be made: the current context and, if that is a
+// primary context, its device and generation. Taken before the driver call, so
+// that a generation that ends while the call runs is charged to the entry. The
+// wrong way round, an entry made in a context that was then destroyed would
+// carry the new generation and be freed at expiry; this way the worst case is
+// that something made in the new generation is skipped and leaks.
+struct Stamp {
+  CUcontext ctx = nullptr;
+  int dev = -1;
+  uint64_t gen = 0;
+};
+
+Stamp stamp() {
+  Stamp st;
+  st.ctx = current_ctx();
+  std::lock_guard<std::mutex> lk(g_gen_mu);
+  auto d = g_primary_dev.find(st.ctx);
+  if (d != g_primary_dev.end()) {
+    st.dev = d->second;
+    auto g = g_primary_gen.find(st.dev);
+    st.gen = g == g_primary_gen.end() ? 0 : g->second;
+  }
+  return st;
+}
+
+// Whether an entry is still what it was when it was made: always, unless it
+// was made in a primary context whose generation has since ended.
+bool still_current(int dev, uint64_t gen) {
+  return dev < 0 || generation(dev) == gen;
+}
+
 // --- recording ------------------------------------------------------------
 
-void note(Inventory::Items Inventory::*which, uint64_t handle) {
+void note(Inventory::Items Inventory::*which, uint64_t handle,
+          const Stamp& st) {
   Inventory* inv = t_inv;
   if (!inv || !handle) return;
-  // Read outside the lock: it is a thread-local lookup in the driver, and the
-  // only thread that could be holding this lock is this one.
-  const CUcontext ctx = current_ctx();
   std::lock_guard<std::mutex> lk(inv->mu);
-  (inv->*which)[handle] = Inventory::Item{ctx};
+  (inv->*which)[handle] = Inventory::Item{st.ctx, st.dev, st.gen};
 }
 
 void forget(Inventory::Items Inventory::*which, uint64_t handle) {
@@ -70,11 +149,10 @@ void forget(Inventory::Items Inventory::*which, uint64_t handle) {
   (inv->*which).erase(handle);
 }
 
-void note_primary_retain(CUdevice dev, int delta, CUcontext ctx) {
+void note_primary_retain(CUdevice dev, int delta) {
   Inventory* inv = t_inv;
   if (!inv) return;
   std::lock_guard<std::mutex> lk(inv->mu);
-  if (ctx) inv->primary_ctx[dev] = ctx;
   int& n = inv->primary_retains[dev];
   n += delta;
   // A client that releases more than it retained has taken a retain off
@@ -111,10 +189,13 @@ void forget_context(CUcontext ctx) {
 }
 
 // Resetting a device destroys everything in its primary context without
-// destroying the context, so the session's record of what is in there is
-// suddenly wrong. Only this session's record can be corrected here; a reset is
-// a process-wide act, and a client that makes one while another session is
-// using the device has already broken that session, driver or no driver.
+// destroying the context, and the last release of a primary context in the
+// process destroys it outright; either way the session's record of what was in
+// there is suddenly wrong. Called with g_primary_mu held, after the generation
+// has been bumped: everything this session made on the device in an earlier
+// generation is forgotten here, so the client freeing it later is not tracked
+// and expiry does not have to skip it. Other sessions' records are left as
+// they are, and expiry skips their entries by generation.
 //
 // Only the resources go. The retains stay: the driver says "Resetting the
 // primary context does not release it, an application that has retained the
@@ -122,21 +203,24 @@ void forget_context(CUcontext ctx) {
 // for other modules to call cuDevicePrimaryCtxRelease() even after resetting
 // the device". So every retain this session held is still held, and expiry
 // owes exactly that many releases; forgetting them would leak them for the
-// life of the server. The handle stays recorded too, since the context was not
-// released: a later reset has to find what was made in it afterwards, and a
-// retain that hands back a new handle overwrites it.
-//
-// The last release of a primary context in the process destroys what is in it
-// the same way, and comes here too. The handle is left recorded then as well;
-// if the driver hands out a new one when the context is next retained, that
-// retain overwrites it.
+// life of the server. After a last release the session holds none anyway.
 void forget_primary(CUdevice dev) {
   Inventory* inv = t_inv;
   if (!inv) return;
+  const uint64_t now = generation(dev);
   std::lock_guard<std::mutex> lk(inv->mu);
-  auto it = inv->primary_ctx.find(dev);
-  if (it == inv->primary_ctx.end()) return;
-  forget_under(inv, it->second);
+  Inventory::Items* maps[] = {&inv->allocs,  &inv->modules, &inv->streams,
+                              &inv->events,  &inv->graphs,  &inv->graph_execs};
+  for (Inventory::Items* m : maps) {
+    for (auto it = m->begin(); it != m->end();) {
+      const bool gone = it->second.dev == dev && it->second.gen != now;
+      it = gone ? m->erase(it) : std::next(it);
+    }
+  }
+  for (auto it = inv->handles.begin(); it != inv->handles.end();) {
+    const bool gone = it->second.dev == dev && it->second.gen != now;
+    it = gone ? inv->handles.erase(it) : std::next(it);
+  }
 }
 
 // --- the wrappers ---------------------------------------------------------
@@ -148,8 +232,9 @@ void forget_primary(CUdevice dev) {
 
 CUresult w_cuMemAlloc_v2(CUdeviceptr* dptr, size_t bytes) {
   REAL("cuMemAlloc_v2", CUdeviceptr*, size_t);
+  const Stamp st = stamp();
   CUresult r = fn(dptr, bytes);
-  if (r == CUDA_SUCCESS && dptr) note(&Inventory::allocs, *dptr);
+  if (r == CUDA_SUCCESS && dptr) note(&Inventory::allocs, *dptr, st);
   return r;
 }
 
@@ -157,23 +242,26 @@ CUresult w_cuMemAllocPitch_v2(CUdeviceptr* dptr, size_t* pitch, size_t width,
                               size_t height, unsigned int elem) {
   REAL("cuMemAllocPitch_v2", CUdeviceptr*, size_t*, size_t, size_t,
        unsigned int);
+  const Stamp st = stamp();
   CUresult r = fn(dptr, pitch, width, height, elem);
-  if (r == CUDA_SUCCESS && dptr) note(&Inventory::allocs, *dptr);
+  if (r == CUDA_SUCCESS && dptr) note(&Inventory::allocs, *dptr, st);
   return r;
 }
 
 CUresult w_cuMemAllocAsync(CUdeviceptr* dptr, size_t bytes, CUstream stream) {
   REAL("cuMemAllocAsync", CUdeviceptr*, size_t, CUstream);
+  const Stamp st = stamp();
   CUresult r = fn(dptr, bytes, stream);
-  if (r == CUDA_SUCCESS && dptr) note(&Inventory::allocs, *dptr);
+  if (r == CUDA_SUCCESS && dptr) note(&Inventory::allocs, *dptr, st);
   return r;
 }
 
 CUresult w_cuMemAllocFromPoolAsync(CUdeviceptr* dptr, size_t bytes,
                                    CUmemoryPool pool, CUstream stream) {
   REAL("cuMemAllocFromPoolAsync", CUdeviceptr*, size_t, CUmemoryPool, CUstream);
+  const Stamp st = stamp();
   CUresult r = fn(dptr, bytes, pool, stream);
-  if (r == CUDA_SUCCESS && dptr) note(&Inventory::allocs, *dptr);
+  if (r == CUDA_SUCCESS && dptr) note(&Inventory::allocs, *dptr, st);
   return r;
 }
 
@@ -191,42 +279,49 @@ CUresult w_cuMemFreeAsync(CUdeviceptr dptr, CUstream stream) {
   return r;
 }
 
-// Held across a session's retain, and across a session's release together with
-// the question that follows it, so that no other session's retain can bring a
-// primary context back to life between a release that ended it and the check
-// that notices. Retains and releases are rare next to everything else, so
-// making them wait for each other costs nothing that shows. Lock order is
-// this, then the inventory's own mutex; nothing takes them the other way round.
-std::mutex g_primary_mu;
-
+// A retain can bring a destroyed primary context back, so it takes
+// g_primary_mu: a release that has just destroyed the context gets to record
+// that before anything can start a new generation.
 CUresult w_cuDevicePrimaryCtxRetain(CUcontext* pctx, CUdevice dev) {
   REAL("cuDevicePrimaryCtxRetain", CUcontext*, CUdevice);
   std::lock_guard<std::mutex> lk(g_primary_mu);
   CUresult r = fn(pctx, dev);
-  if (r == CUDA_SUCCESS) note_primary_retain(dev, 1, pctx ? *pctx : nullptr);
+  if (r == CUDA_SUCCESS) {
+    learn_primary(pctx ? *pctx : nullptr, dev);
+    note_primary_retain(dev, 1);
+  }
   return r;
+}
+
+// Whether the device's primary context is inactive, as the driver reports it.
+// Called with g_primary_mu held, straight after a release, so the answer is
+// about that release. If the state cannot be read the answer is no, and
+// nothing is forgotten or skipped: a free the driver refuses is the lesser
+// mistake next to skipping everything a live context still holds.
+bool primary_inactive(CUdevice dev) {
+  static auto get_state =
+      reinterpret_cast<CUresult (*)(CUdevice, unsigned int*, int*)>(
+          driver_sym_raw("cuDevicePrimaryCtxGetState"));
+  unsigned int flags = 0;
+  int active = 1;
+  return get_state && get_state(dev, &flags, &active) == CUDA_SUCCESS &&
+         !active;
 }
 
 // Releasing the last retain in the process destroys the primary context and
 // everything in it - "The context is automatically reset once the last
-// reference to it is released" - so whatever this session recorded in there is
-// no longer its to free. Its own count cannot say whether this release was the
-// last one, because other sessions may hold retains on the same context, so
-// the driver is asked instead. If the state cannot be read, the record is left
-// as it is: the driver will refuse frees in a context that is gone.
+// reference to it is released". This session's own count cannot say whether
+// this release was the last one, because other sessions may hold retains on
+// the same context, so the driver is asked instead, before anything else can
+// retain it.
 CUresult w_cuDevicePrimaryCtxRelease_v2(CUdevice dev) {
   REAL("cuDevicePrimaryCtxRelease_v2", CUdevice);
-  static auto get_state =
-      reinterpret_cast<CUresult (*)(CUdevice, unsigned int*, int*)>(
-          driver_sym_raw("cuDevicePrimaryCtxGetState"));
   std::lock_guard<std::mutex> lk(g_primary_mu);
   CUresult r = fn(dev);
   if (r != CUDA_SUCCESS) return r;
-  note_primary_retain(dev, -1, nullptr);
-  unsigned int flags = 0;
-  int active = 1;
-  if (get_state && get_state(dev, &flags, &active) == CUDA_SUCCESS &&
-      !active) {
+  note_primary_retain(dev, -1);
+  if (primary_inactive(dev)) {
+    bump_generation(dev);
     forget_primary(dev);
   }
   return r;
@@ -246,8 +341,8 @@ CUresult w_cuDevicePrimaryCtxReset_v2(CUdevice dev) {
   // takes this lock - start using the device, and then have the reset destroy
   // what it had just been given. The price is that a new session waits for one
   // reset to finish before it can start, which is rare and bounded. Lock order
-  // is this, then the inventory's own mutex in forget_primary; nothing takes
-  // them the other way round.
+  // is this, then g_primary_mu, then the inventory's own mutex in
+  // forget_primary; nothing takes them the other way round.
   std::lock_guard<std::mutex> lk(g_live_mu);
   const int live = g_live_sessions;
   if (live > 1) {
@@ -256,8 +351,12 @@ CUresult w_cuDevicePrimaryCtxReset_v2(CUdevice dev) {
          dev, live);
     return CUDA_ERROR_NOT_SUPPORTED;
   }
+  std::lock_guard<std::mutex> primary(g_primary_mu);
   CUresult r = fn(dev);
-  if (r == CUDA_SUCCESS) forget_primary(dev);
+  if (r == CUDA_SUCCESS) {
+    bump_generation(dev);
+    forget_primary(dev);
+  }
   return r;
 }
 
@@ -267,7 +366,7 @@ CUresult w_cuCtxCreate_v2(CUcontext* pctx, unsigned int flags, CUdevice dev) {
   // Creating a context makes it current, so it is its own context: recorded
   // that way, destroying it is enough to account for everything in it.
   if (r == CUDA_SUCCESS && pctx) {
-    note(&Inventory::contexts, reinterpret_cast<uint64_t>(*pctx));
+    note(&Inventory::contexts, reinterpret_cast<uint64_t>(*pctx), stamp());
   }
   return r;
 }
@@ -281,27 +380,30 @@ CUresult w_cuCtxDestroy_v2(CUcontext ctx) {
 
 CUresult w_cuModuleLoad(CUmodule* mod, const char* path) {
   REAL("cuModuleLoad", CUmodule*, const char*);
+  const Stamp st = stamp();
   CUresult r = fn(mod, path);
   if (r == CUDA_SUCCESS && mod) {
-    note(&Inventory::modules, reinterpret_cast<uint64_t>(*mod));
+    note(&Inventory::modules, reinterpret_cast<uint64_t>(*mod), st);
   }
   return r;
 }
 
 CUresult w_cuModuleLoadData(CUmodule* mod, const void* image) {
   REAL("cuModuleLoadData", CUmodule*, const void*);
+  const Stamp st = stamp();
   CUresult r = fn(mod, image);
   if (r == CUDA_SUCCESS && mod) {
-    note(&Inventory::modules, reinterpret_cast<uint64_t>(*mod));
+    note(&Inventory::modules, reinterpret_cast<uint64_t>(*mod), st);
   }
   return r;
 }
 
 CUresult w_cuModuleLoadFatBinary(CUmodule* mod, const void* image) {
   REAL("cuModuleLoadFatBinary", CUmodule*, const void*);
+  const Stamp st = stamp();
   CUresult r = fn(mod, image);
   if (r == CUDA_SUCCESS && mod) {
-    note(&Inventory::modules, reinterpret_cast<uint64_t>(*mod));
+    note(&Inventory::modules, reinterpret_cast<uint64_t>(*mod), st);
   }
   return r;
 }
@@ -317,9 +419,10 @@ CUresult w_cuModuleUnload(CUmodule mod) {
 
 CUresult w_cuStreamCreate(CUstream* stream, unsigned int flags) {
   REAL("cuStreamCreate", CUstream*, unsigned int);
+  const Stamp st = stamp();
   CUresult r = fn(stream, flags);
   if (r == CUDA_SUCCESS && stream) {
-    note(&Inventory::streams, reinterpret_cast<uint64_t>(*stream));
+    note(&Inventory::streams, reinterpret_cast<uint64_t>(*stream), st);
   }
   return r;
 }
@@ -327,9 +430,10 @@ CUresult w_cuStreamCreate(CUstream* stream, unsigned int flags) {
 CUresult w_cuStreamCreateWithPriority(CUstream* stream, unsigned int flags,
                                       int priority) {
   REAL("cuStreamCreateWithPriority", CUstream*, unsigned int, int);
+  const Stamp st = stamp();
   CUresult r = fn(stream, flags, priority);
   if (r == CUDA_SUCCESS && stream) {
-    note(&Inventory::streams, reinterpret_cast<uint64_t>(*stream));
+    note(&Inventory::streams, reinterpret_cast<uint64_t>(*stream), st);
   }
   return r;
 }
@@ -345,9 +449,10 @@ CUresult w_cuStreamDestroy_v2(CUstream stream) {
 
 CUresult w_cuEventCreate(CUevent* event, unsigned int flags) {
   REAL("cuEventCreate", CUevent*, unsigned int);
+  const Stamp st = stamp();
   CUresult r = fn(event, flags);
   if (r == CUDA_SUCCESS && event) {
-    note(&Inventory::events, reinterpret_cast<uint64_t>(*event));
+    note(&Inventory::events, reinterpret_cast<uint64_t>(*event), st);
   }
   return r;
 }
@@ -363,9 +468,10 @@ CUresult w_cuEventDestroy_v2(CUevent event) {
 
 CUresult w_cuGraphCreate(CUgraph* graph, unsigned int flags) {
   REAL("cuGraphCreate", CUgraph*, unsigned int);
+  const Stamp st = stamp();
   CUresult r = fn(graph, flags);
   if (r == CUDA_SUCCESS && graph) {
-    note(&Inventory::graphs, reinterpret_cast<uint64_t>(*graph));
+    note(&Inventory::graphs, reinterpret_cast<uint64_t>(*graph), st);
   }
   return r;
 }
@@ -374,9 +480,10 @@ CUresult w_cuGraphCreate(CUgraph* graph, unsigned int flags) {
 // exactly as if it had created one.
 CUresult w_cuStreamEndCapture(CUstream stream, CUgraph* graph) {
   REAL("cuStreamEndCapture", CUstream, CUgraph*);
+  const Stamp st = stamp();
   CUresult r = fn(stream, graph);
   if (r == CUDA_SUCCESS && graph) {
-    note(&Inventory::graphs, reinterpret_cast<uint64_t>(*graph));
+    note(&Inventory::graphs, reinterpret_cast<uint64_t>(*graph), st);
   }
   return r;
 }
@@ -394,9 +501,10 @@ CUresult w_cuGraphInstantiateWithFlags(CUgraphExec* exec, CUgraph graph,
                                        unsigned long long flags) {
   REAL("cuGraphInstantiateWithFlags", CUgraphExec*, CUgraph,
        unsigned long long);
+  const Stamp st = stamp();
   CUresult r = fn(exec, graph, flags);
   if (r == CUDA_SUCCESS && exec) {
-    note(&Inventory::graph_execs, reinterpret_cast<uint64_t>(*exec));
+    note(&Inventory::graph_execs, reinterpret_cast<uint64_t>(*exec), st);
   }
   return r;
 }
@@ -412,9 +520,10 @@ CUresult w_cuGraphExecDestroy(CUgraphExec exec) {
 
 CUresult w_cuGraphClone(CUgraph* clone, CUgraph original) {
   REAL("cuGraphClone", CUgraph*, CUgraph);
+  const Stamp st = stamp();
   CUresult r = fn(clone, original);
   if (r == CUDA_SUCCESS && clone) {
-    note(&Inventory::graphs, reinterpret_cast<uint64_t>(*clone));
+    note(&Inventory::graphs, reinterpret_cast<uint64_t>(*clone), st);
   }
   return r;
 }
@@ -533,13 +642,49 @@ class Current {
   bool known_ = false;
 };
 
+// Something made in a primary context whose generation has ended: destroyed
+// with the context, by another session's last release or expiry if not this
+// one's, so it is not this session's to free. Logged, and counted apart from
+// failures, because nothing went wrong.
+void log_skipped(const char* what, uint64_t handle, int dev) {
+  logf("session cleanup: %s %llx was not released: device %d's primary "
+       "context was destroyed after it was made",
+       what, (unsigned long long)handle, dev);
+}
+
+// Runs `destroy` for an entry unless its primary context's generation has
+// ended, in which case it returns false. For an entry made in a primary
+// context the check and the destroy happen under g_primary_mu, so no release
+// or reset can destroy the context between them, and no retain can recreate it
+// with somebody else's memory at the same address.
+template <typename F>
+bool unless_destroyed(int dev, uint64_t gen, F destroy) {
+  if (dev < 0) {
+    destroy();
+    return true;
+  }
+  std::lock_guard<std::mutex> lk(g_primary_mu);
+  if (!still_current(dev, gen)) return false;
+  destroy();
+  return true;
+}
+
 unsigned release_items(Inventory::Items& items, const char* what,
                        CUresult (*destroy)(uint64_t), Current* current,
-                       unsigned* failed) {
+                       unsigned* failed, unsigned* skipped) {
   unsigned released = 0;
   for (const auto& entry : items) {
-    current->use(entry.second.ctx);
-    CUresult r = destroy(entry.first);
+    CUresult r = CUDA_SUCCESS;
+    const bool ran =
+        unless_destroyed(entry.second.dev, entry.second.gen, [&] {
+          current->use(entry.second.ctx);
+          r = destroy(entry.first);
+        });
+    if (!ran) {
+      (*skipped)++;
+      log_skipped(what, entry.first, entry.second.dev);
+      continue;
+    }
     if (r == CUDA_SUCCESS) {
       released++;
     } else {
@@ -585,9 +730,12 @@ void inventory_note_handle(uint64_t handle, const char* what,
                            CUresult (*destroy)(uint64_t)) {
   Inventory* inv = t_inv;
   if (!inv || !handle) return;
-  const CUcontext ctx = current_ctx();
+  // Stamped after the library made the handle, not before, since the
+  // libraries only call in once they have one.
+  const Stamp st = stamp();
   std::lock_guard<std::mutex> lk(inv->mu);
-  inv->handles[handle] = Inventory::LibHandle{ctx, what, destroy};
+  inv->handles[handle] =
+      Inventory::LibHandle{st.ctx, st.dev, st.gen, what, destroy};
 }
 
 void inventory_forget_handle(uint64_t handle) {
@@ -625,6 +773,7 @@ std::string release_inventory(Inventory& inv) {
   }
 
   unsigned failed = 0;
+  unsigned skipped = 0;
   Current current;
 
   // Work still running would be reading the memory about to be freed. The
@@ -637,6 +786,9 @@ std::string release_inventory(Inventory& inv) {
       for (const auto& entry : *m) {
         CUcontext ctx = entry.second.ctx;
         if (!ctx) continue;
+        // A destroyed primary context has nothing of this session's to wait
+        // for.
+        if (!still_current(entry.second.dev, entry.second.gen)) continue;
         bool known = false;
         for (CUcontext c : seen) known = known || c == ctx;
         if (known) continue;
@@ -658,10 +810,18 @@ std::string release_inventory(Inventory& inv) {
   // session, goes last of all.
   unsigned handles_released = 0;
   for (const auto& entry : handles) {
-    current.use(entry.second.ctx);
-    CUresult r = entry.second.destroy
-                     ? entry.second.destroy(entry.first)
-                     : CUDA_ERROR_NOT_SUPPORTED;
+    CUresult r = CUDA_SUCCESS;
+    const bool ran =
+        unless_destroyed(entry.second.dev, entry.second.gen, [&] {
+          current.use(entry.second.ctx);
+          r = entry.second.destroy ? entry.second.destroy(entry.first)
+                                   : CUDA_ERROR_NOT_SUPPORTED;
+        });
+    if (!ran) {
+      skipped++;
+      log_skipped(entry.second.what, entry.first, entry.second.dev);
+      continue;
+    }
     if (r == CUDA_SUCCESS) {
       handles_released++;
     } else {
@@ -672,17 +832,23 @@ std::string release_inventory(Inventory& inv) {
   }
 
   const unsigned execs_released =
-      release_items(execs, "graph exec", destroy_graph_exec, &current, &failed);
+      release_items(execs, "graph exec", destroy_graph_exec, &current, &failed,
+                    &skipped);
   const unsigned graphs_released =
-      release_items(graphs, "graph", destroy_graph, &current, &failed);
+      release_items(graphs, "graph", destroy_graph, &current, &failed,
+                    &skipped);
   const unsigned events_released =
-      release_items(events, "event", destroy_event, &current, &failed);
+      release_items(events, "event", destroy_event, &current, &failed,
+                    &skipped);
   const unsigned streams_released =
-      release_items(streams, "stream", destroy_stream, &current, &failed);
+      release_items(streams, "stream", destroy_stream, &current, &failed,
+                    &skipped);
   const unsigned modules_released =
-      release_items(modules, "module", destroy_module, &current, &failed);
+      release_items(modules, "module", destroy_module, &current, &failed,
+                    &skipped);
   const unsigned allocs_released =
-      release_items(allocs, "allocation", destroy_alloc, &current, &failed);
+      release_items(allocs, "allocation", destroy_alloc, &current, &failed,
+                    &skipped);
 
   // Nothing below runs inside a context, and destroying the one this thread is
   // pointing at would leave it pointing at something that is gone. Contexts
@@ -698,7 +864,17 @@ std::string release_inventory(Inventory& inv) {
   unsigned retains_released = 0;
   for (const auto& entry : retains) {
     for (int i = 0; i < entry.second; i++) {
-      CUresult r = release_primary(entry.first);
+      CUresult r;
+      {
+        // This release may be the last in the process, which destroys the
+        // context and everything any session made in it, so it is recorded
+        // the same way as a client's own release.
+        std::lock_guard<std::mutex> lk(g_primary_mu);
+        r = release_primary(entry.first);
+        if (r == CUDA_SUCCESS && primary_inactive(entry.first)) {
+          bump_generation(entry.first);
+        }
+      }
       if (r == CUDA_SUCCESS) {
         retains_released++;
         continue;
@@ -739,6 +915,10 @@ std::string release_inventory(Inventory& inv) {
       if (i) summary += i + 1 == parts.size() ? " and " : ", ";
       summary += parts[i];
     }
+  }
+  if (skipped) {
+    summary += "; " + plural(skipped, "resource") +
+               " skipped, destroyed with a primary context";
   }
   if (failed) {
     summary += "; " + plural(failed, "resource") + " could not be released";

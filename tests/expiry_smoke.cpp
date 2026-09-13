@@ -266,6 +266,204 @@ int release_alone() {
   return 0;
 }
 
+// --- three tenants on one primary context -----------------------------------
+//
+// A session may release its retain while still holding what it made in the
+// primary context: that is legal, and while anybody else holds a retain the
+// context lives on and so does everything in it. But when somebody else then
+// makes the last release - by calling it, or by expiring - the context is
+// destroyed, and only that session's record is corrected. The first session's
+// record still lists memory that no longer exists, and if a third session has
+// retained and allocated in between, on a real driver those addresses can be
+// the third session's. So the first session's expiry must free nothing.
+//
+//   B: retains, and holds.
+//   A: retains, takes resources in the primary context, releases (not the
+//      last: B holds one), and waits.
+//   B: releases (`tenants release`) or is killed and expires
+//      (`tenants expire`) - the last release either way.
+//   C (this process): retains, takes resources, writes memory.
+//   A: killed, expires. C's counts must not move, nothing may be stale, and
+//      C must read its memory back.
+//
+// Whether a session has expired is read from the server's log, which
+// run_smoke.sh names in RGPU_SERVER_LOG: the counters cannot say, because
+// what is being checked is that the expiry changes nothing.
+
+// Waits for a byte on `fd`; false if the other end went away first.
+bool await_byte(int fd, char want) {
+  char c = 0;
+  return ::read(fd, &c, 1) == 1 && c == want;
+}
+
+int tenant_b(int ready_fd, int cmd_fd) {
+  CHECK(cuInit(0));
+  CUcontext primary = nullptr;
+  CHECK(cuDevicePrimaryCtxRetain(&primary, 0));
+  const char ok = g_failures ? 'x' : 'k';
+  if (::write(ready_fd, &ok, 1) != 1) return 1;
+  if (!await_byte(cmd_fd, 'r')) return 1;
+  CHECK(cuDevicePrimaryCtxRelease(0));
+  const char done = g_failures ? 'x' : 'k';
+  if (::write(ready_fd, &done, 1) != 1) return 1;
+  for (;;) ::pause();
+}
+
+int tenant_a(int ready_fd) {
+  CHECK(cuInit(0));
+  CUcontext primary = nullptr;
+  CHECK(cuDevicePrimaryCtxRetain(&primary, 0));
+  CHECK(cuCtxSetCurrent(primary));
+  Held held;
+  take_driver_resources(&held);
+  CHECK(cuDevicePrimaryCtxRelease(0));
+  const char ok = g_failures ? 'x' : 'k';
+  if (::write(ready_fd, &ok, 1) != 1) return 1;
+  for (;;) ::pause();
+}
+
+// Starts this binary again as `role`, with the given descriptors passed on
+// the command line.
+pid_t spawn(const char* self, const char* role, std::vector<int> fds) {
+  const pid_t pid = ::fork();
+  if (pid != 0) return pid;
+  std::vector<std::string> strs;
+  for (int fd : fds) strs.push_back(std::to_string(fd));
+  std::vector<char*> args = {const_cast<char*>(self), const_cast<char*>(role)};
+  for (auto& str : strs) args.push_back(&str[0]);
+  args.push_back(nullptr);
+  ::execv("/proc/self/exe", args.data());
+  ::execv(self, args.data());
+  std::perror("execv");
+  ::_exit(127);
+}
+
+int expired_sessions() {
+  const char* path = std::getenv("RGPU_SERVER_LOG");
+  if (!path) return -1;
+  std::FILE* f = std::fopen(path, "r");
+  if (!f) return -1;
+  int n = 0;
+  char line[1024];
+  while (std::fgets(line, sizeof(line), f)) {
+    if (std::strstr(line, " expired;")) n++;
+  }
+  std::fclose(f);
+  return n;
+}
+
+bool await_expired(int n) {
+  const int grace = std::getenv("RGPU_SESSION_GRACE")
+                        ? std::atoi(std::getenv("RGPU_SESSION_GRACE"))
+                        : 120;
+  for (int waited = 0; waited < (grace + 20) * 1000; waited += 100) {
+    if (expired_sessions() >= n) return true;
+    ::usleep(100 * 1000);
+  }
+  return false;
+}
+
+int tenants(const char* self, bool b_expires) {
+  if (!std::getenv("RGPU_FAKE_STATS") || expired_sessions() < 0) {
+    std::fprintf(stderr, "FAIL: tenants needs RGPU_FAKE_STATS and "
+                         "RGPU_SERVER_LOG; run it from run_smoke.sh\n");
+    return 1;
+  }
+  int ready[2], cmd[2];
+  if (::pipe(ready) != 0 || ::pipe(cmd) != 0) return 1;
+  std::vector<pid_t> children;
+  auto fail = [&](const char* what) {
+    std::fprintf(stderr, "FAIL: %s\n", what);
+    for (pid_t c : children) {
+      ::kill(c, SIGKILL);
+      ::waitpid(c, nullptr, 0);
+    }
+    return 1;
+  };
+
+  const pid_t b = spawn(self, "tenant-b", {ready[1], cmd[0]});
+  children.push_back(b);
+  if (!await_byte(ready[0], 'k')) return fail("session B never retained");
+  const pid_t a = spawn(self, "tenant-a", {ready[1]});
+  children.push_back(a);
+  if (!await_byte(ready[0], 'k')) return fail("session A never got going");
+
+  const std::string with_a = read_stats();
+  if (field(with_a, "allocs") < 2 || field(with_a, "retains") != 1) {
+    return fail("A's resources should be live, and only B's retain held");
+  }
+
+  if (b_expires) {
+    ::kill(b, SIGKILL);
+    ::waitpid(b, nullptr, 0);
+    children.erase(children.begin());
+    if (!await_expired(1)) return fail("session B never expired");
+  } else {
+    if (::write(cmd[1], "r", 1) != 1 || !await_byte(ready[0], 'k')) {
+      return fail("session B never released");
+    }
+  }
+
+  // The premise: that was the last release, and the context went with it.
+  const std::string gone = read_stats();
+  if (field(gone, "allocs") != 0 || field(gone, "retains") != 0 ||
+      field(gone, "modules") != 0 || field(gone, "stale") != 0) {
+    std::fprintf(stderr, "  found: %s\n", gone.c_str());
+    return fail("B's release should have been the last one and destroyed "
+                "everything in the primary context");
+  }
+
+  // C, which is this process, moves into the recreated context.
+  CHECK(cuInit(0));
+  CUcontext primary = nullptr;
+  CHECK(cuDevicePrimaryCtxRetain(&primary, 0));
+  CHECK(cuCtxSetCurrent(primary));
+  Held mine;
+  take_driver_resources(&mine);
+  std::vector<unsigned char> written(kBytes);
+  for (size_t i = 0; i < kBytes; i++) written[i] = (unsigned char)(i * 7 + 1);
+  CHECK(cuMemcpyHtoD(mine.a, written.data(), kBytes));
+  CHECK(cuCtxSynchronize());
+  const std::string baseline = read_stats();
+  const int expired_before = expired_sessions();
+
+  ::kill(a, SIGKILL);
+  ::waitpid(a, nullptr, 0);
+  children.pop_back();
+  if (!await_expired(expired_before + 1)) {
+    return fail("session A never expired");
+  }
+
+  const std::string after = read_stats();
+  if (after != baseline) {
+    std::fprintf(stderr,
+                 "FAIL: A's expiry touched what it no longer owned\n"
+                 "  expected: %s\n     found: %s\n",
+                 baseline.c_str(), after.c_str());
+    g_failures++;
+  }
+  std::vector<unsigned char> read_back(kBytes, 0);
+  CHECK(cuMemcpyDtoH(read_back.data(), mine.a, kBytes));
+  if (std::memcmp(read_back.data(), written.data(), kBytes) != 0) {
+    std::fprintf(stderr, "FAIL: C's memory did not survive A's expiry\n");
+    g_failures++;
+  }
+  CHECK(cuStreamSynchronize(mine.stream));
+
+  for (pid_t c : children) {
+    ::kill(c, SIGKILL);
+    ::waitpid(c, nullptr, 0);
+  }
+  if (g_failures) {
+    std::printf("\nFAILED: %d check(s)\n", g_failures);
+    return 1;
+  }
+  std::printf("PASS: a session whose primary context was destroyed by "
+              "another's %s frees nothing at expiry\n",
+              b_expires ? "expiry" : "release");
+  return 0;
+}
+
 // The client that dies. Takes rather more than the parent, says so down the
 // pipe, and then waits to be killed: no exit handler, no frees, nothing the
 // server can read as a goodbye. That is what a crash looks like from here.
@@ -313,6 +511,15 @@ int main(int argc, char** argv) {
   }
   if (argc > 1 && std::strcmp(argv[1], "reset") == 0) return reset_alone();
   if (argc > 1 && std::strcmp(argv[1], "release") == 0) return release_alone();
+  if (argc > 3 && std::strcmp(argv[1], "tenant-b") == 0) {
+    return tenant_b(std::atoi(argv[2]), std::atoi(argv[3]));
+  }
+  if (argc > 2 && std::strcmp(argv[1], "tenant-a") == 0) {
+    return tenant_a(std::atoi(argv[2]));
+  }
+  if (argc > 2 && std::strcmp(argv[1], "tenants") == 0) {
+    return tenants(argv[0], std::strcmp(argv[2], "expire") == 0);
+  }
 
   if (!std::getenv("RGPU_FAKE_STATS")) {
     std::fprintf(stderr,
