@@ -218,6 +218,39 @@ if [[ -x "$BUILD/thread_id_smoke" ]]; then
   kill $THREAD_SRV 2>/dev/null
 fi
 
+# Each client thread keeps its own context on the server. Its own server: two
+# devices, a stats file the test reads the fake's call counters from, and a
+# low cap on live client threads so the cap can be reached. RGPU_BATCH=1 is
+# the default, pinned because the batch-flushed-by-another-thread case means
+# nothing without batching.
+if [[ -x "$BUILD/threadctx_smoke" ]]; then
+  echo
+  CTX_PORT=$((PORT + 10))
+  CTX_STATS=$(mktemp "${TMPDIR:-/tmp}/rgpu-stats.XXXXXX")
+  CTX_LOG=$(mktemp "${TMPDIR:-/tmp}/rgpu-threadctx-log.XXXXXX")
+  RGPU_FAKE_DEVICES=2 RGPU_FAKE_STATS="$CTX_STATS" RGPU_MAX_CLIENT_THREADS=16 \
+    "$BUILD/rgpu-server-fake" "$CTX_PORT" >"$CTX_LOG" 2>&1 &
+  CTX_SRV=$!
+  for _ in $(seq 1 50); do
+    if (exec 3<>/dev/tcp/127.0.0.1/"$CTX_PORT") 2>/dev/null; then
+      exec 3<&- 3>&-
+      break
+    fi
+    sleep 0.1
+  done
+  LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$CTX_PORT" RGPU_BATCH=1 \
+    RGPU_FAKE_STATS="$CTX_STATS" RGPU_MAX_CLIENT_THREADS=16 \
+    "$BUILD/threadctx_smoke" || rc=1
+  kill $CTX_SRV 2>/dev/null
+  # Said once per session, and said at all: nobody should have to diagnose
+  # serialized multithreaded clients as a mystery.
+  if ! grep -q "has more than one client thread" "$CTX_LOG"; then
+    echo "FAIL: the server never said a session had more than one client thread"
+    rc=1
+  fi
+  rm -f "$CTX_STATS" "$CTX_STATS.tmp" "$CTX_LOG"
+fi
+
 # The runtime API path, if it was built. Our libcudart must come first so the
 # loader picks it over any stock one.
 if [[ -x "$BUILD/cudart_smoke" ]]; then

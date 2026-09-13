@@ -15,10 +15,12 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <deque>
 #include <map>
 #include <new>
 #include <stdexcept>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include <cuda.h>
@@ -203,20 +205,6 @@ CUresult handle_hello(Buffer& req, Buffer* rsp) {
   return CUDA_SUCCESS;
 }
 
-// Client threads that have exited. Nothing on this side keeps per-thread state
-// yet, so there is nothing to drop; the payload is still read, so a malformed
-// notice is caught like any other malformed request.
-CUresult handle_thread_gone(Buffer& req, Buffer* rsp) {
-  (void)rsp;
-  uint32_t count = 0;
-  if (!req.get(&count)) return CUDA_ERROR_INVALID_VALUE;
-  for (uint32_t i = 0; i < count; i++) {
-    uint32_t id = 0;
-    if (!req.get(&id)) return CUDA_ERROR_INVALID_VALUE;
-  }
-  return CUDA_SUCCESS;
-}
-
 bool dispatch_internal(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
   switch (id) {
     case API_rgpu_param_layout: *out = handle_param_layout(req, rsp); return true;
@@ -225,9 +213,192 @@ bool dispatch_internal(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
     case API_rgpu_capture_info: *out = handle_capture_info(req, rsp); return true;
     case API_rgpu_graph_nodes: *out = handle_graph_nodes(req, rsp); return true;
     case API_rgpu_capture_mode: *out = handle_capture_mode(req, rsp); return true;
-    case API_rgpu_thread_gone: *out = handle_thread_gone(req, rsp); return true;
     default: return false;
   }
+}
+
+// --- client threads ---------------------------------------------------------
+//
+// CUDA's current context belongs to the calling thread, and one server thread
+// serves every thread of a client process. So what each client thread last
+// made current is kept here, put back before that thread's request runs, and
+// read back from the driver after it. See
+// docs/superpowers/specs/2026-09-12-per-thread-cuda-contexts.md.
+
+// What one client thread was looking at.
+//
+// Borrowed, never owned. Every context named here is accounted for by the
+// session's inventory, which is what releases it; nothing here is ever
+// released, destroyed or synchronised, and dropping a slot is forgetting a
+// value and nothing more.
+struct ClientThread {
+  CUcontext current = nullptr;  // what this thread last made current
+  // Also per-thread in CUDA, and not kept yet: the context stack, the stream
+  // capture mode, and the deferred error of a call sent without a reply.
+};
+
+// How many recently retired threads keep their slot. A thread's own late
+// thread-local destructors can still call after the client has announced it
+// gone - and the client announces it again after them - so a late call finds
+// its thread's context rather than none. A late call from beyond this many
+// retirements ago gets an empty slot, which the next notice drops again.
+constexpr size_t kRetiredSlots = 64;
+
+// The most client threads a session may have live at once. A client mints
+// thread ids itself and the protocol has no authentication, so without a cap
+// a client could grow this table without bound. A few thousand is far beyond
+// any real process's thread count and still small.
+size_t max_client_threads() {
+  static const size_t n = [] {
+    const char* v = std::getenv("RGPU_MAX_CLIENT_THREADS");
+    const long parsed = v ? std::atol(v) : 0;
+    return parsed > 0 ? static_cast<size_t>(parsed) : size_t{4096};
+  }();
+  return n;
+}
+
+// A session's client threads, and what the serving thread last made current.
+//
+// Touched only by the thread serving the session, which is also the thread
+// that clears it at expiry, so it takes no lock: nothing else - not the
+// handshake, not another session - reads or writes it.
+struct ClientThreads {
+  std::unordered_map<uint32_t, ClientThread> live;
+  // Oldest first, at most kRetiredSlots.
+  std::deque<std::pair<uint32_t, ClientThread>> retired;
+  // What the serving thread last made current, or read back as current. It
+  // lives with the session rather than with a connection, because the thread
+  // - and so the driver's idea of its current context - outlasts every
+  // connection the session has.
+  CUcontext applied = nullptr;
+  uint32_t first_id = 0;       // the first thread seen, for the log below
+  bool said_many = false;
+  bool said_full = false;
+  bool said_zero = false;
+
+  void clear() {
+    live.clear();
+    retired.clear();
+    applied = nullptr;
+  }
+};
+
+// The slot for a thread not in the live table: its retired slot if it has one,
+// otherwise an empty one. nullptr if the session already has as many live
+// threads as it may.
+__attribute__((noinline)) ClientThread* admit_thread(ClientThreads& threads,
+                                                      uint32_t id,
+                                                      uint64_t session) {
+  if (threads.live.size() >= max_client_threads()) {
+    if (!threads.said_full) {
+      threads.said_full = true;
+      logf("session %llx: refusing calls from client thread %u: the session "
+           "already has %zu live client threads, the most allowed "
+           "(RGPU_MAX_CLIENT_THREADS)",
+           (unsigned long long)session, id, threads.live.size());
+    }
+    return nullptr;
+  }
+  ClientThread slot;
+  for (auto it = threads.retired.begin(); it != threads.retired.end(); ++it) {
+    if (it->first == id) {
+      slot = it->second;
+      threads.retired.erase(it);
+      if (g_verbose) {
+        logf("client thread %u called after it was announced gone; its "
+             "context is still known", id);
+      }
+      break;
+    }
+  }
+  if (threads.first_id == 0) {
+    threads.first_id = id;
+  } else if (id != threads.first_id && !threads.said_many) {
+    threads.said_many = true;
+    logf("session %llx has more than one client thread. Each keeps its own "
+         "current context, so a multithreaded client is served correctly - "
+         "but still one call at a time, not concurrently. CUDA state a thread "
+         "keeps beyond its current context is not kept per client thread: "
+         "the context stack, the stream capture mode and anything else the "
+         "driver holds per thread is shared by all of them",
+         (unsigned long long)session);
+  }
+  return &threads.live.emplace(id, slot).first->second;
+}
+
+// The slot for the thread that issued a request: one lookup when the thread is
+// known, which is every call but a thread's first.
+inline ClientThread* thread_slot(ClientThreads& threads, uint32_t id,
+                                 uint64_t session) {
+  auto it = threads.live.find(id);
+  if (it != threads.live.end()) return &it->second;
+  return admit_thread(threads, id, session);
+}
+
+// Drops a thread's slot into the retired set, evicting the oldest past the
+// bound. Ids are never reused, so nothing but a late call from the same
+// thread can find it there.
+void retire_thread(ClientThreads& threads, uint32_t id) {
+  auto it = threads.live.find(id);
+  if (it == threads.live.end()) return;
+  threads.retired.emplace_back(id, it->second);
+  threads.live.erase(it);
+  if (threads.retired.size() > kRetiredSlots) threads.retired.pop_front();
+}
+
+// Client threads that have exited. The ids are all read before any is
+// dropped, so a malformed notice - caught afterwards like any other malformed
+// request - drops nothing.
+CUresult handle_thread_gone(Buffer& req, ClientThreads& threads) {
+  uint32_t count = 0;
+  if (!req.get(&count)) return CUDA_ERROR_INVALID_VALUE;
+  std::vector<uint32_t> ids;
+  for (uint32_t i = 0; i < count; i++) {
+    uint32_t id = 0;
+    if (!req.get(&id)) return CUDA_ERROR_INVALID_VALUE;
+    ids.push_back(id);
+  }
+  for (uint32_t id : ids) retire_thread(threads, id);
+  return CUDA_SUCCESS;
+}
+
+// Makes a thread's context current on the serving thread, which currently has
+// `threads.applied` current. Only called when the two differ.
+//
+// Null is made current like any other value: a thread that has selected
+// nothing gets no context, and a call that needs one fails as it would in
+// CUDA, rather than borrowing whatever the previous thread left. Setting null
+// pops the top of the driver's context stack, which can leave another context
+// current underneath, so it pops until there is none.
+//
+// A saved context the driver refuses has been destroyed since the thread made
+// it current, by another thread. The slot is emptied and the call fails with
+// CUDA_ERROR_INVALID_CONTEXT, which is what CUDA gives a thread whose context
+// went away under it, and the thread's next call runs with no context.
+__attribute__((noinline)) CUresult switch_context(ClientThreads& threads,
+                                                   ClientThread& t) {
+  if (t.current) {
+    if (cuCtxSetCurrent(t.current) != CUDA_SUCCESS) {
+      if (g_verbose) {
+        logf("context %p could not be made current again; it was destroyed "
+             "since its client thread selected it",
+             (void*)t.current);
+      }
+      t.current = nullptr;
+      return CUDA_ERROR_INVALID_CONTEXT;
+    }
+    threads.applied = t.current;
+    return CUDA_SUCCESS;
+  }
+  constexpr int kMaxDepth = 4096;
+  CUcontext now = threads.applied;
+  for (int i = 0; now && i < kMaxDepth; i++) {
+    cuCtxSetCurrent(nullptr);
+    now = nullptr;
+    cuCtxGetCurrent(&now);
+  }
+  threads.applied = now;
+  return now ? CUDA_ERROR_INVALID_CONTEXT : CUDA_SUCCESS;
 }
 
 // --- sessions -------------------------------------------------------------
@@ -270,6 +441,10 @@ struct Session {
   // this process that holds it, so when the session finally expires this is
   // the only record of what to release. See server/inventory.h.
   Inventory inventory;
+  // What each client thread has current. Deliberately apart from the
+  // inventory: that says what the session owns, this says what each thread
+  // was looking at, and it owns nothing. Not under `mu`; see ClientThreads.
+  ClientThreads threads;
 };
 
 using SessionKey = std::pair<uint64_t, uint64_t>;
@@ -290,7 +465,7 @@ int session_grace_seconds() {
 
 void serve_session(std::shared_ptr<Session> session, SessionKey key);
 
-void serve(int fd, const std::shared_ptr<Session>& session) {
+void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
   tune_socket(fd);
 
   // Each connection is one client process. Its CUDA objects live in this
@@ -324,30 +499,76 @@ void serve(int fd, const std::shared_ptr<Session>& session) {
     Buffer req(std::move(payload));
     Buffer rsp;
     CUresult result = CUDA_ERROR_NOT_SUPPORTED;
+    ClientThreads& threads = session->threads;
 
+    // Whether the request was looked at at all. One that is refused before
+    // dispatch has an error for its answer and nothing to check.
     bool handled = false;
-    try {
-      handled =
-          dispatch_internal(h.api_id, req, &rsp, &result) ||
-          (dispatch_cublas && dispatch_cublas(h.api_id, req, &rsp, &result)) ||
-          (dispatch_cublaslt &&
-           dispatch_cublaslt(h.api_id, req, &rsp, &result)) ||
-          (dispatch_cudnn && dispatch_cudnn(h.api_id, req, &rsp, &result)) ||
-          dispatch_generated(h.api_id, req, &rsp, &result);
-    } catch (const std::bad_alloc&) {
-      // A request asking for more memory than there is. An error for this
-      // call, not a reason to end the process and every session in it.
+    bool refused = false;
+    ClientThread* thread = nullptr;
+    if (h.thread_id == 0) {
+      // Never a real thread: a zero-filled or corrupt header. Attributing it
+      // to some thread's context would be guessing.
+      refused = true;
+      result = CUDA_ERROR_INVALID_VALUE;
+      if (!threads.said_zero) {
+        threads.said_zero = true;
+        logf("session %llx: refusing %s: its request names no client thread",
+             (unsigned long long)key, call_name(h.api_id));
+      }
+    } else if (h.api_id == API_rgpu_thread_gone) {
+      // Changes the table rather than running under it. It needs no context,
+      // and must not need a slot: the thread sending it may be new, and a
+      // session at its cap needs the notice most of all.
       handled = true;
-      result = CUDA_ERROR_OUT_OF_MEMORY;
-      rsp = Buffer();
-      logf("%s asked for more memory than could be allocated", call_name(h.api_id));
-    } catch (const std::exception& e) {
-      handled = true;
-      result = CUDA_ERROR_UNKNOWN;
-      rsp = Buffer();
-      logf("%s failed: %s", call_name(h.api_id), e.what());
+      result = handle_thread_gone(req, threads);
+    } else {
+      thread = thread_slot(threads, h.thread_id, key);
+      if (!thread) {
+        refused = true;
+        result = CUDA_ERROR_INVALID_VALUE;
+      } else if (thread->current != threads.applied) {
+        // Only when the thread's context is not already current, so a client
+        // with one thread - or a burst of calls from one thread - never pays
+        // for a switch.
+        result = switch_context(threads, *thread);
+        refused = result != CUDA_SUCCESS;
+      }
     }
-    if (!handled) {
+
+    if (!refused && !handled) {
+      try {
+        handled =
+            dispatch_internal(h.api_id, req, &rsp, &result) ||
+            (dispatch_cublas && dispatch_cublas(h.api_id, req, &rsp, &result)) ||
+            (dispatch_cublaslt &&
+             dispatch_cublaslt(h.api_id, req, &rsp, &result)) ||
+            (dispatch_cudnn && dispatch_cudnn(h.api_id, req, &rsp, &result)) ||
+            dispatch_generated(h.api_id, req, &rsp, &result);
+      } catch (const std::bad_alloc&) {
+        // A request asking for more memory than there is. An error for this
+        // call, not a reason to end the process and every session in it.
+        handled = true;
+        result = CUDA_ERROR_OUT_OF_MEMORY;
+        rsp = Buffer();
+        logf("%s asked for more memory than could be allocated", call_name(h.api_id));
+      } catch (const std::exception& e) {
+        handled = true;
+        result = CUDA_ERROR_UNKNOWN;
+        rsp = Buffer();
+        logf("%s failed: %s", call_name(h.api_id), e.what());
+      }
+      // What the call left current, as the driver says, rather than what it
+      // was asked for: any call can change it, and a list of the ones that do
+      // would be wrong the day CUDA adds another.
+      CUcontext now = nullptr;
+      cuCtxGetCurrent(&now);
+      thread->current = now;
+      threads.applied = now;
+    }
+    if (refused) {
+      // Answered below with the error; the payload was never read.
+    } else if (!handled) {
       logf("unknown api id %u (%s)", h.api_id, call_name(h.api_id));
       result = CUDA_ERROR_NOT_SUPPORTED;
     } else if (!req.ok()) {
@@ -443,7 +664,7 @@ void serve_session(std::shared_ptr<Session> session, SessionKey key) {
       fd = session->fd;
     }
 
-    serve(fd, session);
+    serve(fd, session, key.first);
 
     std::lock_guard<std::mutex> lk(session->mu);
     if (session->fd == fd) session->fd = -1;
@@ -459,6 +680,12 @@ void serve_session(std::shared_ptr<Session> session, SessionKey key) {
     auto it = g_sessions.find(key);
     if (it != g_sessions.end() && it->second == session) g_sessions.erase(it);
   }
+
+  // Forgotten first, and only forgotten. The slots name contexts the
+  // inventory owns and is about to release, and the release makes contexts
+  // current as it goes, so a slot that outlived this line would name a
+  // context that is gone. Nothing is ever released from the slots.
+  session->threads.clear();
 
   // The client is gone but its GPU resources are not: they were created in
   // this process and nothing else will ever free them. This is the only point

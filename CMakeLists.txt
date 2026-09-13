@@ -255,6 +255,12 @@ target_link_libraries(thread_id_smoke PRIVATE rgpu_cudart rgpu_client
                       Threads::Threads)
 add_test(NAME thread_id COMMAND thread_id_smoke wire)
 
+# Checks that each client thread keeps its own CUDA context on the server.
+# Needs the fake server with two devices; run from run_smoke.sh.
+add_executable(threadctx_smoke tests/threadctx_smoke.cpp)
+target_link_libraries(threadctx_smoke PRIVATE rgpu_cudart rgpu_client
+                      Threads::Threads)
+
 # Checks that a dropped connection does not lose the session.
 add_executable(reconnect_smoke tests/reconnect_smoke.cpp)
 target_link_libraries(reconnect_smoke PRIVATE rgpu_client)
