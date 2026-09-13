@@ -5,14 +5,18 @@
 // thread of a client process, so the only way the server can run a request
 // under the context its thread selected is to be told which thread that was.
 // Most of what can go wrong with that is on the client, and is visible in the
-// bytes it writes, so this test is a scripted server of its own that reads
-// exactly what the client sends:
+// bytes it writes, so most of this test is a scripted server of its own that
+// reads exactly what the client sends:
 //
 //   wire     the scripted server. Each case forks a fresh client process,
 //            because a client's connection state is per process and some
 //            cases leave it refusing to connect. Needs nothing else.
+//   runtime  against rgpu-server-fake at RGPU_SERVER, alone on it: a device
+//            reset on one thread has to invalidate another thread's cached
+//            context selection.
 //
 //   ./thread_id_smoke wire
+//   LD_LIBRARY_PATH=build RGPU_SERVER=127.0.0.1:9713 ./thread_id_smoke runtime
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -34,6 +38,7 @@
 #include <vector>
 
 #include <cuda.h>
+#include <cuda_runtime_api.h>
 
 #include "client/rpc.h"
 #include "common/generated/api_ids.h"
@@ -459,14 +464,64 @@ void wire_cases() {
            });
 }
 
+// --- against the fake driver -----------------------------------------------
+
+#define CHECK_RT(call)                                                    \
+  do {                                                                    \
+    cudaError_t e_ = (call);                                              \
+    if (e_ != cudaSuccess) {                                              \
+      std::fprintf(stderr, "FAIL %s:%d: %s -> %d\n", __FILE__, __LINE__,  \
+                   #call, e_);                                            \
+      g_failures++;                                                       \
+    }                                                                     \
+  } while (0)
+
+// The runtime caches, per thread, that the thread's context has been made
+// current. cudaDeviceReset releases every primary context in the process, so
+// it has to invalidate that cache on every thread, not only its own: a thread
+// left believing in a released context sends its next call under it.
+void runtime_cases() {
+  std::mutex mu;
+  std::condition_variable cv;
+  int stage = 0;
+  auto advance = [&](int to) {
+    std::lock_guard<std::mutex> lk(mu);
+    stage = to;
+    cv.notify_all();
+  };
+  auto await = [&](int at) {
+    std::unique_lock<std::mutex> lk(mu);
+    cv.wait(lk, [&] { return stage >= at; });
+  };
+
+  std::thread a([&] {
+    void* p = nullptr;
+    CHECK_RT(cudaSetDevice(0));
+    CHECK_RT(cudaMalloc(&p, 64));
+    CHECK_RT(cudaFree(p));
+    advance(1);
+    await(2);
+    // Another thread has reset the device since this one selected it.
+    void* q = nullptr;
+    CHECK_RT(cudaMalloc(&q, 64));
+    if (q) CHECK_RT(cudaFree(q));
+  });
+  await(1);
+  CHECK_RT(cudaDeviceReset());
+  advance(2);
+  a.join();
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
   const std::string mode = argc > 1 ? argv[1] : "";
   if (mode == "wire") {
     wire_cases();
+  } else if (mode == "runtime") {
+    runtime_cases();
   } else {
-    std::fprintf(stderr, "usage: %s wire\n", argv[0]);
+    std::fprintf(stderr, "usage: %s wire|runtime\n", argv[0]);
     return 2;
   }
   if (g_failures) {

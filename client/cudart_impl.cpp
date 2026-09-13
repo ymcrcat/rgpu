@@ -13,6 +13,7 @@
 // Definitions here are strong and override the weak, logging ones in
 // client/generated/cudart_stubs.cpp.
 
+#include <atomic>
 #include <cstring>
 #include <map>
 #include <mutex>
@@ -79,7 +80,17 @@ std::map<int, CUcontext> g_primary;  // device ordinal -> retained context
 bool g_inited = false;
 
 thread_local int t_device = 0;
-thread_local bool t_ctx_set = false;
+
+// Whether this thread's context is already current, so a runtime call need
+// not send cuCtxSetCurrent first. Every request names the client thread that
+// sent it, so that the server can keep each thread's current context apart;
+// then nothing another thread does can change this one's - except releasing
+// the context itself, which cudaDeviceReset does for every thread at once.
+// So instead of a flag, a generation: this thread's selection holds while it
+// matches the process's, and a reset moves the process's on. Zero never
+// matches.
+std::atomic<uint64_t> g_ctx_gen{1};
+thread_local uint64_t t_ctx_gen = 0;
 
 CUresult ensure_init() {
   std::lock_guard<std::mutex> lk(g_ctx_mu);
@@ -93,11 +104,18 @@ CUresult ensure_init() {
 CUresult ensure_context() {
   CUresult r = ensure_init();
   if (r != CUDA_SUCCESS) return r;
-  if (t_ctx_set) return CUDA_SUCCESS;
+  if (t_ctx_gen == g_ctx_gen.load(std::memory_order_relaxed)) {
+    return CUDA_SUCCESS;
+  }
 
   CUcontext ctx = nullptr;
+  uint64_t gen = 0;
   {
     std::lock_guard<std::mutex> lk(g_ctx_mu);
+    // Read with the context it describes: a reset that lands after this
+    // leaves the selection below already stale, and the next call selects
+    // again.
+    gen = g_ctx_gen.load(std::memory_order_relaxed);
     auto it = g_primary.find(t_device);
     if (it != g_primary.end()) {
       ctx = it->second;
@@ -111,7 +129,7 @@ CUresult ensure_context() {
     }
   }
   r = cuCtxSetCurrent(ctx);
-  if (r == CUDA_SUCCESS) t_ctx_set = true;
+  if (r == CUDA_SUCCESS) t_ctx_gen = gen;
   return r;
 }
 
@@ -372,7 +390,7 @@ cudaError_t cudaSetDevice(int device) {
   if (device < 0 || device >= count) return record(cudaErrorInvalidDevice);
   if (device != t_device) {
     t_device = device;
-    t_ctx_set = false;  // the new device needs its own context made current
+    t_ctx_gen = 0;  // the new device needs its own context made current
   }
   return record_cu(ensure_context());
 }
@@ -477,7 +495,9 @@ cudaError_t cudaDeviceReset(void) {
     }
   }
   g_primary.clear();
-  t_ctx_set = false;
+  // Every thread's selection named a context just released, not only this
+  // thread's.
+  g_ctx_gen.fetch_add(1, std::memory_order_relaxed);
   return cudaSuccess;
 }
 

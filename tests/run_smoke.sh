@@ -196,6 +196,26 @@ if [[ -x "$BUILD/hostile_smoke" ]]; then
   kill $HOSTILE_SRV 2>/dev/null
 fi
 
+# A device reset on one thread must invalidate every other thread's cached
+# context selection. Its own server, because it relies on nobody else holding
+# a retain on the primary context it releases.
+if [[ -x "$BUILD/thread_id_smoke" ]]; then
+  echo
+  THREAD_PORT=$((PORT + 9))
+  "$BUILD/rgpu-server-fake" "$THREAD_PORT" &
+  THREAD_SRV=$!
+  for _ in $(seq 1 50); do
+    if (exec 3<>/dev/tcp/127.0.0.1/"$THREAD_PORT") 2>/dev/null; then
+      exec 3<&- 3>&-
+      break
+    fi
+    sleep 0.1
+  done
+  LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$THREAD_PORT" \
+    "$BUILD/thread_id_smoke" runtime || rc=1
+  kill $THREAD_SRV 2>/dev/null
+fi
+
 # The runtime API path, if it was built. Our libcudart must come first so the
 # loader picks it over any stock one.
 if [[ -x "$BUILD/cudart_smoke" ]]; then
