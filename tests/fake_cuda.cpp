@@ -101,6 +101,25 @@ std::map<unsigned long long, CUdevice> g_contexts;
 
 unsigned long long g_next_handle = 1;
 
+// Handles of destroyed contexts, most recent last, for RGPU_FAKE_REUSE_CONTEXTS.
+//
+// A CUcontext is a pointer to driver heap state, and nothing in the header
+// promises that a destroyed context's address is never handed out again: the
+// next cuCtxCreate anywhere in the process may well get it. By default this
+// fake never reuses one, so that a stale handle is always recognisable; with
+// RGPU_FAKE_REUSE_CONTEXTS=1 a create takes the most recently destroyed handle
+// instead, so a test can show that a stale handle is never mistaken for the
+// new context that now has its address.
+std::vector<unsigned long long> g_destroyed_contexts;
+
+bool reuse_contexts() {
+  static const bool on = [] {
+    const char* s = std::getenv("RGPU_FAKE_REUSE_CONTEXTS");
+    return s && std::strcmp(s, "1") == 0;
+  }();
+  return on;
+}
+
 // The calling thread's context stack; the top is the current context. A
 // thread starts with none. Only the thread itself touches this, so it needs no
 // lock, but the contexts named in it can be destroyed by any thread, which is
@@ -446,7 +465,11 @@ CUresult cuCtxCreate_v2(CUcontext* pctx, unsigned int, CUdevice dev) {
   if (!valid_device(dev)) return CUDA_ERROR_INVALID_DEVICE;
   {
     std::lock_guard<std::mutex> lk(g_mu);
-    const unsigned long long h = (0xC0FFEE00ull << 32) | g_next_handle++;
+    unsigned long long h = (0xC0FFEE00ull << 32) | g_next_handle++;
+    if (reuse_contexts() && !g_destroyed_contexts.empty()) {
+      h = g_destroyed_contexts.back();
+      g_destroyed_contexts.pop_back();
+    }
     g_contexts[h] = dev;
     *pctx = reinterpret_cast<CUcontext>(h);
   }
@@ -464,7 +487,12 @@ CUresult cuCtxDestroy_v2(CUcontext ctx) {
   {
     std::lock_guard<std::mutex> lk(g_mu);
     known = g_contexts.erase(reinterpret_cast<unsigned long long>(ctx)) != 0;
-    if (known) gone = take_contents_locked(ctx);
+    if (known) {
+      gone = take_contents_locked(ctx);
+      if (reuse_contexts()) {
+        g_destroyed_contexts.push_back(reinterpret_cast<unsigned long long>(ctx));
+      }
+    }
   }
   if (!known) {
     rgpu_fake::count(rgpu_fake::kStale, 1);
