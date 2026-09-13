@@ -90,6 +90,10 @@ std::string read_stats() {
   if (!std::fgets(buf, sizeof(buf), f)) buf[0] = 0;
   std::fclose(f);
   std::string s(buf);
+  // The line ends with counters of calls rather than of resources, which move
+  // with every context switch and are no part of what has to come back.
+  const size_t calls = s.find(" ctxsets=");
+  if (calls != std::string::npos) s.erase(calls);
   while (!s.empty() && (s.back() == '\n' || s.back() == ' ')) s.pop_back();
   return s;
 }

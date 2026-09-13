@@ -327,6 +327,10 @@ CUresult range_locked(CUdeviceptr p, size_t n, void** host) {
   const size_t off = static_cast<size_t>(p - it->first);
   if (n > a.size - off) return CUDA_ERROR_INVALID_VALUE;
   *host = static_cast<char*>(a.host) + off;
+  // Allowed, and counted: the only trace a test has of work that ran under a
+  // context other than the one its issuer selected. The counter's lock is its
+  // own, and it takes no lock of ours.
+  if (a.ctx != ctx) rgpu_fake::count(rgpu_fake::kCrossContextUse, 1);
   return CUDA_SUCCESS;
 }
 
@@ -480,6 +484,7 @@ CUresult cuCtxSynchronize(void) { return need_context(); }
 // or not anybody holds a retain on it; it is using it uninitialised that
 // fails, not binding it.
 CUresult cuCtxSetCurrent(CUcontext ctx) {
+  rgpu_fake::count(rgpu_fake::kCtxSetCurrent, 1);
   if (!ctx) {
     if (!t_stack.empty()) t_stack.pop_back();
     return CUDA_SUCCESS;

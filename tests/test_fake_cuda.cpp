@@ -158,9 +158,18 @@ void pointers_carry_their_context() {
   const long allocs = stat(rgpu_fake::kAlloc);
   const long stale = stat(rgpu_fake::kStale);
 
+  const long sets = stat(rgpu_fake::kCtxSetCurrent);
+  const long cross = stat(rgpu_fake::kCrossContextUse);
+  CHECK(cuMemcpyHtoD(a, bytes, 1));
+  EXPECT(stat(rgpu_fake::kCrossContextUse) == cross,
+         "a copy under the pointer's own context is not a cross-context use");
   CHECK(cuCtxSetCurrent(p1));
+  EXPECT(stat(rgpu_fake::kCtxSetCurrent) == sets + 1,
+         "every cuCtxSetCurrent should be counted");
   unsigned char out[16] = {0};
   CHECK(cuMemcpyHtoD(a, bytes, sizeof(bytes)));
+  EXPECT(stat(rgpu_fake::kCrossContextUse) == cross + 1,
+         "a copy under another context should be counted as one");
   CHECK(cuMemcpyDtoH(out, a, sizeof(out)));
   EXPECT(std::memcmp(out, bytes, sizeof(out)) == 0,
          "a copy under another context should reach the pointer's own memory");
@@ -540,7 +549,10 @@ int main() {
   last_release_resets();
 
   for (int k = 0; k < rgpu_fake::kKindCount; k++) {
-    if (k == rgpu_fake::kStale || k == rgpu_fake::kOverRelease) continue;
+    if (k == rgpu_fake::kStale || k == rgpu_fake::kOverRelease ||
+        k == rgpu_fake::kCtxSetCurrent || k == rgpu_fake::kCrossContextUse) {
+      continue;  // mistakes and observations, not resources
+    }
     if (rgpu_fake::value(static_cast<rgpu_fake::Kind>(k)) != 0) {
       std::fprintf(stderr, "FAIL: counter %d is %ld at the end, expected 0\n",
                    k, rgpu_fake::value(static_cast<rgpu_fake::Kind>(k)));

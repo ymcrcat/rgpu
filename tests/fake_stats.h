@@ -34,6 +34,17 @@ enum Kind {
   // back. The same kind of mistake as an over-release, and just as invisible:
   // the fake refuses the call, so no resource count moves.
   kStale,
+  // Not a resource and not a mistake: how many times cuCtxSetCurrent was
+  // called, by anyone. The server restores each client thread's context before
+  // its request only when it differs from the one already current, and this
+  // is how a test sees that a client with one thread costs no switches at all.
+  kCtxSetCurrent,
+  // Device-memory reads and writes that ran while a context other than the
+  // memory's own was current. They succeed - the driver infers placement from
+  // the pointer - so the count is the only trace of work that ran under the
+  // wrong context, which is what a batch flushed by another thread would do if
+  // the server ran it under the flushing thread's context.
+  kCrossContextUse,
   kKindCount,
 };
 

@@ -156,7 +156,9 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
     want="$want graphs=0 execs=0 cublas=0 cublaslt=0 cudnn=0"
     want="$want overreleases=0 stale=0"
     local got
-    got=$(cat "$stats" 2>/dev/null)
+    # The call counters at the end of the line count calls, not resources, so
+    # they are not part of what has to come back to zero.
+    got=$(sed -e 's/ ctxsets=[0-9]*//' -e 's/ crossctx=[0-9]*//' "$stats" 2>/dev/null)
     if [[ "$got" != "$want" ]]; then
       echo "FAIL: after a $mode and an expiry the server should hold nothing"
       echo "      and have released nothing it no longer owned"
