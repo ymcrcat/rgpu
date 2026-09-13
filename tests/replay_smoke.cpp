@@ -437,6 +437,120 @@ void replay_across_the_wrap() {
   ::close(fd);
 }
 
+// A request too short for its call, as a client built against another wire
+// layout would send. The server drops the connection over it - but first
+// records it as completed, with an error, like any other request. Its handler
+// may have called the driver before it found the arguments short, so a
+// request left unrecorded would be sent again by the client when it
+// reconnects, and run again.
+Frame malformed(uint32_t req_id, bool no_reply) {
+  Frame f = total_mem(req_id, 0, no_reply);
+  f.payload = rgpu::Buffer();
+  f.payload.put<uint8_t>(1);  // the out-parameter flag, and no device after it
+  f.h.payload_len = static_cast<uint32_t>(f.payload.size());
+  return f;
+}
+
+bool closed_by_server(int fd) {
+  char byte = 0;
+  return ::recv(fd, &byte, 1, 0) == 0;
+}
+
+void malformed_request_is_recorded() {
+  std::printf("-- a malformed request is answered with an error and recorded "
+              "as completed before the connection drops\n");
+  const uint64_t session = 6;
+
+  rgpu::HandshakeReply hs{};
+  int fd = connect_session(session, 0, &hs);
+  EXPECT(fd >= 0 && hs.resumed == 0, "could not start a session");
+  if (fd < 0) return;
+  const Frame warm = device_count(1);
+  EXPECT(send(fd, warm), "could not send the first request");
+  expect_answer(fd, warm, CUDA_SUCCESS, "the first request");
+
+  const Frame bad = malformed(2, false);
+  EXPECT(send(fd, bad), "could not send the malformed request");
+  expect_answer(fd, bad, CUDA_ERROR_INVALID_VALUE, "the malformed request");
+  EXPECT(closed_by_server(fd),
+         "the server kept the connection open after a malformed request");
+  ::close(fd);
+
+  // As if that error reply had been lost with the connection.
+  fd = connect_session(session, 1, &hs);
+  EXPECT(fd >= 0 && hs.resumed == 1, "the session did not resume");
+  if (fd < 0) return;
+  EXPECT(hs.last_req_id == 2,
+         "the handshake did not report the malformed request as completed");
+  expect_answer(fd, bad, CUDA_ERROR_INVALID_VALUE,
+                "the resent reply to the malformed request");
+  const Frame next = device_count(3);
+  EXPECT(send(fd, next), "could not send a request after the malformed one");
+  expect_answer(fd, next, CUDA_SUCCESS, "the request after the malformed one");
+  ::close(fd);
+}
+
+void malformed_request_without_reply_is_recorded() {
+  std::printf("-- a malformed call without a reply is recorded as completed, "
+              "and its failure reported by the next call\n");
+  const uint64_t session = 7;
+
+  rgpu::HandshakeReply hs{};
+  int fd = connect_session(session, 0, &hs);
+  EXPECT(fd >= 0 && hs.resumed == 0, "could not start a session");
+  if (fd < 0) return;
+  const Frame warm = device_count(1);
+  EXPECT(send(fd, warm), "could not send the first request");
+  expect_answer(fd, warm, CUDA_SUCCESS, "the first request");
+
+  const Frame bad = malformed(2, true);
+  const Frame behind = device_count(3);
+  EXPECT(send(fd, bad) && send(fd, behind),
+         "could not send the malformed call and the one behind it");
+  EXPECT(!receive(fd).received,
+         "the server answered on the connection it should have dropped");
+  ::close(fd);
+
+  fd = connect_session(session, 1, &hs);
+  EXPECT(fd >= 0 && hs.resumed == 1, "the session did not resume");
+  if (fd < 0) return;
+  EXPECT(hs.last_req_id == 2,
+         "the handshake did not report the malformed call as completed");
+  // What the client sends again: everything after what the handshake said.
+  EXPECT(send(fd, behind), "could not replay the call behind it");
+  expect_answer(fd, behind, CUDA_ERROR_INVALID_VALUE,
+                "the call after the malformed call without a reply");
+  const Frame next = device_count(4);
+  EXPECT(send(fd, next), "could not send a request after that");
+  expect_answer(fd, next, CUDA_SUCCESS, "the request after that");
+  ::close(fd);
+}
+
+// Frames naming request id 0, which is no request: a zero-filled header, or a
+// client that does not number its requests. None is run or answered, and the
+// session goes on. The server says so once per session however many arrive;
+// run_smoke.sh counts the lines.
+void frames_without_a_request_id() {
+  std::printf("-- frames naming no request id are skipped\n");
+  const uint64_t session = 8;
+  const long before = totalmem_runs();
+
+  rgpu::HandshakeReply hs{};
+  int fd = connect_session(session, 0, &hs);
+  EXPECT(fd >= 0 && hs.resumed == 0, "could not start a session");
+  if (fd < 0) return;
+  for (int i = 0; i < 5; i++) {
+    EXPECT(send(fd, total_mem(0, 0, i % 2 == 0)),
+           "could not send a frame naming no request id");
+  }
+  const Frame next = device_count(1);
+  EXPECT(send(fd, next), "could not send a request after them");
+  expect_answer(fd, next, CUDA_SUCCESS,
+                "the request after frames naming no request id");
+  EXPECT(totalmem_runs() == before, "a frame naming no request id ran");
+  ::close(fd);
+}
+
 }  // namespace
 
 int main() {
@@ -445,6 +559,9 @@ int main() {
   stale_reply_expected_copy();
   handshake_resends_across_the_wrap();
   replay_across_the_wrap();
+  malformed_request_is_recorded();
+  malformed_request_without_reply_is_recorded();
+  frames_without_a_request_id();
 
   if (g_failures) {
     std::printf("\nFAILED: %d check(s)\n", g_failures);

@@ -363,6 +363,12 @@ struct Session {
   // resending it would wait forever.
   uint32_t last_reply_id = 0;  // 0 while there is none
   std::vector<uint8_t> last_reply;
+  // Whether the session has already logged a frame naming no request (id 0),
+  // and a copy of a request that replies whose reply is no longer kept. Any
+  // client can send as many of either as it likes, so each is said once.
+  // Touched only by the thread serving the session.
+  bool said_no_req_id = false;
+  bool said_stale_copy = false;
   // Everything the client asked the driver for and has not given back. It is
   // this process that holds it, so when the session finally expires this is
   // the only record of what to release. See server/inventory.h.
@@ -455,7 +461,17 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
         }
       }
       if (already_ran) {
-        if (answer) {
+        if (h.req_id == 0) {
+          // Not a copy of anything: a zero-filled or corrupt header, or a
+          // client that does not number its requests. Never run.
+          if (!session->said_no_req_id) {
+            session->said_no_req_id = true;
+            logf("session %llx: skipping %s: its request names no request id "
+                 "(0); every such frame in this session is skipped, and this "
+                 "is said once",
+                 (unsigned long long)key, call_name(h.api_id));
+          }
+        } else if (answer) {
           // Its reply went to a connection that is gone. This is it.
           if (g_verbose) {
             logf("%s (request %u) already ran; sending its reply again",
@@ -468,11 +484,15 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
           // so the only request that replies it can send again is the last
           // one - whose reply is the one kept. There is nothing right to
           // answer this with, and running it is what must not happen.
-          logf("session %llx: request %u (%s) already ran and its reply is no "
-               "longer kept (the last reply kept is for request %u); not "
-               "running it again and not answering it",
-               (unsigned long long)key, h.req_id, call_name(h.api_id),
-               kept);
+          if (!session->said_stale_copy || g_verbose) {
+            session->said_stale_copy = true;
+            logf("session %llx: request %u (%s) already ran and its reply is "
+                 "no longer kept (the last reply kept is for request %u); not "
+                 "running it again and not answering it. Said once per "
+                 "session unless RGPU_VERBOSE is set",
+                 (unsigned long long)key, h.req_id, call_name(h.api_id),
+                 kept);
+          }
         } else if (g_verbose) {
           logf("%s (request %u, no reply) already ran; skipping it",
                call_name(h.api_id), h.req_id);
@@ -558,12 +578,19 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
     } else if (!handled) {
       logf("unknown api id %u (%s)", h.api_id, call_name(h.api_id));
       result = CUDA_ERROR_NOT_SUPPORTED;
-    } else if (!req.ok()) {
-      // A short read means client and server disagree about the wire layout,
-      // which corrupts everything after it. Better to drop the connection.
-      logf("malformed request for %s; dropping connection",
-           call_name(h.api_id));
-      break;
+    }
+    // A short read means client and server disagree about the wire layout,
+    // which corrupts everything after it, so the connection is dropped. But
+    // only after the request is recorded as completed, with an error, like
+    // any other: it was dispatched, and the handler may already have called
+    // the driver before it found the arguments short. A request not recorded
+    // would be sent again by the client after it reconnects, and run again.
+    const bool malformed = !refused && handled && !req.ok();
+    if (malformed) {
+      logf("malformed request for %s; answering it with an error and dropping "
+           "the connection", call_name(h.api_id));
+      result = CUDA_ERROR_INVALID_VALUE;
+      rsp = Buffer();
     }
 
     if (g_verbose) {
@@ -594,6 +621,7 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
         logf("%s also failed with %d, behind an error already waiting",
              call_name(h.api_id), result);
       }
+      if (malformed) break;
       continue;
     }
 
@@ -622,7 +650,7 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
       session->last_reply.insert(session->last_reply.end(), rsp.data().begin(),
                                  rsp.data().end());
     }
-    if (!send_frame(fd, rh, rsp)) break;
+    if (!send_frame(fd, rh, rsp) || malformed) break;
   }
   ::close(fd);
   logf("connection closed");

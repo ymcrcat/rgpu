@@ -26,12 +26,25 @@ constexpr uint32_t kMagicHello = 0x52474845;  // "RGHE"
 //
 // Ordering ids therefore uses sequence-number arithmetic (RFC 1982): b is at
 // or after a when the distance from a forward to b, modulo 2^32, is under half
-// the id space. That is right for any two ids less than 2^31 requests apart,
-// and every pair ever compared is far closer: the frames outstanding between
-// a client and its server are the ones since the last reply, which the client
-// caps at 64 MiB - under three million frames - and a copy of a request is
-// never older than that. Past the window an old id reads as a new one, so a
-// comparison must never be asked of ids that far apart.
+// the id space. That is right for any two ids less than 2^31 requests apart.
+// Past that an old id reads as a new one, so what bounds each comparison:
+//
+//   - The server's check for a request that already ran compares a frame the
+//     client sent again with the last request completed. The client only
+//     sends again the frames since its last reply, and it caps those at
+//     64 MiB - under three million frames - so the two are that close.
+//   - The handshake compares the last reply the client received with the
+//     last reply the server kept. Nothing on the wire bounds that: any number
+//     of calls without a reply can come between two replies. But they are
+//     also frames since the client's last reply, all held for replay, so the
+//     two ids can only drift more than the cap apart once the client has
+//     passed the cap and thrown those frames away. Replay is already
+//     impossible then: frames the server may never have received are gone,
+//     and no ordering of ids at the handshake can bring the session back in
+//     step.
+//
+// Nothing checks these bounds. A client that breaks them - a buggy or hostile
+// one - can have its ids misordered.
 //
 // Every ordering of request ids, on either side, goes through this. Equality
 // needs nothing special.

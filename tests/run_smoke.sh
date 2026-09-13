@@ -89,8 +89,9 @@ if [[ -x "$BUILD/replay_smoke" ]]; then
   echo
   REPLAY_PORT=$((PORT + 13))
   REPLAY_STATS=$(mktemp "${TMPDIR:-/tmp}/rgpu-stats.XXXXXX")
+  REPLAY_LOG=$(mktemp "${TMPDIR:-/tmp}/rgpu-replay-log.XXXXXX")
   RGPU_FAKE_SLOW_TOTALMEM_MS=1500 RGPU_FAKE_STATS="$REPLAY_STATS" \
-    "$BUILD/rgpu-server-fake" "$REPLAY_PORT" &
+    "$BUILD/rgpu-server-fake" "$REPLAY_PORT" >"$REPLAY_LOG" 2>&1 &
   REPLAY_SRV=$!
   for _ in $(seq 1 50); do
     if (exec 3<>/dev/tcp/127.0.0.1/"$REPLAY_PORT") 2>/dev/null; then
@@ -102,7 +103,15 @@ if [[ -x "$BUILD/replay_smoke" ]]; then
   RGPU_SERVER="127.0.0.1:$REPLAY_PORT" RGPU_FAKE_STATS="$REPLAY_STATS" \
     "$BUILD/replay_smoke" || rc=1
   kill $REPLAY_SRV 2>/dev/null
-  rm -f "$REPLAY_STATS" "$REPLAY_STATS.tmp"
+  # Any client can send frames naming no request id, as many as it likes, so
+  # the server says so once per session rather than once per frame.
+  no_id=$(grep -c "names no request id" "$REPLAY_LOG")
+  if [[ "$no_id" != 1 ]]; then
+    echo "FAIL: the server logged frames naming no request id $no_id times;"
+    echo "      once per session is what keeps a client from flooding the log"
+    rc=1
+  fi
+  rm -f "$REPLAY_STATS" "$REPLAY_STATS.tmp" "$REPLAY_LOG"
 fi
 
 # Request ids wrapping past 0xFFFFFFFF, with the connection broken in a batch
@@ -127,10 +136,16 @@ if [[ -x "$BUILD/wrap_smoke" ]]; then
     RGPU_BATCH=1 RGPU_TEST_FIRST_REQ_ID=4294967286 \
     RGPU_FAKE_STATS="$WRAP_STATS" "$BUILD/wrap_smoke" 2>&1) || rc=1
   printf '%s\n' "$wrap_out"
-  # As for reconnect_smoke: without the break this proves only half of it.
-  if ! printf '%s\n' "$wrap_out" | grep -q "and resumed"; then
-    echo "FAIL: the connection was never dropped and resumed, so wrap_smoke"
-    echo "      never replayed across the wrap; check where RGPU_DROP_AFTER lands"
+  # The break has to have happened, and the client has to have sent again
+  # exactly the 7 frames the server had not run (16-22). The count is the only
+  # place the client's own trimming shows: one that forgot nothing would send
+  # all 21, the server would skip the 14 that already ran, and every other
+  # check would still pass - while a real client's replay buffer never shrank.
+  if ! printf '%s\n' "$wrap_out" | grep -q "and resumed; 7 call(s) to send again"; then
+    echo "FAIL: wrap_smoke's client did not resume sending exactly the 7 calls"
+    echo "      the server had not run; either the break never happened (check"
+    echo "      where RGPU_DROP_AFTER lands) or the client trimmed the wrong frames"
+    printf '%s\n' "$wrap_out" | grep "and resumed" | sed 's/^/  /'
     rc=1
   fi
   kill $WRAP_SRV 2>/dev/null
