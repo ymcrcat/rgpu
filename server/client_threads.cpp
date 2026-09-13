@@ -239,11 +239,17 @@ CUresult show_context(ClientThreads& threads, ClientThread& t) {
       threads.applied = *top;
       return CUDA_SUCCESS;
     }
-    // Destroyed where no sweep saw it. The same as any destroyed context.
+    // A refusal here is not how a destroyed context is caught. On hardware
+    // cuCtxSetCurrent accepts a destroyed handle and leaves it current
+    // (real-GPU probe, check 9), so it never refuses one. A destroy this
+    // session saw is caught by the sweep instead (client_threads_destroyed),
+    // which marks the entry gone before its address can be reused, and a gone
+    // entry never reaches this call. This branch is defence-in-depth for any
+    // other error the driver may return: mark the entry gone and go on as for a
+    // destroyed context.
     top->gone = true;
     if (verbose()) {
-      logf("context %p could not be made current again; it was destroyed "
-           "since its client thread selected it",
+      logf("context %p could not be made current again; treating it as gone",
            (void*)top->ctx);
     }
     read_back(threads);

@@ -98,10 +98,13 @@ Assumed, not measured:
   threads, fibers, work-stealing over a thread pool where a logical task moves
   mid-context). PyTorch does not.
 
-Still not measured on hardware, and worth one cheap single-GPU check: that a
-copy or free through another context's pointer succeeds (the fake assumes the
-header's placement inference), that `cuCtxSetCurrent` refuses a destroyed
-handle, that a reset keeps the retain count, and what `cuCtxGetCurrent` costs.
+These were later measured on a real A40 (the driver probe, `hw-probe.log`). A
+copy or free through another context's pointer succeeds and a reset keeps the
+retain count, as assumed. But `cuCtxSetCurrent` does **not** refuse a destroyed
+handle: it accepts it, leaves it current, and using it can segfault (check 9).
+An earlier draft leaned on that refusal to catch a destroyed context at restore
+time; the design does not, because the sweep on destroy is what actually
+protects the server - see "Contexts that die under another thread".
 
 ## Thread identity on the wire
 
@@ -393,19 +396,29 @@ it would bind a thread to somebody else's context.
   context may mean the current one, as the header says of
   `CUDA_KERNEL_NODE_PARAMS`. The maths libraries' results are never corrected: only a
   driver call's result is a `CUresult`.
-- **Fail clean on restore.** If `cuCtxSetCurrent` refuses a saved context
-  anyway - destroyed where no sweep saw it - the entry is marked gone, the
-  current context is read back into `applied`, and the thread is treated as
-  above.
+- **The sweep is the whole defence, not a refusal at restore.** It would be
+  tempting to rely on `cuCtxSetCurrent` refusing a destroyed handle at restore
+  time, so a destroy the server had not seen would be caught when it tried to
+  bind. It does not: on a real A40 `cuCtxSetCurrent` **accepts** a destroyed
+  handle, leaves it current, and a call under it can segfault (the driver
+  probe, check 9). So every destroy this session can see is caught by the sweep
+  above, which marks the entry gone *before* its address can be reused, and a
+  gone entry is never made current. `show_context` still marks an entry gone if
+  `cuCtxSetCurrent` returns any error - defence-in-depth for other failures -
+  but that path is not what protects against a destroyed context, and must not
+  be counted on to notice one. The one destroy the sweep cannot see is another
+  session's destroy of a context shared across sessions; see "Contexts from
+  another session" in Risks.
 
 **Primary contexts are not swept, and carry no generation.** A primary
 context's last release "automatically reset[s]" it, and a reset "does not
 release it": either way it is emptied, not replaced, and its handle survives.
 So a thread that had it current keeps it current through another session's
 last release or a device reset, as in CUDA, and goes on allocating without
-selecting again. If a real driver ever handed out a different handle for a
-device's primary context afterwards, restoring the old one would fail and take
-the fail-clean path above.
+selecting again. A different handle for the primary context is never handed out
+afterwards (the probe confirmed the handle survives a reset, check 7), so there
+is nothing to catch at restore, which is as well since a restore would not
+catch it anyway.
 
 **What is refused instead of tracked.** `cuCtxAttach` would make `cuCtxDetach`
 something other than a destroy, and the green-context family
@@ -720,9 +733,14 @@ destroy sweeps at most a few hundred thousand of them.
 
 **Contexts from another session.** A created context's handle used from
 another session's connection is not covered: another session's destroy is
-neither swept here nor recorded. Reaching it needs a handle from another
-session. (Isolation between tenants is one server per tenant, so the sessions
-sharing a server are one tenant's.)
+neither swept here nor recorded, so this session's slot goes on naming it. When
+that slot is restored, `cuCtxSetCurrent` binds the destroyed handle - the driver
+accepts it (check 9) rather than refusing it - and a call under it can fault.
+Nothing catches this: the sweep is per session, and a restore cannot notice a
+destroyed context. Reaching it needs a handle from another session, and
+isolation between tenants is one server per tenant, so the sessions sharing a
+server are one tenant's - which is why this residual is accepted rather than
+defended against.
 
 **Per-thread deferred errors change observable behaviour.** An error caused by
 thread A no longer surfaces on thread B. That is more correct and it is what

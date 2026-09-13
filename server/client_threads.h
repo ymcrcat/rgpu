@@ -35,18 +35,22 @@ namespace rgpu {
 //
 // A CUcontext is an address in driver memory, and a created context's address
 // may be handed out again once it is destroyed - to a cuCtxCreate anywhere in
-// the process, another tenant's included. So a saved created context is only
-// ever made current again if nothing has destroyed it since it was saved:
-// every destroy is swept through every stack (client_threads_destroyed).
+// the process, another tenant's included. The defence against binding a thread
+// to a reused address is the sweep, not a refusal from the driver: every
+// destroy this session sees is swept through every stack
+// (client_threads_destroyed), which marks the entry gone before its address can
+// be reused, and a gone entry is never made current. It has to be the sweep,
+// because on hardware cuCtxSetCurrent accepts a destroyed handle and leaves it
+// current (real-GPU probe, check 9) - a destroy could not be noticed at restore
+// time. The one destroy the sweep cannot see is another session's destroy of a
+// context shared across sessions: the documented one-server-per-tenant limit,
+// which nothing here defends against.
 //
 // A primary context is different. Its last release "automatically reset[s]"
 // it and a reset "does not release it": either way it is emptied, not
 // replaced, and its handle survives. So a thread that had it current keeps it
 // current through another session's last release or a reset, as in CUDA, and
-// nothing is swept for them. If a real driver ever handed out a different
-// handle for a device's primary context after that, making the old one current
-// again would fail, and the entry would take the same fail-clean path as a
-// created context destroyed where no sweep saw it.
+// nothing is swept for them.
 struct SavedContext {
   CUcontext ctx = nullptr;
   // Destroyed since it was saved. Never made current again. It stays in the
