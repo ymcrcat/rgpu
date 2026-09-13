@@ -336,15 +336,24 @@ bool ensure_connected_locked() {
   }
   if (!answered || reply.magic != kMagicHello) {
     if (!answered) {
-      // A server from before protocol 3 closes on a version it does not
-      // speak without answering, so a close is all this client sees of a
-      // mismatch - and a server binary older than the client is easy to
-      // leave running.
-      log("handshake with %s failed: the server closed the connection "
-          "without answering. An older rgpu-server, speaking a protocol "
-          "before %u, does that; check that the server was rebuilt along "
-          "with this client",
-          spec.c_str(), kProtocolVersion);
+      // Two causes, and this client cannot tell them apart: nothing was
+      // listening behind whatever accepted - an ssh tunnel accepts locally
+      // and closes as soon as it finds the far end down, which is the usual
+      // one - or the server is older than protocol 3, which closes on a
+      // version it does not speak without a word. Said once: a reconnect
+      // tries again and again, and the same line every time buries whatever
+      // else is being logged.
+      static bool said = false;
+      if (!said) {
+        said = true;
+        log("handshake with %s failed: the server closed the connection "
+            "without answering. Either nothing is serving there - an ssh "
+            "tunnel accepts the connection locally and closes it when the "
+            "far end is down - or the server is an older rgpu-server, from "
+            "before protocol %u, which closes on a version it does not "
+            "speak. Said once per process",
+            spec.c_str(), kProtocolVersion);
+      }
     } else {
       log("handshake with %s failed: what answered is not an rgpu-server",
           spec.c_str());

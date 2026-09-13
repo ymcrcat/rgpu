@@ -230,12 +230,17 @@ an ordinary launch would drop the guarantees the kernel was written around.
 
 A dropped connection does not lose the GPU state. The server keeps the session
 for `RGPU_SESSION_GRACE` seconds, and the client reconnects, sends again what
-the server never acknowledged, and carries on. If the client does not get back
+the server never acknowledged, and carries on. A call that still gets no reply
+after that one retry fails with `CUDA_ERROR_UNKNOWN` and is then treated as
+answered: it is never sent again, so it ran at most once - whether it ran at
+all depends on whether it had reached the server - and calls after it carry on
+normally once the link is back. If the client does not get back
 in time, the session expires and the server releases what it held. The same
 happens if the server restarts. The client is then told its session is gone:
 it says so, sends nothing more, and every later call fails. It never carries on
-against an empty GPU. Expiry releases the allocations, contexts, modules,
-streams, events, graphs and maths-library handles a session made. It does not
+against an empty GPU. Expiry ends any stream capture the session left open, releasing the graph it
+yields, and releases the allocations, contexts, modules, streams, events,
+graphs and maths-library handles a session made. It does not
 track `cuMemAddressReserve` ranges, `cuGraphConditionalHandleCreate` handles,
 user-object retains, cuDNN descriptors minted on the client,
 `cuLibraryLoadData` libraries or texture references. Those stay until the

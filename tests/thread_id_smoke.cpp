@@ -748,13 +748,25 @@ void wire_cases() {
                     "not initialized");
              EXPECT(log.find("handshake with") != std::string::npos,
                     "the client did not report the failed handshake");
-             // All the client can see is the close, and the likeliest cause
-             // is a server binary older than this client, which is easy to
-             // leave running on a GPU host. It says so.
-             EXPECT(log.find("protocol") != std::string::npos &&
-                        log.find("older rgpu-server") != std::string::npos,
-                    "the client did not say a server from before this "
-                    "protocol is the likely cause");
+             // All the client sees is the close, and it has two likely
+             // causes: nothing serving behind a tunnel that accepts locally,
+             // and a server binary older than this client. It names both.
+             EXPECT(log.find("tunnel") != std::string::npos &&
+                        log.find("older rgpu-server") != std::string::npos &&
+                        log.find("protocol") != std::string::npos,
+                    "the client did not name both likely causes of a "
+                    "handshake the server closed");
+             // Once, however many attempts: two calls here, each of which
+             // tries the handshake again.
+             size_t said = 0;
+             for (size_t at = log.find("handshake with");
+                  at != std::string::npos;
+                  at = log.find("handshake with", at + 1)) {
+               said++;
+             }
+             EXPECT(said == 1,
+                    "the client said the handshake was closed on every "
+                    "attempt");
            },
            [](int& lfd) {
              int fd = accept_within(lfd, 10000);

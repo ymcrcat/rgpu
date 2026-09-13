@@ -494,8 +494,10 @@ cudaError_t cudaDeviceSynchronize(void) {
 }
 
 cudaError_t cudaDeviceReset(void) {
-  // Releasing the primary contexts is the observable part; the server drops
-  // the rest when the connection closes.
+  // Releasing the primary contexts is the observable part; the rest of what
+  // this process took stays on the server until its session expires, which is
+  // when the server releases what a session holds - a connection closing does
+  // not, because the session outlives it.
   std::lock_guard<std::mutex> lk(g_ctx_mu);
   for (auto& kv : g_primary) {
     CUdevice dev;
