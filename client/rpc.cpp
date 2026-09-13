@@ -216,6 +216,45 @@ void forget_acked_locked(uint32_t up_to) {
   }
 }
 
+// A call that is returning an error because its reply never came: the
+// connection broke, and broke again on the retry, or the stream desynced.
+// Whether it ran is not known. It may have reached the server and run, its
+// reply lost with the connection, or never have got there.
+//
+// Either way it is final. The application has been told it failed, and from
+// here the call is treated exactly like one that was answered with that
+// failure:
+//
+//   - It is not sent again. Sent on the next connection it would run a call
+//     the application was told failed, behind the application's back and
+//     after calls it has made since - a free the application will retry, a
+//     launch it will redo. So the call runs at most once, and only if it had
+//     reached the server by the time the retry failed; the server's
+//     at-most-once check (server/main.cpp) sees to the rest.
+//   - Its reply is no longer wanted. The next handshake names it as the last
+//     reply received, so a server that did run it does not send its kept
+//     reply to a client that is waiting for another call's - which is what
+//     used to fail every call after this one with a mismatched response id
+//     for as long as the process lived.
+//
+// Frames queued ahead of it - calls sent without a reply, which the
+// application was told succeeded - are not given up with it. They stay in the
+// replay buffer and are sent again as usual. Nothing can be queued behind it:
+// the lock has been held since it was queued.
+void abandon_call_locked(uint32_t req_id) {
+  if (!g_unacked.empty() && g_unacked.back().req_id == req_id) {
+    g_unacked_bytes -= g_unacked.back().bytes.size();
+    g_unacked.pop_back();
+  }
+  g_last_reply = req_id;
+  // Every path here has already dropped the connection. If one ever did not,
+  // a late reply to this call could still arrive on it.
+  if (g_fd >= 0) {
+    ::close(g_fd);
+    g_fd = -1;
+  }
+}
+
 // Batching is on by default. RGPU_BATCH=0 makes every call a round trip,
 // which is slower but makes a failing call report itself where it happened.
 bool batching() {
@@ -555,10 +594,12 @@ CUresult call(uint32_t api_id, const Buffer& req, Buffer* rsp) {
 
   // Two goes: one on the connection we have, and if that breaks, one on a
   // connection to the same session. The replay makes the second attempt the
-  // same request, not a new one.
+  // same request, not a new one. A call that gets no reply on either is given
+  // up for good (abandon_call_locked).
   for (int attempt = 0; attempt < 2; attempt++) {
     if (!flush_locked()) {
       if (attempt == 0 && reconnect_locked()) continue;
+      abandon_call_locked(expect_id);
       return CUDA_ERROR_UNKNOWN;
     }
 
@@ -567,11 +608,13 @@ CUresult call(uint32_t api_id, const Buffer& req, Buffer* rsp) {
     if (!recv_frame(g_fd, kMagicRsp, &rh, &payload)) {
       drop_connection_locked("recv failed");
       if (attempt == 0 && reconnect_locked()) continue;
+      abandon_call_locked(expect_id);
       return CUDA_ERROR_UNKNOWN;
     }
     if (rh.req_id != expect_id) {
       // Under the lock this cannot happen unless the stream desynced.
       drop_connection_locked("response id mismatch");
+      abandon_call_locked(expect_id);
       return CUDA_ERROR_UNKNOWN;
     }
 

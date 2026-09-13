@@ -32,6 +32,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <functional>
+#include <map>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -175,6 +176,58 @@ std::vector<Frame> read_until_closed(int fd) {
   }
   return frames;
 }
+
+// A scripted session that keeps the books the real server keeps
+// (server/main.cpp): the last request completed, the last reply, and a request
+// that already ran is never run again - a copy that wants a reply is answered
+// from the kept reply if it is that one, and otherwise dropped. Counts what
+// ran, by call, and the copies that arrived.
+struct ModelSession {
+  uint32_t last_req = 0;
+  uint32_t last_reply_id = 0;
+  int32_t last_result = 0;
+  std::map<uint32_t, int> runs;  // api id -> times run
+  int copies = 0;
+
+  bool answer_kept(int fd) {
+    RspHeader rh{};
+    rh.magic = rgpu::kMagicRsp;
+    rh.req_id = last_reply_id;
+    rh.result = last_result;
+    return rgpu::send_frame(fd, rh, Buffer());
+  }
+
+  // Runs a frame, or skips it if it already ran. Answers it only if `answer`.
+  void take(int fd, const Frame& f, bool answer) {
+    const bool wants_reply = !(f.h.flags & rgpu::kFlagNoReply);
+    if (rgpu::req_at_or_before(f.h.req_id, last_req)) {
+      copies++;
+      if (answer && wants_reply && f.h.req_id == last_reply_id) answer_kept(fd);
+      return;
+    }
+    runs[f.h.api_id]++;
+    last_req = f.h.req_id;
+    if (!wants_reply) return;
+    last_reply_id = f.h.req_id;
+    last_result = CUDA_SUCCESS;
+    if (answer) answer_kept(fd);
+  }
+
+  // A reconnect to this session, served until the client closes it: told it
+  // resumed, sent the reply it never received if there is one, and every
+  // frame taken as above.
+  void serve_reconnect(int fd) {
+    Handshake hello{};
+    EXPECT(read_hello(fd, &hello), "no handshake on reconnect");
+    send_hello(fd, rgpu::kProtocolVersion, true, last_req);
+    if (last_reply_id != 0 &&
+        !rgpu::req_at_or_before(last_reply_id, hello.last_req_id)) {
+      answer_kept(fd);
+    }
+    Frame f;
+    while (read_frame(fd, &f)) take(fd, f, true);
+  }
+};
 
 // Runs `client` in a fresh process pointed at a listener, and `server` here
 // against that listener. The child is forked before this process has any
@@ -537,6 +590,76 @@ void wire_cases() {
                       "a notice did not name the retired thread");
              }
            });
+
+  // A call whose connection breaks, and breaks again on the retry after the
+  // client reconnected, returns an error. The link then recovers, and the
+  // client has to recover with it: its later calls work, and nothing runs
+  // twice. The failed call is final (client/rpc.cpp, abandon_call_locked):
+  // whether it ran is decided by whether it had reached the server when the
+  // retry failed, and it is never sent again. Two ways it can go:
+  //
+  //   ran    the replay on the retry reached the server and ran; the reply
+  //          was lost. A later handshake must not have the server send that
+  //          reply again to a client that is waiting for another.
+  //   lost   the replay reached the server but never ran. A later reconnect
+  //          must not send it again behind the application's back.
+  for (const bool ran : {true, false}) {
+    run_case(ran ? "a call whose retry fails is final, and later calls work "
+                   "(it ran on the retry)"
+                 : "a call whose retry fails is final, and later calls work "
+                   "(it never ran)",
+             [] {
+               EXPECT(sync_call(kApiA) == CUDA_SUCCESS, "the first call failed");
+               EXPECT(sync_call(kApiB) != CUDA_SUCCESS,
+                      "a call with no reply on either attempt succeeded");
+               EXPECT(sync_call(kApiC) == CUDA_SUCCESS,
+                      "a call after the link recovered failed");
+               EXPECT(sync_call(kApiD) == CUDA_SUCCESS,
+                      "the call after that failed");
+             },
+             [ran](int& lfd) {
+               ModelSession session;
+               int fd = accept_session(lfd, nullptr);
+               if (fd < 0) return;
+               Frame a, b;
+               EXPECT(read_frame(fd, &a) && a.h.api_id == kApiA,
+                      "the client did not send its first call");
+               session.take(fd, a, true);
+               EXPECT(read_frame(fd, &b) && b.h.api_id == kApiB,
+                      "the client did not send its second call");
+               ::close(fd);  // before B ran
+
+               // The retry: B again, read and then dropped once more.
+               fd = accept_within(lfd, 10000);
+               EXPECT(fd >= 0, "the client did not come back for the retry");
+               if (fd < 0) return;
+               Handshake again{};
+               EXPECT(read_hello(fd, &again), "no handshake on the retry");
+               send_hello(fd, rgpu::kProtocolVersion, true, session.last_req);
+               Frame replayed;
+               EXPECT(read_frame(fd, &replayed) &&
+                          replayed.bytes() == b.bytes(),
+                      "the retry did not send the second call again");
+               if (ran) session.take(fd, replayed, false);
+               ::close(fd);
+
+               // The link is back: every later connection is served in full.
+               for (;;) {
+                 fd = accept_within(lfd, 3000);
+                 if (fd < 0) break;
+                 session.serve_reconnect(fd);
+                 ::close(fd);
+               }
+               EXPECT(session.runs[kApiB] == (ran ? 1 : 0),
+                      ran ? "the call whose retry failed ran again"
+                          : "the call whose retry failed was sent again and "
+                            "ran after the application was told it failed");
+               EXPECT(session.runs[kApiC] == 1 && session.runs[kApiD] == 1,
+                      "the calls after the recovery did not each run once");
+               EXPECT(session.copies == 0,
+                      "the client sent a call again that had already run");
+             });
+  }
 
   // What a client of this version sees from a server that speaks another.
   // A server from before protocol 3 closes on a mismatch without a word.

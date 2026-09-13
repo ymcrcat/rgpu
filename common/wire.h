@@ -33,8 +33,8 @@ constexpr uint32_t kMagicHello = 0x52474845;  // "RGHE"
 //     client sent again with the last request completed. The client only
 //     sends again the frames since its last reply, and it caps those at
 //     64 MiB - under three million frames - so the two are that close.
-//   - The handshake compares the last reply the client received with the
-//     last reply the server kept. Nothing on the wire bounds that: any number
+//   - The handshake compares the last reply the client received (or gave up
+//     waiting for) with the last reply the server kept. Nothing on the wire bounds that: any number
 //     of calls without a reply can come between two replies. But they are
 //     also frames since the client's last reply, all held for replay, so the
 //     two ids can only drift more than the cap apart once the client has
@@ -75,7 +75,9 @@ struct Handshake {
   uint32_t version;
   uint64_t session_hi;
   uint64_t session_lo;
-  uint32_t last_req_id;  // last reply the client received; 0 if none yet
+  // The last reply the client received, or gave up waiting for when a call
+  // failed without one (client/rpc.cpp, abandon_call_locked); 0 if neither.
+  uint32_t last_req_id;
   uint32_t reserved;
 };
 
