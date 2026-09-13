@@ -67,6 +67,8 @@ struct ReqHeader {
   uint32_t thread_id;
   uint32_t payload_len;
 };
+// Written and read as a memcpy of the struct, so the size is the protocol.
+static_assert(sizeof(ReqHeader) == 24, "ReqHeader is 24 bytes on the wire");
 
 struct RspHeader {
   uint32_t magic;

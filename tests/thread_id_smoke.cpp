@@ -245,6 +245,22 @@ CUresult sync_call(uint32_t api) {
 // A's three ahead of its own. Identity has to go with each frame, not with
 // whoever wrote it. A stays alive until B is done, so that its exit - which
 // the retirement case covers - adds nothing to the traffic here.
+// Steps shared with thread-exit destructors, which cannot capture anything.
+std::mutex g_late_mu;
+std::condition_variable g_late_cv;
+int g_late_stage = 0;
+
+void late_step(int to) {
+  std::lock_guard<std::mutex> lk(g_late_mu);
+  g_late_stage = to;
+  g_late_cv.notify_all();
+}
+
+void late_await(int at) {
+  std::unique_lock<std::mutex> lk(g_late_mu);
+  g_late_cv.wait(lk, [&] { return g_late_stage >= at; });
+}
+
 void client_a_then_b() {
   std::mutex mu;
   std::condition_variable cv;
@@ -291,10 +307,10 @@ void check_a_then_b(const std::vector<Frame>& f) {
   EXPECT(f[3].h.thread_id != 0, "thread B's frame carried no thread id");
   EXPECT(f[3].h.thread_id != f[0].h.thread_id,
          "thread A's frames carried the id of thread B, which wrote them");
-  // Minted from 1, in the order threads first call, so a server can keep them
-  // in a small table.
+  // Minted from 1, in the order threads first call. Monotonic, not dense
+  // once threads exit: a server keeps them in a map and caps the live ones.
   EXPECT(f[0].h.thread_id == 1 && f[3].h.thread_id == 2,
-         "thread ids were not minted densely from 1");
+         "thread ids were not minted in order from 1");
 }
 
 void wire_cases() {
@@ -459,6 +475,67 @@ void wire_cases() {
              uint32_t count = 0, id = 0;
              EXPECT(b.get(&count) && count == 1 && b.get(&id) && id == 1,
                     "the notice did not name the exited thread");
+           });
+
+  // The usual shape of a late call in a busy process: the thread's notice has
+  // already gone out, carried by another thread's frame, by the time its last
+  // destructor calls. That call reaches the server for an id it was told to
+  // forget, so the client has to say so again after it, or the server keeps
+  // whatever it made for that id until the session expires.
+  run_case("a call after the notice has gone out is followed by another",
+           [] {
+             std::thread t([] {
+               struct CallsAfterNotice {
+                 ~CallsAfterNotice() {
+                   late_step(1);  // retired; let main send the notice
+                   late_await(2);
+                   EXPECT(sync_call(kApiD) == CUDA_SUCCESS,
+                          "the late call failed");
+                 }
+               };
+               static thread_local CallsAfterNotice late;
+               (void)late;
+               EXPECT(sync_call(kApiC) == CUDA_SUCCESS, "T's call failed");
+             });
+             late_await(1);
+             EXPECT(sync_call(kApiMain) == CUDA_SUCCESS, "main's call failed");
+             late_step(2);
+             t.join();
+             EXPECT(sync_call(kApiMain) == CUDA_SUCCESS, "main's call failed");
+           },
+           [](int& lfd) {
+             int fd = accept_session(lfd, nullptr);
+             if (fd < 0) return;
+             std::vector<Frame> f = read_until_closed(fd);
+             ::close(fd);
+             const uint32_t want_api[] = {kApiC,
+                                          rgpu::API_rgpu_thread_gone,
+                                          kApiMain,
+                                          kApiD,
+                                          rgpu::API_rgpu_thread_gone,
+                                          kApiMain};
+             const uint32_t want_thread[] = {1, 2, 2, 1, 2, 2};
+             EXPECT(f.size() == 6, "expected six frames: T, notice, main, "
+                                   "T late, notice again, main");
+             if (f.size() != 6) {
+               for (const auto& x : f) {
+                 std::fprintf(stderr, "   got api %#x thread %u\n", x.h.api_id,
+                              x.h.thread_id);
+               }
+               return;
+             }
+             for (int i = 0; i < 6; i++) {
+               EXPECT(f[i].h.api_id == want_api[i],
+                      "frames arrived in the wrong order");
+               EXPECT(f[i].h.thread_id == want_thread[i],
+                      "a frame carried the wrong thread id");
+             }
+             for (int i : {1, 4}) {
+               Buffer b(f[i].payload);
+               uint32_t count = 0, id = 0;
+               EXPECT(b.get(&count) && count == 1 && b.get(&id) && id == 1,
+                      "a notice did not name the retired thread");
+             }
            });
 
   // What a client of this version sees from a server that speaks another.

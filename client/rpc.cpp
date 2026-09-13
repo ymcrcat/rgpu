@@ -26,7 +26,11 @@
 namespace rgpu {
 namespace {
 
-std::mutex g_mu;          // guards the socket, the counter and the send queue
+// Guards the socket, the counter and the send queue. Never destroyed: threads
+// keep calling in while the process exits, and locking a mutex that static
+// destruction has already taken down is undefined (on libc++ it throws, from
+// places that cannot).
+std::mutex& g_mu = *new std::mutex();
 int g_fd = -1;
 uint32_t g_next_req = 1;
 bool g_connect_failed = false;
@@ -122,18 +126,21 @@ const SessionId g_session = make_session_id();
 // Every request says which client thread issued it, so that the server can
 // keep CUDA's per-thread state - the current context above all - for each one.
 // The id is ours rather than the OS's: minted from 1 in the order threads first
-// call, never reused (a recycled OS tid would inherit a dead thread's context),
+// call, not reused (a recycled OS tid would inherit a dead thread's context),
 // and the same size on every platform.
 
 std::atomic<uint32_t> g_next_thread{1};
 thread_local uint32_t t_thread_id = 0;  // 0 until this thread first calls
+// Set once this thread's id has been retired. It can still call after that:
+// see queue_frame_locked.
+thread_local bool t_retired = false;
 
 // Ids of threads that have exited, for the server to forget. Never destroyed,
 // for the same reason as the stats: threads keep exiting while the process
 // does. Its own lock, so a thread can exit without waiting behind a call that
 // is blocked on the network, and a flag so that the common case - nothing to
 // report - costs a load rather than a lock.
-std::mutex g_retired_mu;
+std::mutex& g_retired_mu = *new std::mutex();
 std::vector<uint32_t>& g_retired = *new std::vector<uint32_t>();
 std::atomic<bool> g_have_retired{false};
 
@@ -144,14 +151,20 @@ struct ThreadRetirer {
     std::lock_guard<std::mutex> lk(g_retired_mu);
     g_retired.push_back(t_thread_id);
     g_have_retired.store(true, std::memory_order_relaxed);
+    t_retired = true;
   }
 };
 
+// ponytail: the counter is 32 bits and is not reclaimed. After about 4.3
+// billion threads that ever called, it wraps and hands out ids that live
+// threads - the main thread's 1 among them - still hold, and two threads would
+// share one context on the server. Skipping zero only keeps "no thread"
+// meaningful; it does not make the wrap safe. No process gets near it.
 __attribute__((noinline)) uint32_t mint_thread_id() {
   uint32_t id;
   do {
     id = g_next_thread.fetch_add(1, std::memory_order_relaxed);
-  } while (id == 0);  // zero means "no thread"; skip it if the counter wraps
+  } while (id == 0);
   t_thread_id = id;
   // Constructed here, on first use, so its destructor runs when this thread
   // exits and threads that never call cost nothing.
@@ -387,6 +400,21 @@ void queue_frame_locked(uint32_t api_id, const Buffer& req, uint32_t flags,
     }
   }
   queue_one_locked(api_id, req, flags, thread_id);
+
+  if (t_retired) {
+    // A call from a thread already retired. Its notice may well have gone out
+    // already - any other thread's frame carries it, and this call may have
+    // waited for the lock behind several - so the server has been told to
+    // forget an id that is still in use. List it again, so that another
+    // notice follows this frame; the last call the thread makes is then
+    // always followed by one.
+    std::lock_guard<std::mutex> lk(g_retired_mu);
+    if (std::find(g_retired.begin(), g_retired.end(), thread_id) ==
+        g_retired.end()) {
+      g_retired.push_back(thread_id);
+    }
+    g_have_retired.store(true, std::memory_order_relaxed);
+  }
 }
 
 void queue_one_locked(uint32_t api_id, const Buffer& req, uint32_t flags,
