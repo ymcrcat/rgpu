@@ -94,6 +94,10 @@ uint64_t generation(int dev) {
   return it == g_primary_gen.end() ? 0 : it->second;
 }
 
+// A generation no primary context ever reaches, so one that has always already
+// ended. It marks an entry whose placement is not known: see stamp_of.
+constexpr uint64_t kEndedGeneration = ~uint64_t{0};
+
 // Called with g_primary_mu held, straight after the driver call that destroyed
 // the context.
 void bump_generation(int dev) {
@@ -123,8 +127,10 @@ Stamp stamp() {
 }
 
 // Whether an entry is still what it was when it was made: always, unless it
-// was made in a primary context whose generation has since ended.
+// was made in a primary context whose generation has since ended, or it was
+// stamped as already ended because nobody knows where it was made.
 bool still_current(int dev, uint64_t gen) {
+  if (gen == kEndedGeneration) return false;
   return dev < 0 || generation(dev) == gen;
 }
 
@@ -138,11 +144,21 @@ bool still_current(int dev, uint64_t gen) {
 // for them, and they would be freed again at expiry, while the destruction of
 // the current one would skip them and leak them. That they live in the
 // source's context is inferred, not documented; the fake driver models it the
-// same way. A source this session has no record of - the null default stream,
-// or a handle it never made - falls back to the current context.
+// same way.
+//
+// A null source is the current context's default stream, so it is recorded in
+// the current context. A non-null source this session has no record of - a
+// handle it never made, such as another session's - lives who knows where, and
+// whatever destroys that context will not be seen from here. Recorded in the
+// current context, the object would be freed at expiry even if its real
+// context had long since been destroyed with it: a stale free, of what may by
+// then be somebody else's. So it is recorded as made in a generation that has
+// already ended, and expiry skips it. The worst case is that the object leaks,
+// which is the direction every uncertainty in this file is made to fail in.
 Stamp stamp_of(Inventory::Items Inventory::*which, uint64_t source) {
   Inventory* inv = t_inv;
-  if (inv && source) {
+  if (!inv || !source) return stamp();
+  {
     std::lock_guard<std::mutex> lk(inv->mu);
     auto it = (inv->*which).find(source);
     if (it != (inv->*which).end()) {
@@ -153,7 +169,9 @@ Stamp stamp_of(Inventory::Items Inventory::*which, uint64_t source) {
       return st;
     }
   }
-  return stamp();
+  Stamp st = stamp();
+  st.gen = kEndedGeneration;
+  return st;
 }
 
 void note(Inventory::Items Inventory::*which, uint64_t handle,
@@ -671,7 +689,13 @@ class Current {
 // with the context, by another session's last release or expiry if not this
 // one's, so it is not this session's to free. Logged, and counted apart from
 // failures, because nothing went wrong.
-void log_skipped(const char* what, uint64_t handle, int dev) {
+void log_skipped(const char* what, uint64_t handle, int dev, uint64_t gen) {
+  if (gen == kEndedGeneration) {
+    logf("session cleanup: %s %llx was not released: it was made from an "
+         "object this session did not make, so where it lives is not known",
+         what, (unsigned long long)handle);
+    return;
+  }
   logf("session cleanup: %s %llx was not released: device %d's primary "
        "context was destroyed after it was made",
        what, (unsigned long long)handle, dev);
@@ -684,6 +708,7 @@ void log_skipped(const char* what, uint64_t handle, int dev) {
 // with somebody else's memory at the same address.
 template <typename F>
 bool unless_destroyed(int dev, uint64_t gen, F destroy) {
+  if (gen == kEndedGeneration) return false;
   if (dev < 0) {
     destroy();
     return true;
@@ -707,7 +732,7 @@ unsigned release_items(Inventory::Items& items, const char* what,
         });
     if (!ran) {
       (*skipped)++;
-      log_skipped(what, entry.first, entry.second.dev);
+      log_skipped(what, entry.first, entry.second.dev, entry.second.gen);
       continue;
     }
     if (r == CUDA_SUCCESS) {
@@ -843,7 +868,8 @@ std::string release_inventory(Inventory& inv) {
         });
     if (!ran) {
       skipped++;
-      log_skipped(entry.second.what, entry.first, entry.second.dev);
+      log_skipped(entry.second.what, entry.first, entry.second.dev,
+                  entry.second.gen);
       continue;
     }
     if (r == CUDA_SUCCESS) {
@@ -942,7 +968,8 @@ std::string release_inventory(Inventory& inv) {
   }
   if (skipped) {
     summary += "; " + plural(skipped, "resource") +
-               " skipped, destroyed with a primary context";
+               " skipped, destroyed with a primary context or of unknown "
+               "placement";
   }
   if (failed) {
     summary += "; " + plural(failed, "resource") + " could not be released";

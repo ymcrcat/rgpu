@@ -126,6 +126,9 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
   #   derived: graphs, clones and executables made from device 0's objects
   #            while device 1 is current go with device 0's primary context,
   #            and expiry must not free them again. Two devices.
+  #   foreign: a graph captured on another session's stream is of unknown
+  #            placement, so the capturing session's expiry leaves it alone.
+  #            The other session cleans it up. Two sessions to wait for.
   then_expire() {
     local mode=$1 port=$2 sessions=$3 devices=${4:-1}
     local stats log
@@ -177,6 +180,7 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
   then_expire "tenants release" $((PORT + 6)) 3
   then_expire "tenants expire" $((PORT + 7)) 3
   then_expire derived $((PORT + 8)) 1 2
+  then_expire foreign $((PORT + 11)) 2
 fi
 
 # Hostile requests get a server of their own: if one of them does take the

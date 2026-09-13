@@ -546,6 +546,112 @@ int tenants(const char* self, bool b_expires) {
   return 0;
 }
 
+// --- an object made from another session's object ---------------------------
+//
+// A session that captures a graph on a stream it did not make - a stream
+// handle from another session, which nothing stops a client sending - cannot
+// know which context the graph lives in: the stream's own record is in the
+// other session. If it recorded the graph in its current context, its expiry
+// would free the graph even after the graph's real context had been destroyed
+// and the graph with it, which is a stale free. So it records the graph as of
+// unknown placement, and its expiry leaves it alone: at worst a leak.
+//
+//   This process: retains device 0's primary context, makes a stream.
+//   M: retains the same context, captures a graph on this process's stream,
+//      and is killed. Its expiry must not free the graph.
+//   This process: destroys the graph and the stream itself, and exits.
+//
+// What is checked is the server's rule, not where a driver puts the graph:
+// the graph must survive M's expiry wherever it lives.
+
+int foreign_capturer(int ready_fd, const char* stream_arg) {
+  CHECK(cuInit(0));
+  CUcontext primary = nullptr;
+  CHECK(cuDevicePrimaryCtxRetain(&primary, 0));
+  CHECK(cuCtxSetCurrent(primary));
+  const auto stream = reinterpret_cast<CUstream>(
+      static_cast<uint64_t>(std::strtoull(stream_arg, nullptr, 16)));
+  CUgraph graph = nullptr;
+  CHECK(cuStreamBeginCapture(stream, CU_STREAM_CAPTURE_MODE_GLOBAL));
+  CHECK(cuStreamEndCapture(stream, &graph));
+  char msg[32];
+  const int n = std::snprintf(msg, sizeof(msg), "%c%016llx", g_failures ? 'x' : 'k',
+                              (unsigned long long)reinterpret_cast<uint64_t>(graph));
+  if (::write(ready_fd, msg, n) != n) return 1;
+  for (;;) ::pause();
+}
+
+int foreign(const char* self) {
+  if (!std::getenv("RGPU_FAKE_STATS") || expired_sessions() < 0) {
+    std::fprintf(stderr, "FAIL: foreign needs RGPU_FAKE_STATS and "
+                         "RGPU_SERVER_LOG; run it from run_smoke.sh\n");
+    return 1;
+  }
+  CHECK(cuInit(0));
+  CUcontext primary = nullptr;
+  CHECK(cuDevicePrimaryCtxRetain(&primary, 0));
+  CHECK(cuCtxSetCurrent(primary));
+  CUstream stream = nullptr;
+  CHECK(cuStreamCreate(&stream, 0));
+
+  int ready[2];
+  if (::pipe(ready) != 0) return 1;
+  char stream_hex[32];
+  std::snprintf(stream_hex, sizeof(stream_hex), "%llx",
+                (unsigned long long)reinterpret_cast<uint64_t>(stream));
+  const std::string ready_fd = std::to_string(ready[1]);
+  const pid_t parent = ::getpid();
+  const pid_t m = ::fork();
+  if (m == 0) {
+    die_with_parent(parent);
+    char* args[] = {const_cast<char*>(self), const_cast<char*>("foreign-m"),
+                    const_cast<char*>(ready_fd.c_str()), stream_hex, nullptr};
+    ::execv("/proc/self/exe", args);
+    ::execv(self, args);
+    std::perror("execv");
+    ::_exit(127);
+  }
+  char msg[17] = {0};
+  if (!await_byte(ready[0], 'k') || ::read(ready[0], msg, 16) != 16) {
+    std::fprintf(stderr, "FAIL: session M never captured a graph\n");
+    ::kill(m, SIGKILL);
+    ::waitpid(m, nullptr, 0);
+    return 1;
+  }
+  const auto graph = reinterpret_cast<CUgraph>(
+      static_cast<uint64_t>(std::strtoull(msg, nullptr, 16)));
+
+  const std::string with_m = read_stats();
+  const int expired_before = expired_sessions();
+  ::kill(m, SIGKILL);
+  ::waitpid(m, nullptr, 0);
+  if (!await_expired(expired_before + 1)) {
+    std::fprintf(stderr, "FAIL: session M never expired\n");
+    return 1;
+  }
+  const std::string after = read_stats();
+  if (field(with_m, "graphs") != 1 || field(after, "graphs") != 1 ||
+      field(after, "stale") != 0) {
+    std::fprintf(stderr,
+                 "FAIL: M's expiry freed a graph it made from a stream it did "
+                 "not make\n  before: %s\n   after: %s\n",
+                 with_m.c_str(), after.c_str());
+    g_failures++;
+  }
+
+  // What M's expiry left alone is still this server's to clean up.
+  CHECK(cuGraphDestroy(graph));
+  CHECK(cuStreamDestroy(stream));
+  CHECK(cuDevicePrimaryCtxRelease(0));
+  if (g_failures) {
+    std::printf("\nFAILED: %d check(s)\n", g_failures);
+    return 1;
+  }
+  std::printf("PASS: a graph made from another session's stream survives "
+              "that session's expiry\n");
+  return 0;
+}
+
 // The client that dies. Takes rather more than the parent, says so down the
 // pipe, and then waits to be killed: no exit handler, no frees, nothing the
 // server can read as a goodbye. That is what a crash looks like from here.
@@ -600,6 +706,10 @@ int main(int argc, char** argv) {
   if (argc > 2 && std::strcmp(argv[1], "tenant-a") == 0) {
     return tenant_a(std::atoi(argv[2]));
   }
+  if (argc > 3 && std::strcmp(argv[1], "foreign-m") == 0) {
+    return foreign_capturer(std::atoi(argv[2]), argv[3]);
+  }
+  if (argc > 1 && std::strcmp(argv[1], "foreign") == 0) return foreign(argv[0]);
   if (argc > 2 && std::strcmp(argv[1], "tenants") == 0) {
     return tenants(argv[0], std::strcmp(argv[2], "expire") == 0);
   }
