@@ -6,7 +6,8 @@
 // threads or two devices. This one links the fake directly and drives it from
 // several OS threads, because that is where the real driver keeps its state:
 // the current context and the context stack belong to the calling thread, and
-// what a context holds belongs to that context and nothing else.
+// what a context holds belongs to that context, whichever context is current
+// when it is used.
 //
 // Issue #2 was invisible because the fake did not model this. These are the
 // behaviours later tests lean on to fail loudly, so they are pinned here
@@ -138,9 +139,15 @@ void currency_is_per_thread() {
   CHECK(cuDevicePrimaryCtxRelease(1));
 }
 
-// A pointer belongs to the context that allocated it. Used from any thread
-// with that context current it works; used under another context it fails.
-void pointers_belong_to_their_context() {
+// A pointer carries its context with it. The header's Unified Addressing
+// overview says "Since pointers are unique, it is not necessary to specify
+// information about the pointers specified to the various copy functions",
+// and that "the CUDA driver should infer the location of the pointer from its
+// value", so a copy, a memset and a free of another context's pointer act on
+// that context's memory and succeed. What a test can rely on is placement:
+// which context and device own the allocation, read back through the pointer
+// attributes.
+void pointers_carry_their_context() {
   CUcontext p0 = nullptr, p1 = nullptr;
   CHECK(cuDevicePrimaryCtxRetain(&p0, 0));
   CHECK(cuDevicePrimaryCtxRetain(&p1, 1));
@@ -148,40 +155,126 @@ void pointers_belong_to_their_context() {
   CUdeviceptr a = 0;
   CHECK(cuMemAlloc(&a, 256));
   const unsigned char bytes[16] = {1, 2, 3, 4, 5, 6, 7, 8};
-  CHECK(cuMemcpyHtoD(a, bytes, sizeof(bytes)));
-
   const long allocs = stat(rgpu_fake::kAlloc);
   const long stale = stat(rgpu_fake::kStale);
+
   CHECK(cuCtxSetCurrent(p1));
   unsigned char out[16] = {0};
-  EXPECT_RC(cuMemcpyHtoD(a, bytes, sizeof(bytes)), CUDA_ERROR_INVALID_VALUE);
-  EXPECT_RC(cuMemcpyDtoH(out, a, sizeof(out)), CUDA_ERROR_INVALID_VALUE);
-  EXPECT_RC(cuMemsetD8(a, 0, sizeof(out)), CUDA_ERROR_INVALID_VALUE);
-  EXPECT_RC(cuMemFree(a), CUDA_ERROR_INVALID_VALUE);
-  EXPECT(stat(rgpu_fake::kAlloc) == allocs,
-         "a free under the wrong context must not free anything");
-  EXPECT(stat(rgpu_fake::kStale) == stale,
-         "a pointer used under the wrong context is live, not stale");
-
-  // The same pointer from a different thread, under its own context, works:
-  // it is the context that owns it, not the thread.
-  on_other_thread([&] {
-    CHECK(cuCtxSetCurrent(p0));
-    CHECK(cuMemcpyDtoH(out, a, sizeof(out)));
-  });
+  CHECK(cuMemcpyHtoD(a, bytes, sizeof(bytes)));
+  CHECK(cuMemcpyDtoH(out, a, sizeof(out)));
   EXPECT(std::memcmp(out, bytes, sizeof(out)) == 0,
-         "the copy under the owning context returned the wrong bytes");
+         "a copy under another context should reach the pointer's own memory");
+  CHECK(cuMemsetD8(a + 8, 0x7f, 8));
+  CHECK(cuMemcpyDtoH(out, a, sizeof(out)));
+  EXPECT(out[0] == 1 && out[8] == 0x7f, "memset under another context");
 
-  CHECK(cuCtxSetCurrent(p0));
+  // Placement, from any context and from a thread with none.
+  CUcontext owner = nullptr;
+  int ordinal = -1;
+  unsigned int type = 0;
+  CHECK(cuPointerGetAttribute(&owner, CU_POINTER_ATTRIBUTE_CONTEXT, a));
+  CHECK(cuPointerGetAttribute(&ordinal, CU_POINTER_ATTRIBUTE_DEVICE_ORDINAL, a));
+  CHECK(cuPointerGetAttribute(&type, CU_POINTER_ATTRIBUTE_MEMORY_TYPE, a));
+  EXPECT(owner == p0, "the pointer should report the context it was made in");
+  EXPECT(ordinal == 0, "the pointer should report device 0");
+  EXPECT(type == CU_MEMORYTYPE_DEVICE, "the pointer should be device memory");
+  owner = nullptr;
+  CHECK(cuPointerGetAttribute(&owner, CU_POINTER_ATTRIBUTE_CONTEXT, a + 100));
+  EXPECT(owner == p0, "a pointer into the middle of an allocation is placed too");
+
+  CUpointer_attribute attrs[] = {CU_POINTER_ATTRIBUTE_CONTEXT,
+                                 CU_POINTER_ATTRIBUTE_DEVICE_ORDINAL,
+                                 CU_POINTER_ATTRIBUTE_MEMORY_TYPE};
+  owner = nullptr;
+  ordinal = -1;
+  type = 0;
+  void* data[] = {&owner, &ordinal, &type};
+  CHECK(cuPointerGetAttributes(3, attrs, data, a));
+  EXPECT(owner == p0 && ordinal == 0 && type == CU_MEMORYTYPE_DEVICE,
+         "cuPointerGetAttributes should agree with cuPointerGetAttribute");
+
+  // Not a CUDA pointer: one call refuses, the other answers with nothing.
+  const CUdeviceptr bogus = 0x1234;
+  EXPECT_RC(cuPointerGetAttribute(&owner, CU_POINTER_ATTRIBUTE_CONTEXT, bogus),
+            CUDA_ERROR_INVALID_VALUE);
+  owner = p1;
+  ordinal = 5;
+  type = 9;
+  CHECK(cuPointerGetAttributes(3, attrs, data, bogus));
+  EXPECT(owner == nullptr && ordinal == 0 && type == 0,
+         "cuPointerGetAttributes should give default values for a non-CUDA "
+         "pointer");
+
+  on_other_thread([&] {
+    CUcontext seen = nullptr;
+    CHECK(cuPointerGetAttribute(&seen, CU_POINTER_ATTRIBUTE_CONTEXT, a));
+    EXPECT(seen == p0, "placement should not need a current context");
+    unsigned char none[4] = {0};
+    EXPECT_RC(cuMemcpyDtoH(none, a, sizeof(none)), CUDA_ERROR_INVALID_CONTEXT);
+    CUdevice dev = -1;
+    EXPECT_RC(cuCtxGetDevice(&dev), CUDA_ERROR_INVALID_CONTEXT);
+  });
+
+  // The current context's device.
+  CUdevice dev = -1;
+  CHECK(cuCtxGetDevice(&dev));
+  EXPECT(dev == 1, "device 1's primary context should be on device 1");
+  CUcontext mine = nullptr;
+  CHECK(cuCtxCreate(&mine, 0, 1));
+  dev = -1;
+  CHECK(cuCtxGetDevice(&dev));
+  EXPECT(dev == 1, "a context created on device 1 should be on device 1");
+  CUdeviceptr b = 0;
+  CHECK(cuMemAlloc(&b, 64));
+  CHECK(cuPointerGetAttribute(&owner, CU_POINTER_ATTRIBUTE_CONTEXT, b));
+  CHECK(cuPointerGetAttribute(&ordinal, CU_POINTER_ATTRIBUTE_DEVICE_ORDINAL, b));
+  EXPECT(owner == mine && ordinal == 1,
+         "an allocation should be placed in the context current when made");
+  CHECK(cuCtxDestroy(mine));
+  CHECK(cuCtxSetCurrent(p1));
+
+  // Freed under another context, and really freed: not stale, and gone.
   CHECK(cuMemFree(a));
+  EXPECT(stat(rgpu_fake::kAlloc) == allocs - 1,
+         "a free under another context should free the pointer's memory");
+  EXPECT(stat(rgpu_fake::kStale) == stale, "a live pointer is not stale");
+  EXPECT_RC(cuPointerGetAttribute(&owner, CU_POINTER_ATTRIBUTE_CONTEXT, a),
+            CUDA_ERROR_INVALID_VALUE);
+
   CHECK(cuCtxSetCurrent(nullptr));
   CHECK(cuDevicePrimaryCtxRelease(0));
   CHECK(cuDevicePrimaryCtxRelease(1));
 }
 
-// Streams, events and modules are handles into a context, and outside it they
-// are handles to nothing.
-void handles_belong_to_their_context() {
+// Launches the checked kernel with the arguments the fake expects.
+CUresult launch(CUfunction f, CUstream s) {
+  unsigned char packed[28] = {0};
+  const unsigned long long ptrs[3] = {0x1111111111111111ull,
+                                      0x2222222222222222ull,
+                                      0x3333333333333333ull};
+  const int n = 42;
+  std::memcpy(packed, ptrs, sizeof(ptrs));
+  std::memcpy(packed + 24, &n, sizeof(n));
+  size_t size = sizeof(packed);
+  void* extra[] = {CU_LAUNCH_PARAM_BUFFER_POINTER, packed,
+                   CU_LAUNCH_PARAM_BUFFER_SIZE, &size, CU_LAUNCH_PARAM_END};
+  return cuLaunchKernel(f, 1, 1, 1, 1, 1, 1, 0, s, nullptr, extra);
+}
+
+// Streams, events, modules and graphs carry their context the same way: the
+// header says nothing that confines them to the current context, so they are
+// used, and destroyed, wherever they live. Two calls are stricter, each
+// because the header says so:
+//   - cuModuleUnload "Unloads a module hmod from the current context";
+//   - a launch runs in the stream's context, or the current context's for a
+//     null stream ("the context to launch the kernel on will either be taken
+//     from the specified stream hStream or the current context in case of
+//     NULL stream"), and "The CUDA context associated with this stream must
+//     match that associated with function f".
+void handles_carry_their_context() {
+  const long base[] = {stat(rgpu_fake::kModule), stat(rgpu_fake::kGraph),
+                       stat(rgpu_fake::kGraphExec), stat(rgpu_fake::kStream),
+                       stat(rgpu_fake::kEvent)};
   CUcontext p0 = nullptr, p1 = nullptr;
   CHECK(cuDevicePrimaryCtxRetain(&p0, 0));
   CHECK(cuDevicePrimaryCtxRetain(&p1, 1));
@@ -190,31 +283,55 @@ void handles_belong_to_their_context() {
   CUevent e = nullptr;
   CUmodule m = nullptr;
   CUfunction f = nullptr;
+  CUgraph g = nullptr;
   CHECK(cuStreamCreate(&s, 0));
   CHECK(cuEventCreate(&e, 0));
   const std::vector<unsigned char> image = fake_fatbin();
   CHECK(cuModuleLoadData(&m, image.data()));
   CHECK(cuModuleGetFunction(&f, m, "rgpu_check_args"));
-  CHECK(cuStreamSynchronize(s));
+  CHECK(launch(f, s));
+  CHECK(launch(f, nullptr));
+  CHECK(cuStreamBeginCapture(s, CU_STREAM_CAPTURE_MODE_GLOBAL));
+  CHECK(cuStreamEndCapture(s, &g));
 
   const long stale = stat(rgpu_fake::kStale);
   CHECK(cuCtxSetCurrent(p1));
+  CUstream s1 = nullptr;
+  CHECK(cuStreamCreate(&s1, 0));
   CUfunction f1 = nullptr;
   size_t off = 0, size = 0;
-  EXPECT_RC(cuStreamSynchronize(s), CUDA_ERROR_INVALID_HANDLE);
-  EXPECT_RC(cuModuleGetFunction(&f1, m, "rgpu_check_args"),
-            CUDA_ERROR_INVALID_HANDLE);
-  EXPECT_RC(cuFuncGetParamInfo(f, 0, &off, &size), CUDA_ERROR_INVALID_HANDLE);
-  EXPECT_RC(cuStreamDestroy(s), CUDA_ERROR_INVALID_HANDLE);
-  EXPECT_RC(cuEventDestroy(e), CUDA_ERROR_INVALID_HANDLE);
+  CHECK(cuStreamSynchronize(s));
+  CHECK(cuModuleGetFunction(&f1, m, "rgpu_check_args"));
+  EXPECT(f1 == f, "the same function from the same module");
+  CHECK(cuFuncGetParamInfo(f, 0, &off, &size));
+  CHECK(launch(f, s));
+  EXPECT_RC(launch(f, nullptr), CUDA_ERROR_INVALID_HANDLE);
+  EXPECT_RC(launch(f, s1), CUDA_ERROR_INVALID_HANDLE);
   EXPECT_RC(cuModuleUnload(m), CUDA_ERROR_INVALID_HANDLE);
-  EXPECT(stat(rgpu_fake::kStale) == stale,
-         "a handle used under the wrong context is live, not stale");
-
-  CHECK(cuCtxSetCurrent(p0));
-  CHECK(cuStreamDestroy(s));
+  EXPECT(stat(rgpu_fake::kModule) == base[0] + 1,
+         "an unload refused under another context must not unload");
+  CUgraph clone = nullptr;
+  CUgraphExec exec = nullptr;
+  CHECK(cuGraphClone(&clone, g));
+  CHECK(cuGraphInstantiateWithFlags(&exec, clone, 0));
+  CHECK(cuGraphLaunch(exec, s));
   CHECK(cuEventDestroy(e));
-  CHECK(cuModuleUnload(m));
+  CHECK(cuStreamDestroy(s1));
+  EXPECT(stat(rgpu_fake::kStale) == stale,
+         "a handle used under another context is live, not stale");
+
+  // The clone and its executable were made from device 0's graph, so they
+  // live in device 0's primary context however they were reached: resetting
+  // device 0 takes them, the module, the graph and the stream with it.
+  CHECK(cuDevicePrimaryCtxReset(0));
+  EXPECT(stat(rgpu_fake::kModule) == base[0] &&
+             stat(rgpu_fake::kGraph) == base[1] &&
+             stat(rgpu_fake::kGraphExec) == base[2] &&
+             stat(rgpu_fake::kStream) == base[3] &&
+             stat(rgpu_fake::kEvent) == base[4],
+         "everything made from device 0's objects should die with its "
+         "primary context");
+
   CHECK(cuCtxSetCurrent(nullptr));
   CHECK(cuDevicePrimaryCtxRelease(0));
   CHECK(cuDevicePrimaryCtxRelease(1));
@@ -300,7 +417,7 @@ void addresses_are_not_reused() {
 // Resetting a device throws away everything in its primary context - not only
 // memory - and nothing in any other context, on this device or another. It
 // leaves the retain count alone.
-void reset_releases_the_primary_context() {
+void reset_empties_the_primary_context() {
   const long base[] = {stat(rgpu_fake::kAlloc),  stat(rgpu_fake::kModule),
                        stat(rgpu_fake::kStream), stat(rgpu_fake::kEvent),
                        stat(rgpu_fake::kGraph),  stat(rgpu_fake::kGraphExec)};
@@ -409,12 +526,12 @@ int main() {
   devices();
   primary_per_device();
   currency_is_per_thread();
-  pointers_belong_to_their_context();
-  handles_belong_to_their_context();
+  pointers_carry_their_context();
+  handles_carry_their_context();
   stack_is_per_thread();
   destroyed_under_another_thread();
   addresses_are_not_reused();
-  reset_releases_the_primary_context();
+  reset_empties_the_primary_context();
   last_release_resets();
 
   for (int k = 0; k < rgpu_fake::kKindCount; k++) {

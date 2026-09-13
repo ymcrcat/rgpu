@@ -18,9 +18,12 @@
 //     so that is where this state lives there too; nothing here is shortened
 //     to "one current context per process".
 //   - Everything the fake hands out - memory, modules, streams, events, graphs
-//     - belongs to the context that was current when it was made, and is only
-//     usable while that context is current. Destroying the context, or
-//     resetting a primary context, destroys what is in it.
+//     - belongs to the context that was current when it was made, and carries
+//     that context with it: a call on it acts in its own context whichever
+//     one is current, as the driver infers placement from a pointer's value.
+//     Destroying the context, or resetting a primary context, destroys what
+//     is in it. Which context and device own an allocation can be read back
+//     through the pointer attributes.
 //
 // What is deliberately not modelled: peer access between contexts, and
 // cuMemAllocAsync-style allocations that belong to no context.
@@ -149,23 +152,33 @@ CUresult need_context() {
 // that was released from one that was merely forgotten, or one used in the
 // right place from one used in the wrong one.
 //
-// What a real driver returns for an object that belongs to another context:
-// every lookup here is made in the current context, and to that context an
-// object living in a different one is not there. So the call fails exactly as
-// it would for a handle that was never issued. For device memory that is
-// CUDA_ERROR_INVALID_VALUE, which is the driver's documented rule in
-// cuPointerGetAttribute: a pointer that "kernels running in the current
-// CUcontext" cannot reach is CUDA_ERROR_INVALID_VALUE, and no current context
-// at all is CUDA_ERROR_INVALID_CONTEXT. For streams, events and modules it is
-// CUDA_ERROR_INVALID_HANDLE - "a resource handle passed to the API call was
-// not valid" - which is the "invalid resource handle" a real program gets for
-// a stream or kernel from the wrong device. Graphs keep the
-// CUDA_ERROR_INVALID_VALUE this fake has always given for an unknown graph.
+// What a real driver does with an object that belongs to another context: it
+// uses it there. The header's Unified Addressing overview says "Since pointers
+// are unique, it is not necessary to specify information about the pointers
+// specified to the various copy functions", and that the driver "should infer
+// the location of the pointer from its value". Streams, events, modules and
+// graphs are handles to one context's objects in the same way, and nothing in
+// the header confines their use to the current context. So a copy, a free, a
+// stream synchronise or a destroy of another context's object succeeds here.
+// A fake stricter than the hardware would let a test pass for a reason the
+// hardware does not share.
 //
-// CUDA_ERROR_INVALID_CONTEXT is not used for a mismatch: the driver documents
-// it for a thread with no context, or a context handle that is not valid, and
-// neither is the case when a valid context is current and the object is
-// simply not in it.
+// Two calls are stricter, each because the header says so:
+//   - cuModuleUnload "Unloads a module hmod from the current context", so a
+//     module from another context is refused, with the
+//     CUDA_ERROR_INVALID_HANDLE this fake gives for any module it cannot use;
+//   - a kernel launches in its stream's context, or the current context's for
+//     a null stream ("the context to launch the kernel on will either be taken
+//     from the specified stream hStream or the current context in case of NULL
+//     stream"), and "The CUDA context associated with this stream must match
+//     that associated with function f" (cuLaunchKernelEx), so a function from
+//     another context is CUDA_ERROR_INVALID_HANDLE.
+//
+// What still needs a context is unchanged: a call the header documents
+// CUDA_ERROR_INVALID_CONTEXT for still needs one current and usable. A handle
+// that names nothing - never issued, or destroyed with its context - is
+// CUDA_ERROR_INVALID_VALUE for memory and graphs and CUDA_ERROR_INVALID_HANDLE
+// for streams, events and modules.
 
 // Device pointers are not host addresses. They are handed out from a range no
 // host allocation can occupy - above 48 bits, so dereferencing one on the host
@@ -189,57 +202,73 @@ using Objects = std::map<unsigned long long, CUcontext>;
 Objects g_modules, g_streams, g_events, g_graphs, g_graph_execs;
 
 // Hands out a distinct token per creation, tagged so a value that turns up in
-// the wrong place is recognisable in a log, and records it in the current
-// context.
+// the wrong place is recognisable in a log, and records it in `ctx`. Called
+// with g_mu held.
+unsigned long long mint_in_locked(Objects* into, unsigned tag, CUcontext ctx) {
+  const unsigned long long h =
+      (static_cast<unsigned long long>(tag) << 32) | g_next_handle++;
+  (*into)[h] = ctx;
+  return h;
+}
+
+// The same, in the current context.
 CUresult mint(Objects* into, unsigned tag, unsigned long long* out) {
   std::lock_guard<std::mutex> lk(g_mu);
   CUcontext ctx = nullptr;
   CUresult r = enter_locked(&ctx);
   if (r != CUDA_SUCCESS) return r;
-  *out = (static_cast<unsigned long long>(tag) << 32) | g_next_handle++;
-  (*into)[*out] = ctx;
+  *out = mint_in_locked(into, tag, ctx);
   return CUDA_SUCCESS;
 }
 
-// Whether `h` is an object of this kind in the current context. `missing` is
-// what this kind of call reports for a handle it does not know. Called with
-// g_mu held.
+// Whether `h` is a live object of this kind, and if so the context it lives
+// in, which need not be the current one. A context has to be current all the
+// same. `missing` is what this kind of call reports for a handle it does not
+// know. Called with g_mu held.
 CUresult owned_locked(const Objects& in, unsigned long long h,
-                      CUresult missing) {
+                      CUresult missing, CUcontext* owner = nullptr) {
   CUcontext ctx = nullptr;
   CUresult r = enter_locked(&ctx);
   if (r != CUDA_SUCCESS) return r;
   auto it = in.find(h);
-  return it != in.end() && it->second == ctx ? CUDA_SUCCESS : missing;
+  if (it == in.end()) return missing;
+  if (owner) *owner = it->second;
+  return CUDA_SUCCESS;
 }
 
-CUresult owned(const Objects& in, unsigned long long h, CUresult missing) {
+CUresult owned(const Objects& in, unsigned long long h, CUresult missing,
+               CUcontext* owner = nullptr) {
   std::lock_guard<std::mutex> lk(g_mu);
-  return owned_locked(in, h, missing);
+  return owned_locked(in, h, missing, owner);
 }
 
-// A null stream is the current context's default stream; any other has to be
-// one of the current context's own.
-CUresult stream_ok_locked(CUstream s) {
+// A null stream is the current context's default stream; any other is a live
+// stream in whatever context it was made in. `ctx` gets the context the
+// stream runs in.
+CUresult stream_ok_locked(CUstream s, CUcontext* ctx = nullptr) {
   if (!s) {
-    CUcontext ctx = nullptr;
-    return enter_locked(&ctx);
+    CUcontext cur = nullptr;
+    CUresult r = enter_locked(&cur);
+    if (r == CUDA_SUCCESS && ctx) *ctx = cur;
+    return r;
   }
   return owned_locked(g_streams, reinterpret_cast<unsigned long long>(s),
-                      CUDA_ERROR_INVALID_HANDLE);
+                      CUDA_ERROR_INVALID_HANDLE, ctx);
 }
 
-CUresult stream_ok(CUstream s) {
+CUresult stream_ok(CUstream s, CUcontext* ctx = nullptr) {
   std::lock_guard<std::mutex> lk(g_mu);
-  return stream_ok_locked(s);
+  return stream_ok_locked(s, ctx);
 }
 
-// Destroys an object, in its own context only. Destroying something that was
-// never created, or already destroyed, is an error here rather than a shrug,
-// and it is counted: on a real driver the handle may belong to somebody else
-// by now. Counted whether or not a context is current, because the counter is
-// there to catch the mistake, not to mirror the return code.
-CUresult retire(Objects* from, unsigned long long h, CUresult missing) {
+// Destroys an object, in whatever context it lives in - or, with
+// `current_only`, only if that is the current context. Destroying something
+// that was never created, or already destroyed, is an error here rather than a
+// shrug, and it is counted: on a real driver the handle may belong to somebody
+// else by now. Counted whether or not a context is current, because the counter
+// is there to catch the mistake, not to mirror the return code.
+CUresult retire(Objects* from, unsigned long long h, CUresult missing,
+                bool current_only = false) {
   bool known;
   CUresult r;
   {
@@ -249,7 +278,7 @@ CUresult retire(Objects* from, unsigned long long h, CUresult missing) {
     CUcontext ctx = nullptr;
     r = enter_locked(&ctx);
     if (r == CUDA_SUCCESS) {
-      if (known && it->second == ctx) {
+      if (known && (!current_only || it->second == ctx)) {
         from->erase(it);
       } else {
         r = missing;
@@ -260,21 +289,32 @@ CUresult retire(Objects* from, unsigned long long h, CUresult missing) {
   return r;
 }
 
-// The device memory [p, p+n) in the current context, as host bytes. Called
-// with g_mu held; the caller copies under the same lock, so the allocation
-// cannot be freed by another thread in between.
+// The allocation containing device address p, or g_allocs.end(). Called with
+// g_mu held.
+std::map<CUdeviceptr, Alloc>::iterator containing_locked(CUdeviceptr p) {
+  auto it = g_allocs.upper_bound(p);
+  if (it == g_allocs.begin()) return g_allocs.end();
+  --it;
+  if (static_cast<size_t>(p - it->first) >= it->second.size) {
+    return g_allocs.end();
+  }
+  return it;
+}
+
+// The device memory [p, p+n), in whichever context owns it, as host bytes. A
+// context has to be current, as the copy calls document
+// CUDA_ERROR_INVALID_CONTEXT, but it need not be the owner. Called with g_mu
+// held; the caller copies under the same lock, so the allocation cannot be
+// freed by another thread in between.
 CUresult range_locked(CUdeviceptr p, size_t n, void** host) {
   CUcontext ctx = nullptr;
   CUresult r = enter_locked(&ctx);
   if (r != CUDA_SUCCESS) return r;
-  // The allocation containing p: the last one starting at or below it.
-  auto it = g_allocs.upper_bound(p);
-  if (it == g_allocs.begin()) return CUDA_ERROR_INVALID_VALUE;
-  --it;
+  auto it = containing_locked(p);
+  if (it == g_allocs.end()) return CUDA_ERROR_INVALID_VALUE;
   const Alloc& a = it->second;
   const size_t off = static_cast<size_t>(p - it->first);
-  if (off >= a.size || n > a.size - off) return CUDA_ERROR_INVALID_VALUE;
-  if (a.ctx != ctx) return CUDA_ERROR_INVALID_VALUE;  // see above
+  if (n > a.size - off) return CUDA_ERROR_INVALID_VALUE;
   *host = static_cast<char*>(a.host) + off;
   return CUDA_SUCCESS;
 }
@@ -590,7 +630,7 @@ CUresult cuMemFree_v2(CUdeviceptr dptr) {
     CUcontext ctx = nullptr;
     r = enter_locked(&ctx);
     if (r == CUDA_SUCCESS) {
-      if (known && it->second.ctx == ctx) {
+      if (known) {  // in its own context, whichever is current
         host = it->second.host;
         g_allocs.erase(it);
       } else {
@@ -650,6 +690,110 @@ CUresult cuMemsetD8Async(CUdeviceptr dst, unsigned char value, size_t n,
   return cuMemsetD8_v2(dst, value, n);
 }
 
+// --- placement ---------------------------------------------------------------
+//
+// Which context and device own an allocation. This, not whether a use under
+// another context fails, is what a test can rely on to see where memory went:
+// the driver infers placement from a pointer, so a copy through a pointer that
+// landed on the wrong device still succeeds.
+
+namespace {
+
+// The device a live context is on, or -1. Called with g_mu held.
+int device_of_locked(CUcontext ctx) {
+  const int dev = primary_device(ctx);
+  if (dev >= 0) return dev;
+  auto it = g_contexts.find(reinterpret_cast<unsigned long long>(ctx));
+  return it == g_contexts.end() ? -1 : it->second;
+}
+
+// One attribute of the allocation `a`. Only the attributes the fake models;
+// the rest are CUDA_ERROR_NOT_SUPPORTED rather than a made-up answer. Called
+// with g_mu held.
+CUresult attribute_locked(const Alloc& a, CUpointer_attribute attribute,
+                          void* data) {
+  switch (attribute) {
+    case CU_POINTER_ATTRIBUTE_CONTEXT:
+      *static_cast<CUcontext*>(data) = a.ctx;
+      return CUDA_SUCCESS;
+    case CU_POINTER_ATTRIBUTE_MEMORY_TYPE:
+      *static_cast<unsigned int*>(data) = CU_MEMORYTYPE_DEVICE;
+      return CUDA_SUCCESS;
+    case CU_POINTER_ATTRIBUTE_DEVICE_ORDINAL:
+      *static_cast<int*>(data) = device_of_locked(a.ctx);
+      return CUDA_SUCCESS;
+    default:
+      return CUDA_ERROR_NOT_SUPPORTED;
+  }
+}
+
+// The "default NULL value" cuPointerGetAttributes gives for a pointer that is
+// not a CUDA pointer.
+CUresult attribute_default(CUpointer_attribute attribute, void* data) {
+  switch (attribute) {
+    case CU_POINTER_ATTRIBUTE_CONTEXT:
+      *static_cast<CUcontext*>(data) = nullptr;
+      return CUDA_SUCCESS;
+    case CU_POINTER_ATTRIBUTE_MEMORY_TYPE:
+      *static_cast<unsigned int*>(data) = 0;
+      return CUDA_SUCCESS;
+    case CU_POINTER_ATTRIBUTE_DEVICE_ORDINAL:
+      *static_cast<int*>(data) = 0;
+      return CUDA_SUCCESS;
+    default:
+      return CUDA_ERROR_NOT_SUPPORTED;
+  }
+}
+
+}  // namespace
+
+// No context needs to be current: the attributes describe the pointer, not
+// the caller. A pointer that is not in any live allocation is
+// CUDA_ERROR_INVALID_VALUE, as the header documents for one "not allocated
+// by, mapped by, or registered with a CUcontext".
+CUresult cuPointerGetAttribute(void* data, CUpointer_attribute attribute,
+                               CUdeviceptr ptr) {
+  if (!data) return CUDA_ERROR_INVALID_VALUE;
+  std::lock_guard<std::mutex> lk(g_mu);
+  auto it = containing_locked(ptr);
+  if (it == g_allocs.end()) return CUDA_ERROR_INVALID_VALUE;
+  return attribute_locked(it->second, attribute, data);
+}
+
+// "Unlike cuPointerGetAttribute, this function will not return an error when
+// the ptr encountered is not a valid CUDA pointer. Instead, the attributes are
+// assigned default NULL values and CUDA_SUCCESS is returned."
+CUresult cuPointerGetAttributes(unsigned int numAttributes,
+                                CUpointer_attribute* attributes, void** data,
+                                CUdeviceptr ptr) {
+  if (numAttributes && (!attributes || !data)) return CUDA_ERROR_INVALID_VALUE;
+  std::lock_guard<std::mutex> lk(g_mu);
+  auto it = containing_locked(ptr);
+  for (unsigned int i = 0; i < numAttributes; i++) {
+    if (!data[i]) return CUDA_ERROR_INVALID_VALUE;
+    CUresult r = it == g_allocs.end()
+                     ? attribute_default(attributes[i], data[i])
+                     : attribute_locked(it->second, attributes[i], data[i]);
+    if (r != CUDA_SUCCESS) return r;
+  }
+  return CUDA_SUCCESS;
+}
+
+// "Returns in *device the handle of the current context's device." A context
+// destroyed under this thread is reported the way every other call here
+// reports it; a primary context is on its device whether or not it is
+// initialised.
+CUresult cuCtxGetDevice(CUdevice* device) {
+  if (!device) return CUDA_ERROR_INVALID_VALUE;
+  std::lock_guard<std::mutex> lk(g_mu);
+  const CUcontext ctx = current();
+  if (!ctx) return CUDA_ERROR_INVALID_CONTEXT;
+  const int dev = device_of_locked(ctx);
+  if (dev < 0) return CUDA_ERROR_CONTEXT_IS_DESTROYED;
+  *device = dev;
+  return CUDA_SUCCESS;
+}
+
 // ---------------------------------------------------------------------------
 // Modules and kernels
 // ---------------------------------------------------------------------------
@@ -676,13 +820,14 @@ constexpr int kExpectedInt = 42;
 namespace {
 constexpr unsigned long long kFunctionMark = 0xF0ull << 56;
 
-CUresult function_ok(CUfunction f) {
+CUresult function_ok(CUfunction f, CUcontext* owner = nullptr) {
   const auto v = reinterpret_cast<unsigned long long>(f);
   if ((v >> 56) != 0xF0) {
     CUresult r = need_context();
     return r != CUDA_SUCCESS ? r : CUDA_ERROR_INVALID_HANDLE;
   }
-  return owned(g_modules, v & ~kFunctionMark, CUDA_ERROR_INVALID_HANDLE);
+  return owned(g_modules, v & ~kFunctionMark, CUDA_ERROR_INVALID_HANDLE,
+               owner);
 }
 }  // namespace
 
@@ -703,9 +848,11 @@ CUresult cuModuleLoadData(CUmodule* module, const void* image) {
   return CUDA_SUCCESS;
 }
 
+// "Unloads a module hmod from the current context": the one destroy the
+// header confines to the current context.
 CUresult cuModuleUnload(CUmodule m) {
   CUresult r = retire(&g_modules, reinterpret_cast<unsigned long long>(m),
-                      CUDA_ERROR_INVALID_HANDLE);
+                      CUDA_ERROR_INVALID_HANDLE, /*current_only=*/true);
   if (r != CUDA_SUCCESS) return r;
   rgpu_fake::count(rgpu_fake::kModule, -1);
   return CUDA_SUCCESS;
@@ -752,10 +899,15 @@ CUresult cuLaunchKernel(CUfunction f, unsigned int gx, unsigned int gy,
   CUresult r = need_context();
   if (r != CUDA_SUCCESS) return r;
   if (!f) return CUDA_ERROR_INVALID_HANDLE;
-  r = function_ok(f);
+  CUcontext fctx = nullptr, sctx = nullptr;
+  r = function_ok(f, &fctx);
   if (r != CUDA_SUCCESS) return r;
-  r = stream_ok(stream);
+  r = stream_ok(stream, &sctx);
   if (r != CUDA_SUCCESS) return r;
+  // The launch runs in the stream's context - the current one for a null
+  // stream - and the function has to be from that context (see the note on
+  // what lives in a context, above).
+  if (fctx != sctx) return CUDA_ERROR_INVALID_HANDLE;
   if (gx == 0 || bx == 0) return CUDA_ERROR_INVALID_VALUE;
   // The client always packs arguments and hands them over through extra.
   if (kernelParams) return CUDA_ERROR_INVALID_VALUE;
@@ -847,15 +999,19 @@ CUresult cuStreamBeginCapture_v2(CUstream stream, CUstreamCaptureMode mode) {
   return CUDA_SUCCESS;
 }
 
+// The graph belongs to the stream's context, which is where it was captured.
 CUresult cuStreamEndCapture(CUstream stream, CUgraph* graph) {
-  CUresult r = stream_ok(stream);
-  if (r != CUDA_SUCCESS) return r;
-  if (!g_capturing) return CUDA_ERROR_ILLEGAL_STATE;
-  g_capturing = false;
-  if (!graph) return CUDA_ERROR_INVALID_VALUE;
   unsigned long long h = 0;
-  r = mint(&g_graphs, 0xC0FFEEu, &h);
-  if (r != CUDA_SUCCESS) return r;
+  {
+    std::lock_guard<std::mutex> lk(g_mu);
+    CUcontext ctx = nullptr;
+    CUresult r = stream_ok_locked(stream, &ctx);
+    if (r != CUDA_SUCCESS) return r;
+    if (!g_capturing) return CUDA_ERROR_ILLEGAL_STATE;
+    g_capturing = false;
+    if (!graph) return CUDA_ERROR_INVALID_VALUE;
+    h = mint_in_locked(&g_graphs, 0xC0FFEEu, ctx);
+  }
   *graph = reinterpret_cast<CUgraph>(h);
   rgpu_fake::count(rgpu_fake::kGraph, 1);
   return CUDA_SUCCESS;
@@ -890,15 +1046,19 @@ CUresult cuStreamGetCaptureInfo_v2(CUstream stream,
   return CUDA_SUCCESS;
 }
 
+// An executable, and a clone, belong to the graph's context.
 CUresult cuGraphInstantiateWithFlags(CUgraphExec* exec, CUgraph graph,
                                      unsigned long long) {
-  CUresult r = owned(g_graphs, reinterpret_cast<unsigned long long>(graph),
-                     CUDA_ERROR_INVALID_VALUE);
-  if (r != CUDA_SUCCESS) return r;
-  if (!exec) return CUDA_ERROR_INVALID_VALUE;
   unsigned long long h = 0;
-  r = mint(&g_graph_execs, 0xE7E0u, &h);
-  if (r != CUDA_SUCCESS) return r;
+  {
+    std::lock_guard<std::mutex> lk(g_mu);
+    CUcontext ctx = nullptr;
+    CUresult r = owned_locked(g_graphs, reinterpret_cast<unsigned long long>(graph),
+                              CUDA_ERROR_INVALID_VALUE, &ctx);
+    if (r != CUDA_SUCCESS) return r;
+    if (!exec) return CUDA_ERROR_INVALID_VALUE;
+    h = mint_in_locked(&g_graph_execs, 0xE7E0u, ctx);
+  }
   *exec = reinterpret_cast<CUgraphExec>(h);
   rgpu_fake::count(rgpu_fake::kGraphExec, 1);
   return CUDA_SUCCESS;
@@ -913,12 +1073,16 @@ CUresult cuGraphLaunch(CUgraphExec exec, CUstream stream) {
 
 CUresult cuGraphClone(CUgraph* clone, CUgraph original) {
   if (!clone) return CUDA_ERROR_INVALID_VALUE;
-  CUresult r = owned(g_graphs, reinterpret_cast<unsigned long long>(original),
-                     CUDA_ERROR_INVALID_VALUE);
-  if (r != CUDA_SUCCESS) return r;
   unsigned long long h = 0;
-  r = mint(&g_graphs, 0xC0FFEEu, &h);
-  if (r != CUDA_SUCCESS) return r;
+  {
+    std::lock_guard<std::mutex> lk(g_mu);
+    CUcontext ctx = nullptr;
+    CUresult r = owned_locked(g_graphs,
+                              reinterpret_cast<unsigned long long>(original),
+                              CUDA_ERROR_INVALID_VALUE, &ctx);
+    if (r != CUDA_SUCCESS) return r;
+    h = mint_in_locked(&g_graphs, 0xC0FFEEu, ctx);
+  }
   *clone = reinterpret_cast<CUgraph>(h);
   rgpu_fake::count(rgpu_fake::kGraph, 1);
   return CUDA_SUCCESS;
