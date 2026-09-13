@@ -30,10 +30,13 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <cuda.h>
@@ -376,6 +379,92 @@ int derived_alone() {
   }
   // Device 1's retain is left for expiry to release.
   std::printf("PASS: objects made from device 0's objects went with device 0\n");
+  return 0;
+}
+
+// Two client threads, each with its own device's primary context current and
+// one with a created context pushed on top, each take everything a client can
+// take and then the process ends holding all of it. The server keeps a slot
+// for each thread naming the contexts, and the serving thread has the last
+// thread's context current when the session expires; neither may stand in
+// the way of the release, which has to give back both devices' retains and
+// free everything once. The slots own nothing, so nothing may be released
+// twice either.
+//
+// Alone on a server with two devices (RGPU_FAKE_DEVICES=2). run_smoke.sh
+// checks the counters once the session has expired: retains is both devices'
+// together, and a device released more times than it was retained would show
+// as an over-release rather than hide in the sum.
+int threads_alone() {
+  CHECK(cuInit(0));
+  int count = 0;
+  CHECK(cuDeviceGetCount(&count));
+  if (count < 2) {
+    std::fprintf(stderr, "FAIL: threads needs a server with two devices\n");
+    return 1;
+  }
+
+  std::mutex mu;
+  std::condition_variable cv;
+  int stage = 0;
+  auto advance = [&](int to) {
+    std::lock_guard<std::mutex> lk(mu);
+    stage = to;
+    cv.notify_all();
+  };
+  auto await = [&](int at) {
+    std::unique_lock<std::mutex> lk(mu);
+    cv.wait(lk, [&] { return stage >= at; });
+  };
+
+  // The threads take turns, so their CHECKs never run at once.
+  Held a_held, b_held;
+  CUdeviceptr a_extra = 0, b_extra = 0;
+  std::thread a([&] {
+    CUcontext p0 = nullptr;
+    CHECK(cuDevicePrimaryCtxRetain(&p0, 0));
+    CHECK(cuCtxSetCurrent(p0));
+    take_driver_resources(&a_held);
+    Held in_own;
+    take_resources(0, &in_own, /*own_context=*/true);
+    advance(1);
+    await(2);
+    CHECK(cuMemAlloc(&a_extra, kBytes));
+    advance(3);
+    await(4);
+  });
+  std::thread b([&] {
+    await(1);
+    CUcontext p1 = nullptr;
+    CHECK(cuDevicePrimaryCtxRetain(&p1, 1));
+    CHECK(cuCtxSetCurrent(p1));
+    take_resources(1, &b_held, /*own_context=*/false);
+    advance(2);
+    await(3);
+    // The last call of the session: the serving thread is left with this
+    // thread's context current, not the one that made the created context.
+    CHECK(cuMemAlloc(&b_extra, kBytes));
+    CHECK(cuCtxSynchronize());
+    advance(4);
+  });
+  a.join();
+  b.join();
+
+  // The premise: both devices are retained, and the created context is live.
+  const std::string held = read_stats();
+  if (field(held, "retains") != 2 || field(held, "contexts") != 1) {
+    std::fprintf(stderr,
+                 "FAIL: expected both devices retained and one created "
+                 "context before exiting: %s\n",
+                 held.c_str());
+    g_failures++;
+  }
+  if (g_failures) {
+    std::printf("\nFAILED: %d check(s)\n", g_failures);
+    return 1;
+  }
+  // Exits holding everything, for expiry to give back.
+  std::printf("PASS: two threads on two devices exit holding everything\n");
   return 0;
 }
 
@@ -734,6 +823,7 @@ int main(int argc, char** argv) {
   if (argc > 1 && std::strcmp(argv[1], "release") == 0) return release_alone();
   if (argc > 1 && std::strcmp(argv[1], "detach") == 0) return detach_alone();
   if (argc > 1 && std::strcmp(argv[1], "derived") == 0) return derived_alone();
+  if (argc > 1 && std::strcmp(argv[1], "threads") == 0) return threads_alone();
   if (argc > 3 && std::strcmp(argv[1], "tenant-b") == 0) {
     return tenant_b(std::atoi(argv[2]), std::atoi(argv[3]));
   }

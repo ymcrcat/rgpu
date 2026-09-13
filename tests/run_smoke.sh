@@ -243,6 +243,10 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
   #   detach:  cuCtxDetach destroys a created context and what is in it, so
   #            expiry must not destroy or free any of it again, which would
   #            be stale.
+  #   threads: two client threads on two devices, one with a created context
+  #            on top of its primary one, exit holding everything; the slots
+  #            the server keeps for them must not stand in the way of giving
+  #            back both devices' retains. Two devices.
   then_expire() {
     local mode=$1 port=$2 sessions=$3 devices=${4:-1}
     local stats log
@@ -297,6 +301,7 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
   then_expire derived $((PORT + 8)) 1 2
   then_expire foreign $((PORT + 11)) 2
   then_expire detach $((PORT + 15)) 1
+  then_expire threads $((PORT + 17)) 1 2
 fi
 
 # Hostile requests get a server of their own: if one of them does take the
