@@ -286,6 +286,43 @@ if [[ -x "$BUILD/replay_smoke" ]]; then
   rm -f "$SESSIONS_LOG"
 fi
 
+# Reconnects that land while the thread serving a session is between
+# connections. Its own server, and nothing else on it: the case depends on a
+# reconnect being given the descriptor number of the connection that just
+# closed, which is the lowest free one only when nothing else is open. The gap
+# is held open by RGPU_TEST_RECONNECT_GAP_MS, a test hook.
+if [[ -x "$BUILD/replay_smoke" ]]; then
+  echo
+  GAP_PORT=$((PORT + 23))
+  GAP_LOG=$(mktemp "${TMPDIR:-/tmp}/rgpu-gap-log.XXXXXX")
+  RGPU_SESSION_GRACE=30 RGPU_TEST_RECONNECT_GAP_MS=1500 \
+    "$BUILD/rgpu-server-fake" "$GAP_PORT" >"$GAP_LOG" 2>&1 &
+  GAP_SRV=$!
+  for _ in $(seq 1 50); do
+    if (exec 3<>/dev/tcp/127.0.0.1/"$GAP_PORT") 2>/dev/null; then
+      exec 3<&- 3>&-
+      break
+    fi
+    sleep 0.1
+  done
+  RGPU_SERVER="127.0.0.1:$GAP_PORT" "$BUILD/replay_smoke" gap || rc=1
+  kill $GAP_SRV 2>/dev/null
+  # A reconnect has to have been given a descriptor number a closed connection
+  # had, or the first case passes without testing anything. The test keeps the
+  # lower numbers occupied to make that happen; this is where it shows.
+  first_closed=$(grep -o "connection closed (descriptor [0-9]*" "$GAP_LOG" |
+    grep -o "[0-9]*$" | head -1)
+  first_handed=$(grep -o "handed it over on descriptor [0-9]*" "$GAP_LOG" |
+    grep -o "[0-9]*$" | head -1)
+  if [[ -z "$first_closed" || "$first_closed" != "$first_handed" ]]; then
+    echo "FAIL: no reconnect was given the descriptor number of a connection"
+    echo "      that had closed, so replay_smoke gap did not test the reuse"
+    grep "descriptor" "$GAP_LOG" | sed 's/^/  /'
+    rc=1
+  fi
+  rm -f "$GAP_LOG"
+fi
+
 # Request ids wrapping past 0xFFFFFFFF, with the connection broken in a batch
 # that spans the wrap. Its own server: a break by frame count, which only means
 # something with one client on the server, and a stats file counting the calls

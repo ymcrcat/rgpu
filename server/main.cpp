@@ -411,7 +411,14 @@ ClientThread* deferred_home(ClientThreads& threads, uint32_t id, bool make,
 struct Session {
   std::mutex mu;
   std::condition_variable cv;
-  int fd = -1;                 // the current connection, -1 while waiting
+  // A connection handed over by a handshake and not yet taken up by the
+  // thread serving the session; -1 if there is none. Whoever takes it out of
+  // here owns it and closes it, and a handshake that finds one still waiting
+  // closes it as it puts its own in: the descriptor a connection had says
+  // nothing about which connection it is, because the number is handed out
+  // again as soon as it is closed - a reconnect can be given the number of the
+  // connection that just ended.
+  int pending_fd = -1;
   bool finished = false;       // the serving thread has given up and gone
   // Last request this session actually completed; 0 while it has completed
   // none. Request ids wrap, so compare with req_at_or_before, never with <.
@@ -762,7 +769,9 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
     if (!send_frame(fd, rh, rsp) || malformed) break;
   }
   ::close(fd);
-  logf("connection closed");
+  // With the descriptor, because a reconnect can be given the same number,
+  // and a session must not mistake it for the connection that just closed.
+  logf("connection closed (descriptor %d)", fd);
 }
 
 // Serves one session across however many connections it takes. Between them
@@ -776,22 +785,34 @@ void serve_session(std::shared_ptr<Session> session, SessionKey key) {
     int fd = -1;
     {
       std::unique_lock<std::mutex> lk(session->mu);
-      if (session->fd < 0) {
+      if (session->pending_fd < 0) {
         const auto grace = std::chrono::seconds(session_grace_seconds());
         if (!session->cv.wait_for(lk, grace,
-                                  [&] { return session->fd >= 0; })) {
+                                  [&] { return session->pending_fd >= 0; })) {
           // Nobody came back. Everything this session holds goes with it.
           session->finished = true;
           break;
         }
       }
-      fd = session->fd;
+      // Taken, not borrowed: from here this thread owns the connection and
+      // closes it, and nothing else can close it behind its back.
+      fd = session->pending_fd;
+      session->pending_fd = -1;
     }
 
     serve(fd, session, key.first);
 
-    std::lock_guard<std::mutex> lk(session->mu);
-    if (session->fd == fd) session->fd = -1;
+    // A test hook, off by default: holds this thread back between a
+    // connection closing and its looking for the next, so that a test can
+    // reconnect in that gap.
+    static const int reconnect_gap_ms = [] {
+      const char* v = std::getenv("RGPU_TEST_RECONNECT_GAP_MS");
+      return v ? std::atoi(v) : 0;
+    }();
+    if (reconnect_gap_ms > 0) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(reconnect_gap_ms));
+    }
+
     logf("session %llx waiting up to %ds for the client to come back",
          (unsigned long long)key.first, session_grace_seconds());
   }
@@ -897,9 +918,9 @@ void forget_unserved(const std::shared_ptr<Session>& session,
   std::lock_guard<std::mutex> slk(session->mu);
   session->finished = true;
   // A reconnect already handed over, which nothing will read.
-  if (session->fd >= 0) {
-    ::close(session->fd);
-    session->fd = -1;
+  if (session->pending_fd >= 0) {
+    ::close(session->pending_fd);
+    session->pending_fd = -1;
   }
 }
 
@@ -1045,8 +1066,19 @@ void accept_connection(int fd) {
     {
       std::lock_guard<std::mutex> lk(session->mu);
       if (!session->finished) {
-        session->fd = fd;
+        // A connection handed over before this one and not yet taken up is
+        // this one's predecessor: its client is the same client, and it is
+        // here again. Closed rather than dropped, so that a client waiting on
+        // it learns at once instead of waiting for a reply nobody will send.
+        if (session->pending_fd >= 0) {
+          logf("session %llx: closing the connection handed over before this "
+               "one, which its serving thread had not taken up yet",
+               (unsigned long long)key.first);
+          ::close(session->pending_fd);
+        }
+        session->pending_fd = fd;
         session->cv.notify_all();
+        logf("  handed it over on descriptor %d", fd);
         return;
       }
     }
@@ -1060,7 +1092,7 @@ void accept_connection(int fd) {
   logf("session %llx started", (unsigned long long)key.first);
   {
     std::lock_guard<std::mutex> lk(session->mu);
-    session->fd = fd;
+    session->pending_fd = fd;
   }
   std::thread(serve_session, session, key).detach();
 }

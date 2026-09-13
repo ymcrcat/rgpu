@@ -755,6 +755,123 @@ int sessions() {
   return 0;
 }
 
+// --- replay_smoke gap ---------------------------------------------------------
+//
+// Reconnects that arrive while the thread serving a session is between
+// connections: its last connection has closed and it has not yet looked for
+// the next. The server runs alone with RGPU_TEST_RECONNECT_GAP_MS holding that
+// gap open for 1.5s.
+
+// Waits for the server to close `fd`, or for the receive timeout (see dial).
+// Returns how long that took, negative if the connection was not closed.
+double seconds_until_closed(int fd) {
+  const auto start = std::chrono::steady_clock::now();
+  const bool closed = closed_by_server(fd);
+  const double waited = std::chrono::duration<double>(
+                            std::chrono::steady_clock::now() - start)
+                            .count();
+  return closed ? waited : -waited;
+}
+
+int gap() {
+  const auto into_the_gap = std::chrono::milliseconds(300);
+
+  // Connections that say nothing and stay open, so that the server holds no
+  // free descriptor below the ones the cases use. With them and the spacer
+  // below, the first case's reconnect is given the number the connection that
+  // just closed had, which is what that case is about; run_smoke.sh checks
+  // the server's log to see that it really was.
+  std::vector<int> plugs;
+  for (int i = 0; i < 8; i++) plugs.push_back(dial());
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
+  // The reconnect is given the descriptor number the closed connection had:
+  // the lowest free one, and on a server with nothing else open, that one. A
+  // serving thread that recognised its connection by number would take the
+  // reconnect for the connection that just closed, and never serve it.
+  std::printf("-- a reconnect given the closed connection's descriptor number "
+              "is served\n");
+  {
+    rgpu::HandshakeReply hs{};
+    int fd = connect_session(1, 0, &hs);
+    EXPECT(fd >= 0 && hs.resumed == 0, "could not start a session");
+    if (fd < 0) return 1;
+    const Frame first = device_count(1);
+    EXPECT(send(fd, first), "could not send the first request");
+    expect_answer(fd, first, CUDA_SUCCESS, "the first request");
+    ::close(fd);
+    std::this_thread::sleep_for(into_the_gap);
+
+    // Linux reserves the descriptor a blocking accept will return before the
+    // connection arrives, so the server is already holding the number above
+    // the one it just closed. One connection takes that, and the reconnect
+    // after it gets the closed one's number, which is the point of the case.
+    const int spacer = dial();
+    std::this_thread::sleep_for(into_the_gap);
+
+    fd = connect_session(1, 1, &hs);
+    EXPECT(fd >= 0 && hs.resumed == 1, "the reconnect did not resume");
+    if (fd < 0) return 1;
+    const Frame next = device_count(2);
+    EXPECT(send(fd, next), "could not send a request after reconnecting");
+    expect_answer(fd, next, CUDA_SUCCESS,
+                  "the request on a reconnect made while the serving thread "
+                  "was between connections");
+    ::close(fd);
+    if (spacer >= 0) ::close(spacer);
+  }
+
+  // Two reconnects before the serving thread takes up either. The first is
+  // replaced by the second and has to be closed, not left open for a client
+  // to wait on; the second is served.
+  std::printf("-- a reconnect replaced by another before it was taken up is "
+              "closed\n");
+  {
+    rgpu::HandshakeReply hs{};
+    int fd = connect_session(2, 0, &hs);
+    EXPECT(fd >= 0 && hs.resumed == 0, "could not start a session");
+    if (fd < 0) return 1;
+    const Frame first = device_count(1);
+    EXPECT(send(fd, first), "could not send the first request");
+    expect_answer(fd, first, CUDA_SUCCESS, "the first request");
+    ::close(fd);
+    std::this_thread::sleep_for(into_the_gap);
+
+    rgpu::HandshakeReply hs_a{}, hs_b{};
+    int a = connect_session(2, 1, &hs_a);
+    int b = connect_session(2, 1, &hs_b);
+    EXPECT(a >= 0 && hs_a.resumed == 1 && b >= 0 && hs_b.resumed == 1,
+           "the reconnects did not resume");
+    if (a >= 0) {
+      const double waited = seconds_until_closed(a);
+      std::printf("   the replaced connection %s after %.1fs\n",
+                  waited >= 0 ? "was closed" : "was still open",
+                  waited < 0 ? -waited : waited);
+      EXPECT(waited >= 0 && waited < 8.0,
+             "a reconnect replaced before it was taken up was left open");
+      ::close(a);
+    }
+    if (b >= 0) {
+      const Frame next = device_count(2);
+      EXPECT(send(b, next), "could not send a request on the second reconnect");
+      expect_answer(b, next, CUDA_SUCCESS,
+                    "the request on the reconnect that replaced another");
+      ::close(b);
+    }
+  }
+
+  for (int p : plugs) {
+    if (p >= 0) ::close(p);
+  }
+  if (g_failures) {
+    std::printf("\nFAILED: %d check(s)\n", g_failures);
+    return 1;
+  }
+  std::printf("\nPASS: reconnects between connections are served, and a "
+              "replaced one is closed\n");
+  return 0;
+}
+
 // --- replay_smoke handoff -----------------------------------------------------
 //
 // The grace period running out while a reconnect is being handed over. The
@@ -910,6 +1027,7 @@ int main(int argc, char** argv) {
   if (mode == "handoff") return expiry_during_handoff();
   if (mode == "flood") return deferred_error_flood();
   if (mode == "sessions") return sessions();
+  if (mode == "gap") return gap();
 
   reply_expected_request_in_flight();
   no_reply_request_in_flight();
