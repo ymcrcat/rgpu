@@ -22,7 +22,12 @@ constexpr uint32_t kMagicHello = 0x52474845;  // "RGHE"
 // carrying the same id back to the very thread that was serving it. That
 // thread still holds the CUDA context, so device memory and every handle the
 // client is holding stay valid.
-constexpr uint32_t kProtocolVersion = 2;
+//
+// 3: every request carries the client thread that issued it (see ReqHeader).
+// A peer speaking another version is refused at the handshake, whose layout
+// does not change between versions so that the refusal can say which one each
+// side speaks.
+constexpr uint32_t kProtocolVersion = 3;
 
 struct Handshake {
   uint32_t magic;
@@ -52,6 +57,14 @@ struct ReqHeader {
   uint32_t api_id;
   uint32_t req_id;
   uint32_t flags;
+  // The client thread that issued this request, as the client numbers them:
+  // an opaque id minted from 1 and never reused, not an OS thread id. CUDA's
+  // current context is per thread, and one server thread serves every thread
+  // of a client, so this is what lets it put each request back under the
+  // context its own thread selected. It travels with the frame rather than
+  // with the write, because a batch issued by one thread can be flushed by
+  // another's call. Zero is never a valid id.
+  uint32_t thread_id;
   uint32_t payload_len;
 };
 

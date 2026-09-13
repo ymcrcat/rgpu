@@ -467,6 +467,16 @@ void accept_connection(int fd) {
   if (hello.version != kProtocolVersion) {
     logf("client speaks protocol %u, this server speaks %u; closing",
          hello.version, kProtocolVersion);
+    // Say which protocol this server speaks before closing. A client that
+    // only sees the connection close can report nothing more precise than a
+    // failed handshake; one that reads this reply can name both versions. The
+    // handshake has the same layout in every version, so any client can read
+    // it. Nothing else happens: no session is made for a client that cannot
+    // be served.
+    HandshakeReply refusal{};
+    refusal.magic = kMagicHello;
+    refusal.version = kProtocolVersion;
+    write_exact(fd, &refusal, sizeof(refusal));
     ::close(fd);
     return;
   }
