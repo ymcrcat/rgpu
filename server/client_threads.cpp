@@ -73,12 +73,16 @@ CUresult clear(ClientThreads& threads) {
 // How deep a client thread's context stack may grow. It is server memory, the
 // driver's own stack on the serving thread stays one deep and so never limits
 // it, and every destroy sweeps every entry, so a client pushing in a loop
-// must be stopped here. CUDA programs push a handful deep at most.
+// must be stopped here. CUDA programs push a handful deep at most. The default
+// is kept small because the cost multiplies: a destroy sweeps every entry of
+// every live and retired thread, so at the thread cap (4096 live, 64 retired)
+// a deep default would make each destroy a walk of millions of entries, and
+// the stacks alone megabytes.
 size_t max_stack_depth() {
   static const size_t n = [] {
     const char* v = std::getenv("RGPU_MAX_CONTEXT_STACK");
     const long parsed = v ? std::atol(v) : 0;
-    return parsed > 0 ? static_cast<size_t>(parsed) : size_t{1024};
+    return parsed > 0 ? static_cast<size_t>(parsed) : size_t{64};
   }();
   return n;
 }
@@ -322,8 +326,11 @@ void client_thread_after(ClientThreads& threads, ClientThread& t,
   // goes on doing so until the thread selects another. Here nothing is current
   // instead, so the driver says CUDA_ERROR_INVALID_CONTEXT; while the thread's
   // top is still the destroyed context, that is corrected. The calls that
-  // report CUDA_ERROR_INVALID_CONTEXT about a context they were handed,
-  // rather than the current one, keep their own answer. So do the maths
+  // report CUDA_ERROR_INVALID_CONTEXT about a context they were handed as an
+  // argument, rather than the current one, keep their own answer. (Calls
+  // that name a context inside a structure - cuMemcpy3DPeer, the kernel and
+  // generic node parameters - are not listed: there a null context means the
+  // current one, so the answer may be about either.) So do the maths
   // libraries, whose calls carry no driver result here: only a driver call's
   // result is a CUresult to correct.
   if (*result != CUDA_ERROR_INVALID_CONTEXT) return;
@@ -341,6 +348,16 @@ void client_thread_after(ClientThreads& threads, ClientThread& t,
     case API_cuCtxGetId:
     case API_cuCtxEnablePeerAccess:
     case API_cuCtxDisablePeerAccess:
+    case API_cuCtxRecordEvent:
+    case API_cuCtxWaitEvent:
+    case API_cuCtxGetDevResource:
+    case API_cuMemcpyPeer:
+    case API_cuMemcpyPeerAsync:
+    case API_cuGraphAddMemcpyNode:
+    case API_cuGraphAddMemsetNode:
+    case API_cuGraphConditionalHandleCreate:
+    case API_cuGraphExecMemcpyNodeSetParams:
+    case API_cuGraphExecMemsetNodeSetParams:
     case API_cuDevicePrimaryCtxRetain:
     case API_cuDevicePrimaryCtxRelease_v2:
       return;

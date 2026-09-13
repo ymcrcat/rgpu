@@ -174,7 +174,7 @@ void* client_threads_wrapper(const char* name);
 void client_threads_created(CUcontext ctx);
 // Asked by the cuCtxCreate wrapper before the driver call: whether the calling
 // thread's stack has room for the context a create pushes. A thread's stack is
-// capped at RGPU_MAX_CONTEXT_STACK entries (1024 by default); a push or create
+// capped at RGPU_MAX_CONTEXT_STACK entries (64 by default); a push or create
 // past it is refused with CUDA_ERROR_INVALID_VALUE.
 bool client_threads_may_create();
 void client_threads_destroyed(CUcontext ctx);

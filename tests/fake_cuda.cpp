@@ -868,6 +868,18 @@ CUresult cuCtxGetApiVersion(CUcontext ctx, unsigned int* version) {
   return CUDA_SUCCESS;
 }
 
+// Records an event in the context the caller names, which need not be the
+// current one. A handle that names no context is refused with
+// CUDA_ERROR_INVALID_CONTEXT, which the call documents, whatever is current.
+CUresult cuCtxRecordEvent(CUcontext ctx, CUevent event) {
+  std::lock_guard<std::mutex> lk(g_mu);
+  if (!ctx || !bindable_locked(ctx)) return CUDA_ERROR_INVALID_CONTEXT;
+  if (!g_events.count(reinterpret_cast<unsigned long long>(event))) {
+    return CUDA_ERROR_INVALID_HANDLE;
+  }
+  return CUDA_SUCCESS;
+}
+
 // "Returns in *device the handle of the current context's device." A context
 // destroyed under this thread is reported the way every other call here
 // reports it; a primary context is on its device whether or not it is

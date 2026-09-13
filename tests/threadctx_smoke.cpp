@@ -587,7 +587,7 @@ void recovery_after_destroy() {
   int pushed_on = -1, set_on = -1;
   CUcontext at_end = reinterpret_cast<CUcontext>(0xbadull);
   CUcontext destroyed_sees = nullptr;
-  CUresult about_handle = CUDA_SUCCESS;
+  CUresult about_handle = CUDA_SUCCESS, about_event_ctx = CUDA_SUCCESS;
   std::thread a([&] {
     CHECK(cuCtxCreate(&made, 0, 0));
     turns.advance(1);
@@ -606,6 +606,8 @@ void recovery_after_destroy() {
     unsigned int version = 0;
     about_handle = cuCtxGetApiVersion(
         reinterpret_cast<CUcontext>(0xdeadbeefull), &version);
+    about_event_ctx = cuCtxRecordEvent(
+        reinterpret_cast<CUcontext>(0xdeadbeefull), nullptr);
     CUdeviceptr e = 0;
     after_pop = cuMemAlloc(&e, 64);
     if (after_pop == CUDA_SUCCESS) cuMemFree(e);
@@ -649,6 +651,14 @@ void recovery_after_destroy() {
                   "cuCtxGetApiVersion of a handle naming no context returned "
                   "%d, not its own CUDA_ERROR_INVALID_CONTEXT",
                   (int)about_handle);
+    fail_at(__FILE__, __LINE__, msg);
+  }
+  if (about_event_ctx != CUDA_ERROR_INVALID_CONTEXT) {
+    char msg[200];
+    std::snprintf(msg, sizeof(msg),
+                  "cuCtxRecordEvent in a handle naming no context returned "
+                  "%d, not its own CUDA_ERROR_INVALID_CONTEXT",
+                  (int)about_event_ctx);
     fail_at(__FILE__, __LINE__, msg);
   }
   if (after_pop != CUDA_ERROR_CONTEXT_IS_DESTROYED) {
@@ -1471,10 +1481,8 @@ void refusals_are_deferred_to_their_own_thread(CUcontext p0) {
 // that pushes in a loop (RGPU_MAX_CONTEXT_STACK). A push or a create past it
 // is refused with CUDA_ERROR_INVALID_VALUE, one of the codes cuCtxPushCurrent
 // documents, and leaves the stack as it was; a pop makes room again.
-void context_stacks_are_capped(CUcontext p0) {
-  std::printf("-- a client thread's context stack is capped\n");
-  const char* env = std::getenv("RGPU_MAX_CONTEXT_STACK");
-  const long cap = env ? std::atol(env) : 0;
+void context_stacks_are_capped(CUcontext p0, long cap) {
+  std::printf("-- a client thread's context stack is capped at %ld\n", cap);
   if (cap < 2 || cap > 1024) {
     fail_at(__FILE__, __LINE__,
             "RGPU_MAX_CONTEXT_STACK must name the server's cap, and a small "
@@ -1523,11 +1531,20 @@ int main(int argc, char** argv) {
   CHECK(cuInit(0));
   if (argc > 1 && std::strcmp(argv[1], "reset") == 0) {
     reset_by_another_thread();
+    // This server sets no cap of its own, so the default is what applies:
+    // kept small, because every destroy sweeps every entry of every stack.
+    // The default is max_stack_depth() in server/client_threads.cpp.
+    constexpr long kDefaultStackCap = 64;
+    CUcontext p0 = nullptr;
+    CHECK(cuDevicePrimaryCtxRetain(&p0, 0));
+    context_stacks_are_capped(p0, kDefaultStackCap);
+    CHECK(cuDevicePrimaryCtxRelease(0));
     if (g_failures) {
       std::printf("\nFAILED: %d check(s)\n", g_failures);
       return 1;
     }
-    std::printf("\nPASS: a reset leaves every thread its context\n");
+    std::printf("\nPASS: a reset leaves every thread its context, and "
+                "stacks are capped by default\n");
     return 0;
   }
   int count = 0;
@@ -1560,7 +1577,8 @@ int main(int argc, char** argv) {
   late_call_after_notice(p0, p1);
   retired_slots_are_bounded(p0, p1);
   live_slots_are_capped();
-  context_stacks_are_capped(p0);
+  const char* stack_cap = std::getenv("RGPU_MAX_CONTEXT_STACK");
+  context_stacks_are_capped(p0, stack_cap ? std::atol(stack_cap) : 0);
   refusals_are_deferred_to_their_own_thread(p0);
   CHECK(cuDevicePrimaryCtxRelease(0));
   CHECK(cuDevicePrimaryCtxRelease(1));
