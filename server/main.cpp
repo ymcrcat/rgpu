@@ -298,21 +298,51 @@ inline ClientThread* thread_slot(ClientThreads& threads, uint32_t id,
   return admit_thread(threads, id, session);
 }
 
+// Says so when a client thread's slot is forgotten while it still holds the
+// failure of a call it sent without a reply: the thread will never make the
+// call that would have carried it. Always said, like the failure itself was
+// when it was held, because this is the last place it is named.
+//
+// CUDA has no exact counterpart to lose. A sticky error belongs to the context,
+// not the thread, and survives the thread's exit - every later call in that
+// context fails with it, from any thread, and a real driver still does that
+// here, on its own. A thread's last error dies with the thread. What is held
+// here is neither: it is the ordinary result of one call, which CUDA would have
+// returned to the thread at the call, so it goes with its thread.
+void say_unreported(uint64_t session, uint32_t id, const ClientThread& t,
+                    const char* why) {
+  if (t.pending_async == CUDA_SUCCESS) return;
+  logf("session %llx: client thread %u %s without learning that a call it "
+       "sent without a reply failed with %d; no call from it that replies "
+       "came after",
+       (unsigned long long)session, id, why, t.pending_async);
+}
+
+// Forgets the oldest retired slots past the bound.
+void trim_retired(ClientThreads& threads, uint64_t session) {
+  while (threads.retired.size() > kRetiredSlots) {
+    say_unreported(session, threads.retired.front().first,
+                   threads.retired.front().second, "was forgotten");
+    threads.retired.pop_front();
+  }
+}
+
 // Drops a thread's slot into the retired set, evicting the oldest past the
 // bound. Ids are never reused, so nothing but a late call from the same
 // thread can find it there.
-void retire_thread(ClientThreads& threads, uint32_t id) {
+void retire_thread(ClientThreads& threads, uint32_t id, uint64_t session) {
   auto it = threads.live.find(id);
   if (it == threads.live.end()) return;
   threads.retired.emplace_back(id, std::move(it->second));
   threads.live.erase(it);
-  if (threads.retired.size() > kRetiredSlots) threads.retired.pop_front();
+  trim_retired(threads, session);
 }
 
 // Client threads that have exited. The ids are all read before any is
 // dropped, so a malformed notice - caught afterwards like any other malformed
 // request - drops nothing.
-CUresult handle_thread_gone(Buffer& req, ClientThreads& threads) {
+CUresult handle_thread_gone(Buffer& req, ClientThreads& threads,
+                            uint64_t session) {
   uint32_t count = 0;
   if (!req.get(&count)) return CUDA_ERROR_INVALID_VALUE;
   std::vector<uint32_t> ids;
@@ -321,8 +351,30 @@ CUresult handle_thread_gone(Buffer& req, ClientThreads& threads) {
     if (!req.get(&id)) return CUDA_ERROR_INVALID_VALUE;
     ids.push_back(id);
   }
-  for (uint32_t id : ids) retire_thread(threads, id);
+  for (uint32_t id : ids) retire_thread(threads, id, session);
   return CUDA_SUCCESS;
+}
+
+// Where the deferred failure of a request that was given no slot belongs: a
+// thread notice, which runs without one, and a call refused because the
+// session was at its cap. Its thread's slot if it has one, live or retired.
+// Otherwise, if there is a failure to hold (`make`), a new empty slot in the
+// retired set: a thread refused at the cap is let in once there is room, and
+// admit_thread gives it its retired slot back, failure and all. nullptr for a
+// request naming no thread, which no thread can be told of.
+ClientThread* deferred_home(ClientThreads& threads, uint32_t id, bool make,
+                            uint64_t session) {
+  if (id == 0) return nullptr;
+  auto it = threads.live.find(id);
+  if (it != threads.live.end()) return &it->second;
+  for (auto& entry : threads.retired) {
+    if (entry.first == id) return &entry.second;
+  }
+  if (!make) return nullptr;
+  threads.retired.emplace_back(id, ClientThread{});
+  // The new slot is the back; trimming takes from the front.
+  trim_retired(threads, session);
+  return &threads.retired.back().second;
 }
 
 // --- sessions -------------------------------------------------------------
@@ -347,16 +399,10 @@ struct Session {
   // Last request this session actually completed; 0 while it has completed
   // none. Request ids wrap, so compare with req_at_or_before, never with <.
   uint32_t last_req = 0;
-  // A call sent without expecting a reply has nowhere to report a failure, so
-  // we hold the first one and hand it to the next call that does reply. CUDA
-  // reports asynchronous failures the same way, at a later call rather than
-  // the one that caused them.
+  // A call sent without expecting a reply has nowhere to report a failure;
+  // the first one is held in its client thread's slot (ClientThread::
+  // pending_async) and handed to that thread's next call that replies.
   //
-  // It belongs to the session and not to the connection. A dropped connection
-  // is not an acknowledgement: the client was told the call completed, so it
-  // will not send it again, and an error left behind on the old connection
-  // would turn a failed launch into an apparent success.
-  CUresult pending_async = CUDA_SUCCESS;
   // The most recent reply, kept in case the connection died between running
   // the call and answering it. Without this the client has a request that was
   // executed and never answered: resending it would run it twice, and not
@@ -519,7 +565,10 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
       result = CUDA_ERROR_INVALID_VALUE;
       if (!threads.said_zero) {
         threads.said_zero = true;
-        logf("session %llx: refusing %s: its request names no client thread",
+        logf("session %llx: refusing %s: its request names no client thread. "
+             "Every such request in this session is refused, one sent "
+             "without a reply has its failure reported to no thread, and "
+             "this is said once",
              (unsigned long long)key, call_name(h.api_id));
       }
     } else if (h.api_id == API_rgpu_thread_gone) {
@@ -527,7 +576,7 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
       // and must not need a slot: the thread sending it may be new, and a
       // session at its cap needs the notice most of all.
       handled = true;
-      result = handle_thread_gone(req, threads);
+      result = handle_thread_gone(req, threads, key);
     } else {
       thread = thread_slot(threads, h.thread_id, key);
       if (!thread) {
@@ -597,13 +646,25 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
       logf("%s -> %d (%zu bytes back)", call_name(h.api_id), result, rsp.size());
     }
 
-    if (h.flags & kFlagNoReply) {
+    // The slot a failure of this request is held in, or a held one taken
+    // from: the issuing thread's. Found before the lock, because finding it
+    // for a request that was given no slot can make one; used only under it.
+    const bool no_reply = (h.flags & kFlagNoReply) != 0;
+    ClientThread* home = thread;
+    if (!home) {
+      home = deferred_home(threads, h.thread_id,
+                           no_reply && result != CUDA_SUCCESS, key);
+    }
+
+    if (no_reply) {
       bool held = false;
       {
         std::lock_guard<std::mutex> lk(session->mu);
+        // Completed, and its failure held, in one step.
         session->last_req = h.req_id;
-        if (result != CUDA_SUCCESS && session->pending_async == CUDA_SUCCESS) {
-          session->pending_async = result;
+        if (result != CUDA_SUCCESS && home &&
+            home->pending_async == CUDA_SUCCESS) {
+          home->pending_async = result;
           held = true;
         }
       }
@@ -611,15 +672,18 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
         // Always logged: this is the only place the failure is named, and an
         // application that ignores the next return value would otherwise never
         // learn it happened at all.
-        logf("%s failed with %d and had no reply to report it in; the next "
-             "call that replies will carry it", call_name(h.api_id), result);
+        logf("%s from client thread %u failed with %d and had no reply to "
+             "report it in; that thread's next call that replies will carry it",
+             call_name(h.api_id), h.thread_id, result);
       } else if (result != CUDA_SUCCESS && g_verbose) {
         // One slot holds one error, so everything that fails behind the first
         // one is dropped. CUDA's own sticky error behaves the same way, and
-        // the first is the one worth having, but a session that keeps failing
+        // the first is the one worth having, but a thread that keeps failing
         // looks silent from the outside unless we say so here.
-        logf("%s also failed with %d, behind an error already waiting",
-             call_name(h.api_id), result);
+        logf("%s from client thread %u also failed with %d, %s",
+             call_name(h.api_id), h.thread_id, result,
+             home ? "behind an error already waiting"
+                  : "and names no thread to report it to");
       }
       if (malformed) break;
       continue;
@@ -631,13 +695,15 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
     rh.payload_len = static_cast<uint32_t>(rsp.size());
     {
       std::lock_guard<std::mutex> lk(session->mu);
-      // Only a call that succeeded on its own can carry someone else's error.
+      // Only a call that succeeded on its own can carry an earlier error.
       // Handing the older one to a call that just failed would report the
       // wrong failure and lose the real one, which is the opposite of the
-      // point: the deferred error stays held for the next call that succeeds.
-      if (result == CUDA_SUCCESS && session->pending_async != CUDA_SUCCESS) {
-        result = session->pending_async;
-        session->pending_async = CUDA_SUCCESS;
+      // point: the deferred error stays held for the thread's next call that
+      // succeeds.
+      if (result == CUDA_SUCCESS && home &&
+          home->pending_async != CUDA_SUCCESS) {
+        result = home->pending_async;
+        home->pending_async = CUDA_SUCCESS;
       }
       rh.result = static_cast<int32_t>(result);
       // Completed and its reply kept in one step. A handshake that saw the
@@ -701,6 +767,12 @@ void serve_session(std::shared_ptr<Session> session, SessionKey key) {
   // current as it goes, so a slot that outlived this line would name a
   // context that is gone. Nothing is ever released from the slots.
   client_threads_bind(nullptr);
+  for (const auto& entry : session->threads.live) {
+    say_unreported(key.first, entry.first, entry.second, "expired");
+  }
+  for (const auto& entry : session->threads.retired) {
+    say_unreported(key.first, entry.first, entry.second, "expired");
+  }
   session->threads.clear();
 
   // The client is gone but its GPU resources are not: they were created in

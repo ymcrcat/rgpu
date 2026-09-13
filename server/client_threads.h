@@ -60,15 +60,32 @@ struct SavedContext {
 
 struct ClientThread {
   std::vector<SavedContext> stack;  // bottom first; back() is current
-  // Also per-thread in CUDA, and not kept yet: the stream capture mode, and
-  // the deferred error of a call sent without a reply.
+  // A call sent without expecting a reply has nowhere to report a failure, so
+  // the first one is held and handed to the next call from this same thread
+  // that does reply. In CUDA the failing call would have returned its error to
+  // the thread that made it; handing it to whichever thread replied next told
+  // a thread of a failure it did not cause, and the thread that caused it
+  // never learned of it.
+  //
+  // It lives with the session, not the connection. A dropped connection is not
+  // an acknowledgement: the client was told the call completed, so it will not
+  // send it again, and an error left behind on the old connection would turn a
+  // failed launch into an apparent success.
+  //
+  // Written and taken only in the same critical section, under the session's
+  // mutex, that records the request as completed (server/main.cpp), so that
+  // completing a request and holding or reporting its failure are one step.
+  // Nothing else reads it.
+  CUresult pending_async = CUDA_SUCCESS;
 };
 
 // A session's client threads, and what the serving thread has current.
 //
 // Touched only by the thread serving the session, which is also the thread
 // that clears it at expiry, so it takes no lock: nothing else - not the
-// handshake, not another session - reads or writes it.
+// handshake, not another session - reads or writes it. (A slot's
+// pending_async is written under the session's mutex, but for the step it
+// shares with completing a request, not to protect it from anybody.)
 struct ClientThreads {
   std::unordered_map<uint32_t, ClientThread> live;
   // Oldest first, at most kRetiredSlots (server/main.cpp).

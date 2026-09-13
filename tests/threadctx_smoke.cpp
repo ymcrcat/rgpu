@@ -282,6 +282,70 @@ void batch_flushed_by_another_thread() {
   CHECK(cuDevicePrimaryCtxRelease(1));
 }
 
+// A call sent without a reply has nowhere to report its failure, so the server
+// holds it for the next call that does reply - from the same client thread. A
+// launch that thread A queued and thread B's call flushed fails on the server
+// before B's call runs, and B must not be told: B's call succeeds, and A's next
+// call that replies carries A's failure, once.
+void deferred_error_stays_with_its_thread() {
+  std::printf("-- a failure with no reply surfaces on the thread that caused "
+              "it\n");
+  CUcontext p0 = nullptr;
+  CHECK(cuDevicePrimaryCtxRetain(&p0, 0));
+
+  Turns turns;
+  CUresult queued = CUDA_ERROR_UNKNOWN, b_call = CUDA_ERROR_UNKNOWN;
+  CUresult a_first = CUDA_SUCCESS, a_second = CUDA_ERROR_UNKNOWN;
+  std::thread a([&] {
+    CHECK(cuCtxSetCurrent(p0));
+    // A null function: the server's driver rejects the launch, and with no
+    // reply the failure waits. reconnect_smoke rests on the same launch.
+    unsigned char packed[28] = {0};
+    size_t packed_size = sizeof(packed);
+    void* extra[] = {CU_LAUNCH_PARAM_BUFFER_POINTER, packed,
+                     CU_LAUNCH_PARAM_BUFFER_SIZE, &packed_size,
+                     CU_LAUNCH_PARAM_END};
+    queued = cuLaunchKernel(nullptr, 8, 1, 1, 256, 1, 1, 0, nullptr, nullptr,
+                            extra);
+    turns.advance(1);
+    turns.await(2);
+    a_first = cuCtxSynchronize();
+    a_second = cuCtxSynchronize();
+    CHECK(cuCtxSetCurrent(nullptr));
+    turns.advance(3);
+  });
+  std::thread b([&] {
+    turns.await(1);
+    int count = 0;
+    b_call = cuDeviceGetCount(&count);  // flushes the launch ahead of itself
+    turns.advance(2);
+    turns.await(3);
+  });
+  a.join();
+  b.join();
+  EXPECT(queued == CUDA_SUCCESS,
+         "the launch was not queued without a reply, so nothing was deferred");
+  if (b_call != CUDA_SUCCESS) {
+    char msg[200];
+    std::snprintf(msg, sizeof(msg),
+                  "thread B's call returned %d: it was handed the failure of "
+                  "a launch thread A queued",
+                  (int)b_call);
+    fail_at(__FILE__, __LINE__, msg);
+  }
+  if (a_first != CUDA_ERROR_INVALID_HANDLE) {
+    char msg[200];
+    std::snprintf(msg, sizeof(msg),
+                  "thread A's next call that replies returned %d, not its "
+                  "launch's CUDA_ERROR_INVALID_HANDLE",
+                  (int)a_first);
+    fail_at(__FILE__, __LINE__, msg);
+  }
+  EXPECT(a_second == CUDA_SUCCESS,
+         "thread A's deferred failure was reported more than once");
+  CHECK(cuDevicePrimaryCtxRelease(0));
+}
+
 // The price of all this for a client with one thread: nothing. The server only
 // makes a thread's context current when it differs from the one it last made
 // current, so a thread calling on its own pays no cuCtxSetCurrent beyond the
@@ -1124,12 +1188,120 @@ void live_slots_are_capped() {
   s.get_current(cap + 1, &r);
   EXPECT(r == CUDA_ERROR_INVALID_VALUE,
          "a thread past the cap was not refused with CUDA_ERROR_INVALID_VALUE");
+  // Refused too, and with no reply to say so. It is still that thread's
+  // failure once it is let in.
+  rgpu::Buffer query;
+  query.put<uint8_t>(1);
+  EXPECT(s.send(rgpu::API_cuCtxGetCurrent, cap + 1, query, true),
+         "could not send a call without a reply");
   // Sent by the refused thread itself, which is how a client whose new thread
   // has just announced an old one would send it.
   EXPECT(s.gone(cap + 1, {1}), "could not send a notice");
+  s.get_current(2, &r);
+  EXPECT(r == CUDA_SUCCESS,
+         "another thread was handed the failure of a call refused past the "
+         "cap");
+  s.get_current(cap + 1, &r);
+  EXPECT(r == CUDA_ERROR_INVALID_VALUE,
+         "a thread let in after a call of its own was refused past the cap "
+         "was not told of it");
   s.get_current(cap + 1, &r);
   EXPECT(r == CUDA_SUCCESS,
          "a notice from a thread past the cap did not make room for it");
+}
+
+// The server's own refusals of a call sent without a reply are deferred like
+// any failure, to the thread that sent the call: past its stack's cap, after
+// its context was destroyed, and once it has been announced gone. A frame
+// naming no thread has no thread to report to, and is reported to none.
+void refusals_are_deferred_to_their_own_thread(CUcontext p0) {
+  std::printf("-- a refused call without a reply reports to its own thread\n");
+  const char* env = std::getenv("RGPU_MAX_CONTEXT_STACK");
+  const long cap = env ? std::atol(env) : 0;
+  if (cap < 2 || cap > 1024) {
+    fail_at(__FILE__, __LINE__,
+            "RGPU_MAX_CONTEXT_STACK must name the server's cap, and a small "
+            "one");
+    return;
+  }
+  constexpr uint32_t kPusher = 21, kMaker = 22, kGone = 23, kOther = 24;
+  RawSession s;
+  if (!s.open()) {
+    fail_at(__FILE__, __LINE__, "could not open a session of our own");
+    return;
+  }
+  // What each refused frame is followed by: a call from another thread, which
+  // must not carry it, then two from the thread that sent it, the first of
+  // which must carry it and the second not.
+  auto expect_deferred = [&](uint32_t sender, CUresult want, const char* what) {
+    CUresult r = CUDA_ERROR_UNKNOWN;
+    s.get_current(kOther, &r);
+    if (r != CUDA_SUCCESS) {
+      char msg[200];
+      std::snprintf(msg, sizeof(msg),
+                    "%s: another thread's call returned %d, carrying it",
+                    what, (int)r);
+      fail_at(__FILE__, __LINE__, msg);
+    }
+    s.get_current(sender, &r);
+    if (r != want) {
+      char msg[200];
+      std::snprintf(msg, sizeof(msg),
+                    "%s: the sending thread's next call returned %d, not %d",
+                    what, (int)r, (int)want);
+      fail_at(__FILE__, __LINE__, msg);
+    }
+    s.get_current(sender, &r);
+    if (r != CUDA_SUCCESS) {
+      char msg[200];
+      std::snprintf(msg, sizeof(msg), "%s: reported twice (%d)", what, (int)r);
+      fail_at(__FILE__, __LINE__, msg);
+    }
+  };
+
+  rgpu::Buffer query;
+  query.put<uint8_t>(1);
+  EXPECT(s.send(rgpu::API_cuCtxGetCurrent, 0, query, true),
+         "could not send a frame naming no thread");
+  CUresult r = CUDA_ERROR_UNKNOWN;
+  s.get_current(kOther, &r);
+  EXPECT(r == CUDA_SUCCESS,
+         "a refused frame naming no thread had its failure reported on a "
+         "thread");
+
+  CHECK(s.set_current(kPusher, p0));
+  for (long depth = 1; depth < cap; depth++) CHECK(s.push(kPusher, p0));
+  rgpu::Buffer push;
+  push.put<uint64_t>(reinterpret_cast<uint64_t>(p0));
+  EXPECT(s.send(rgpu::API_cuCtxPushCurrent_v2, kPusher, push, true),
+         "could not send a push");
+  expect_deferred(kPusher, CUDA_ERROR_INVALID_VALUE, "a push past the cap");
+  while (s.pop(kPusher) == CUDA_SUCCESS) {
+  }
+
+  CUcontext made = nullptr;
+  CHECK(s.create(kMaker, 0, &made));
+  CHECK(s.set_current(kOther, p0));
+  CHECK(s.destroy(kOther, made));
+  rgpu::Buffer alloc;
+  alloc.put<uint8_t>(1);
+  alloc.put<size_t>(64);
+  EXPECT(s.send(rgpu::API_cuMemAlloc_v2, kMaker, alloc, true),
+         "could not send an allocation");
+  expect_deferred(kMaker, CUDA_ERROR_CONTEXT_IS_DESTROYED,
+                  "an allocation after the thread's context was destroyed");
+  CHECK(s.set_current(kMaker, nullptr));
+
+  // A push of no context, which the server refuses itself, then the notice
+  // that the thread is gone: its late call still carries the failure.
+  rgpu::Buffer push_null;
+  push_null.put<uint64_t>(0);
+  EXPECT(s.send(rgpu::API_cuCtxPushCurrent_v2, kGone, push_null, true),
+         "could not send a push");
+  EXPECT(s.gone(kOther, {kGone}), "could not send the notice");
+  expect_deferred(kGone, CUDA_ERROR_INVALID_CONTEXT,
+                  "a push of no context from a thread since announced gone");
+  CHECK(s.set_current(kOther, nullptr));
 }
 
 // A thread's context stack lives in server memory, and the driver's own stack
@@ -1208,6 +1380,7 @@ int main(int argc, char** argv) {
   currency_is_read_back();
   issue_scenario_by_placement();
   batch_flushed_by_another_thread();
+  deferred_error_stays_with_its_thread();
   one_thread_costs_no_switches();
   context_destroyed_by_another_thread();
   recovery_after_destroy();
@@ -1224,6 +1397,7 @@ int main(int argc, char** argv) {
   retired_slots_are_bounded(p0, p1);
   live_slots_are_capped();
   context_stacks_are_capped(p0);
+  refusals_are_deferred_to_their_own_thread(p0);
   CHECK(cuDevicePrimaryCtxRelease(0));
   CHECK(cuDevicePrimaryCtxRelease(1));
 
