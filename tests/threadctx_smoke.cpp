@@ -423,6 +423,7 @@ void recovery_after_destroy() {
   int pushed_on = -1, set_on = -1;
   CUcontext at_end = reinterpret_cast<CUcontext>(0xbadull);
   CUcontext destroyed_sees = nullptr;
+  CUresult about_handle = CUDA_SUCCESS;
   std::thread a([&] {
     CHECK(cuCtxCreate(&made, 0, 0));
     turns.advance(1);
@@ -436,6 +437,11 @@ void recovery_after_destroy() {
     }
     CHECK(cuCtxPopCurrent(&popped));
     CHECK(cuCtxGetCurrent(&destroyed_sees));
+    // A call that reports on a handle it was handed keeps its own answer
+    // about that handle, whatever the thread has current.
+    unsigned int version = 0;
+    about_handle = cuCtxGetApiVersion(
+        reinterpret_cast<CUcontext>(0xdeadbeefull), &version);
     CUdeviceptr e = 0;
     after_pop = cuMemAlloc(&e, 64);
     if (after_pop == CUDA_SUCCESS) cuMemFree(e);
@@ -473,6 +479,14 @@ void recovery_after_destroy() {
   EXPECT(destroyed_sees == made,
          "after popping back to the destroyed context, cuCtxGetCurrent did not "
          "name it, as CUDA does");
+  if (about_handle != CUDA_ERROR_INVALID_CONTEXT) {
+    char msg[200];
+    std::snprintf(msg, sizeof(msg),
+                  "cuCtxGetApiVersion of a handle naming no context returned "
+                  "%d, not its own CUDA_ERROR_INVALID_CONTEXT",
+                  (int)about_handle);
+    fail_at(__FILE__, __LINE__, msg);
+  }
   if (after_pop != CUDA_ERROR_CONTEXT_IS_DESTROYED) {
     char msg[160];
     std::snprintf(msg, sizeof(msg),

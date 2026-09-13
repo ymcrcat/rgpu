@@ -856,6 +856,17 @@ CUresult cuPointerGetAttributes(unsigned int numAttributes,
   return CUDA_SUCCESS;
 }
 
+// A context's API version, reported about the context it is handed, not the
+// current one: a handle that names no context is CUDA_ERROR_INVALID_CONTEXT
+// whatever is current. The version itself is any fixed number.
+CUresult cuCtxGetApiVersion(CUcontext ctx, unsigned int* version) {
+  if (!version) return CUDA_ERROR_INVALID_VALUE;
+  std::lock_guard<std::mutex> lk(g_mu);
+  if (!ctx || !bindable_locked(ctx)) return CUDA_ERROR_INVALID_CONTEXT;
+  *version = 3011;
+  return CUDA_SUCCESS;
+}
+
 // "Returns in *device the handle of the current context's device." A context
 // destroyed under this thread is reported the way every other call here
 // reports it; a primary context is on its device whether or not it is

@@ -5,7 +5,9 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "common/cublas_ids.h"
 #include "common/generated/api_ids.h"
+#include "common/internal_ids.h"
 
 namespace rgpu {
 namespace {
@@ -272,15 +274,25 @@ void client_thread_after(ClientThreads& threads, ClientThread& t,
   // instead, so the driver says CUDA_ERROR_INVALID_CONTEXT; while the thread's
   // top is still the destroyed context, that is corrected. The calls that
   // report CUDA_ERROR_INVALID_CONTEXT about a context they were handed,
-  // rather than the current one, keep their own answer.
+  // rather than the current one, keep their own answer. So do the maths
+  // libraries, whose calls carry no driver result here: only a driver call's
+  // result is a CUresult to correct.
   if (*result != CUDA_ERROR_INVALID_CONTEXT) return;
   if (t.stack.empty() || !t.stack.back().gone) return;
+  const bool driver_call =
+      api_id < API__count || (api_id >= kInternalBase && api_id < kCublasBase);
+  if (!driver_call) return;
   switch (api_id) {
     case API_cuCtxSetCurrent:
     case API_cuCtxPushCurrent_v2:
     case API_cuCtxPopCurrent_v2:
     case API_cuCtxDestroy_v2:
     case API_cuCtxDetach:
+    case API_cuCtxGetApiVersion:
+    case API_cuCtxGetId:
+    case API_cuCtxEnablePeerAccess:
+    case API_cuCtxDisablePeerAccess:
+    case API_cuDevicePrimaryCtxRetain:
     case API_cuDevicePrimaryCtxRelease_v2:
       return;
     default:
