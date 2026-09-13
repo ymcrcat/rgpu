@@ -256,6 +256,24 @@ if [[ -x "$BUILD/threadctx_smoke" ]]; then
     rc=1
   fi
   rm -f "$CTX_STATS" "$CTX_STATS.tmp" "$CTX_LOG"
+
+  # A reset is refused while another session is live, and the case above
+  # leaves several waiting out their grace, so the reset case has a server of
+  # its own.
+  echo
+  RESET_PORT=$((PORT + 12))
+  RGPU_FAKE_DEVICES=2 "$BUILD/rgpu-server-fake" "$RESET_PORT" &
+  RESET_SRV=$!
+  for _ in $(seq 1 50); do
+    if (exec 3<>/dev/tcp/127.0.0.1/"$RESET_PORT") 2>/dev/null; then
+      exec 3<&- 3>&-
+      break
+    fi
+    sleep 0.1
+  done
+  LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$RESET_PORT" \
+    "$BUILD/threadctx_smoke" reset || rc=1
+  kill $RESET_SRV 2>/dev/null
 fi
 
 # The runtime API path, if it was built. Our libcudart must come first so the

@@ -20,6 +20,9 @@
 //     RGPU_FAKE_REUSE_CONTEXTS=1 rgpu-server-fake 9723 &
 //   LD_LIBRARY_PATH=build RGPU_SERVER=127.0.0.1:9723 RGPU_BATCH=1
 //     RGPU_FAKE_STATS=/tmp/s RGPU_MAX_CLIENT_THREADS=16 ./threadctx_smoke
+//
+// `threadctx_smoke reset` runs the device-reset case alone, and needs a server
+// of its own with no other session on it.
 
 #include <netdb.h>
 #include <sys/socket.h>
@@ -510,6 +513,66 @@ void push_pop_across_a_background_call() {
   CHECK(cuDevicePrimaryCtxRelease(1));
 }
 
+// cuCtxCreate pushes the context it makes. A thread that creates a dozen
+// contexts on top of its own has a stack a dozen deep, and a thread with no
+// context must still be served in between - with no context, at the cost of
+// no more than the serving thread's one entry - after which the first thread
+// destroys its contexts one by one and finds each one underneath current.
+void deep_stack_of_created_contexts() {
+  std::printf("-- a stack of created contexts survives a thread with none\n");
+  constexpr int kDepth = 12;
+  CUcontext p0 = nullptr;
+  CHECK(cuDevicePrimaryCtxRetain(&p0, 0));
+
+  Turns turns;
+  CUcontext made[kDepth] = {};
+  int wrong_top = 0;
+  CUcontext at_end = reinterpret_cast<CUcontext>(0xbadull);
+  CUresult b_call = CUDA_ERROR_UNKNOWN;
+  CUcontext b_sees = reinterpret_cast<CUcontext>(0xbadull);
+  std::thread a([&] {
+    CHECK(cuCtxSetCurrent(p0));
+    for (int i = 0; i < kDepth; i++) CHECK(cuCtxCreate(&made[i], 0, i % 2));
+    turns.advance(1);
+    turns.await(2);
+    for (int i = kDepth - 1; i >= 0; i--) {
+      CUcontext top = nullptr;
+      CHECK(cuCtxGetCurrent(&top));
+      if (top != made[i]) wrong_top++;
+      CHECK(cuCtxDestroy(made[i]));
+    }
+    CHECK(cuCtxGetCurrent(&at_end));
+    CHECK(cuCtxSetCurrent(nullptr));
+    turns.advance(3);
+  });
+  std::thread b([&] {
+    turns.await(1);
+    int count = 0;
+    b_call = cuDeviceGetCount(&count);
+    CHECK(cuCtxGetCurrent(&b_sees));
+    turns.advance(2);
+    turns.await(3);
+  });
+  a.join();
+  b.join();
+  if (b_call != CUDA_SUCCESS) {
+    char msg[160];
+    std::snprintf(msg, sizeof(msg),
+                  "a thread with no context was refused (%d) while another "
+                  "thread had a deep stack",
+                  (int)b_call);
+    fail_at(__FILE__, __LINE__, msg);
+  }
+  EXPECT(b_sees == nullptr,
+         "a thread with no context saw another thread's created context");
+  EXPECT(wrong_top == 0,
+         "destroying a created context did not uncover the one below it");
+  EXPECT(at_end == p0,
+         "destroying every created context did not return to the thread's "
+         "own context");
+  CHECK(cuDevicePrimaryCtxRelease(0));
+}
+
 // Test 3 of the design: context stacks are per thread. A pushes one context
 // over its own; B, with a different context of its own, pushes and pops; A
 // pops and is back where it started, and so is B.
@@ -553,6 +616,84 @@ void stacks_are_per_thread() {
          "and popped");
   CHECK(cuDevicePrimaryCtxRelease(0));
   CHECK(cuDevicePrimaryCtxRelease(1));
+}
+
+// A device reset destroys everything in the primary context, and the server
+// counts it as the end of that context's generation, so every other thread's
+// saved selection of it is treated as destroyed: that thread's next call that
+// needs a context fails with CUDA_ERROR_CONTEXT_IS_DESTROYED, and selecting
+// again recovers it. The thread that reset the device had the context current
+// throughout and still has it, as CUDA leaves it: it goes on allocating
+// without selecting again.
+//
+// Its own server and nothing else connected to it, because a reset is refused
+// while another session is live.
+void reset_by_another_thread() {
+  std::printf("-- a device reset by one thread leaves it its context, and "
+              "other threads select again\n");
+  CUcontext p0 = nullptr;
+  CHECK(cuDevicePrimaryCtxRetain(&p0, 0));
+
+  Turns turns;
+  CUresult b_reset = CUDA_ERROR_UNKNOWN, b_alloc = CUDA_ERROR_UNKNOWN;
+  CUresult a_alloc = CUDA_SUCCESS;
+  int b_on = -1, a_reselected_on = -1;
+  std::thread a([&] {
+    CHECK(cuCtxSetCurrent(p0));
+    CUdeviceptr before = 0;
+    CHECK(cuMemAlloc(&before, 64));  // destroyed by the reset, never freed
+    turns.advance(1);
+    turns.await(2);
+    CUdeviceptr d = 0;
+    a_alloc = cuMemAlloc(&d, 64);
+    if (a_alloc == CUDA_SUCCESS) cuMemFree(d);
+    CHECK(cuCtxSetCurrent(p0));
+    CUdeviceptr e = 0;
+    CHECK(cuMemAlloc(&e, 64));
+    if (e) {
+      a_reselected_on = ordinal_of(e);
+      CHECK(cuMemFree(e));
+    }
+    CHECK(cuCtxSetCurrent(nullptr));
+    turns.advance(3);
+  });
+  std::thread b([&] {
+    turns.await(1);
+    CHECK(cuCtxSetCurrent(p0));
+    b_reset = cuDevicePrimaryCtxReset(0);
+    CUdeviceptr d = 0;
+    b_alloc = cuMemAlloc(&d, 64);
+    if (b_alloc == CUDA_SUCCESS) {
+      b_on = ordinal_of(d);
+      CHECK(cuMemFree(d));
+    }
+    turns.advance(2);
+    turns.await(3);
+    CHECK(cuCtxSetCurrent(nullptr));
+  });
+  a.join();
+  b.join();
+  if (b_reset != CUDA_SUCCESS) {
+    char msg[160];
+    std::snprintf(msg, sizeof(msg),
+                  "the reset was refused (%d); is anything else connected to "
+                  "this server?",
+                  (int)b_reset);
+    fail_at(__FILE__, __LINE__, msg);
+  }
+  EXPECT(b_alloc == CUDA_SUCCESS && b_on == 0,
+         "the thread that reset the device lost its context");
+  if (a_alloc != CUDA_ERROR_CONTEXT_IS_DESTROYED) {
+    char msg[200];
+    std::snprintf(msg, sizeof(msg),
+                  "another thread's call after the reset returned %d, not "
+                  "CUDA_ERROR_CONTEXT_IS_DESTROYED",
+                  (int)a_alloc);
+    fail_at(__FILE__, __LINE__, msg);
+  }
+  EXPECT(a_reselected_on == 0,
+         "a thread could not select the reset device's context again");
+  CHECK(cuDevicePrimaryCtxRelease(0));
 }
 
 // --- the slot table, from a connection of our own ---------------------------
@@ -862,8 +1003,17 @@ void live_slots_are_capped() {
 
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
   CHECK(cuInit(0));
+  if (argc > 1 && std::strcmp(argv[1], "reset") == 0) {
+    reset_by_another_thread();
+    if (g_failures) {
+      std::printf("\nFAILED: %d check(s)\n", g_failures);
+      return 1;
+    }
+    std::printf("\nPASS: a reset leaves its own thread its context\n");
+    return 0;
+  }
   int count = 0;
   CHECK(cuDeviceGetCount(&count));
   if (count < 2) {
@@ -881,6 +1031,7 @@ int main() {
   recovery_after_destroy();
   push_pop_across_a_background_call();
   stacks_are_per_thread();
+  deep_stack_of_created_contexts();
 
   CUcontext p0 = nullptr, p1 = nullptr;
   CHECK(cuDevicePrimaryCtxRetain(&p0, 0));
