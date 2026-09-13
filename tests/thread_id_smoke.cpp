@@ -553,6 +553,13 @@ void wire_cases() {
                     "not initialized");
              EXPECT(log.find("handshake with") != std::string::npos,
                     "the client did not report the failed handshake");
+             // All the client can see is the close, and the likeliest cause
+             // is a server binary older than this client, which is easy to
+             // leave running on a GPU host. It says so.
+             EXPECT(log.find("protocol") != std::string::npos &&
+                        log.find("older rgpu-server") != std::string::npos,
+                    "the client did not say a server from before this "
+                    "protocol is the likely cause");
            },
            [](int& lfd) {
              int fd = accept_within(lfd, 10000);

@@ -277,10 +277,23 @@ bool ensure_connected_locked() {
   hello.session_lo = g_session.lo;
   hello.last_req_id = g_last_reply;
   HandshakeReply reply{};
-  if (!write_exact(fd, &hello, sizeof(hello)) ||
-      !read_exact(fd, &reply, sizeof(reply)) ||
-      reply.magic != kMagicHello) {
-    log("handshake with %s failed", spec.c_str());
+  const bool answered = write_exact(fd, &hello, sizeof(hello)) &&
+                        read_exact(fd, &reply, sizeof(reply));
+  if (!answered || reply.magic != kMagicHello) {
+    if (!answered) {
+      // A server from before protocol 3 closes on a version it does not
+      // speak without answering, so a close is all this client sees of a
+      // mismatch - and a server binary older than the client is easy to
+      // leave running.
+      log("handshake with %s failed: the server closed the connection "
+          "without answering. An older rgpu-server, speaking a protocol "
+          "before %u, does that; check that the server was rebuilt along "
+          "with this client",
+          spec.c_str(), kProtocolVersion);
+    } else {
+      log("handshake with %s failed: what answered is not an rgpu-server",
+          spec.c_str());
+    }
     ::close(fd);
     g_connect_failed = true;
     return false;
