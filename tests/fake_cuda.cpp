@@ -748,6 +748,7 @@ CUresult cuMemcpyDtoH_v2(void* dst, CUdeviceptr src, size_t n) {
 }
 
 CUresult cuMemsetD8_v2(CUdeviceptr dst, unsigned char value, size_t n) {
+  rgpu_fake::count(rgpu_fake::kMemset, 1);
   std::lock_guard<std::mutex> lk(g_mu);
   void* to = nullptr;
   CUresult r = range_locked(dst, n, &to);

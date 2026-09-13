@@ -15,7 +15,7 @@ std::atomic<long> g_counts[kKindCount];
 const char* const kNames[kKindCount] = {
     "allocs",  "retains", "contexts", "modules",  "streams", "events",
     "graphs",  "execs",   "cublas",   "cublaslt", "cudnn",
-    "overreleases", "stale", "ctxsets", "crossctx", "totalmem", "modeswaps",
+    "overreleases", "stale", "ctxsets", "crossctx", "totalmem", "modeswaps", "memsets",
 };
 
 // Serialises the writers, so two sessions releasing at once do not both write

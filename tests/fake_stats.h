@@ -55,6 +55,10 @@ enum Kind {
   // when it differs from the serving thread's, and this is how a test sees
   // that a client whose threads keep one mode pays nothing for it.
   kCaptureModeExchange,
+  // Not a resource: how many memsets ran, counted as each starts. A test that
+  // queues memsets without replies reads it to see that they really were held
+  // back until another call flushed them, rather than sent one by one.
+  kMemset,
   kKindCount,
 };
 

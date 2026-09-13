@@ -215,6 +215,13 @@ void issue_scenario_by_placement() {
 // infers placement from the pointer, so what is checked is what the fake saw:
 // every device-memory write that ran under a context other than its memory's
 // own is counted.
+//
+// And that they were batched at all. With batching off each memset is a round
+// trip that runs under its own thread's context before the other thread calls,
+// and every other check here passes without testing anything. So the fake's
+// memset count must not move while they are queued, and must move by all of
+// them when the other thread's call flushes them. RGPU_BATCH=1 is pinned in
+// run_smoke.sh, and this is what says so if it stops meaning batching.
 void batch_flushed_by_another_thread() {
   std::printf("-- a batch flushed by another thread runs under its own "
               "thread's context\n");
@@ -226,6 +233,7 @@ void batch_flushed_by_another_thread() {
 
   Turns turns;
   long before = -1, after = -1;
+  long runs_before = -1, runs_queued = -1, runs_flushed = -1;
   CUdeviceptr mem = 0;
   CUcontext b_sees = nullptr;
   CUresult flushed_by = CUDA_ERROR_UNKNOWN;
@@ -237,10 +245,13 @@ void batch_flushed_by_another_thread() {
     turns.await(2);
     // Every reply so far has been read, so nothing is still running.
     before = fake_counter("crossctx");
+    runs_before = fake_counter("memsets");
     for (int i = 1; i <= kQueued; i++) {
       CHECK(cuMemsetD8Async(mem, static_cast<unsigned char>(i), kBytes,
                             nullptr));
     }
+    // Still in this process: nothing has been written to the server.
+    runs_queued = fake_counter("memsets");
     // Nothing from this thread until the other one has flushed the batch.
     turns.advance(3);
     turns.await(4);
@@ -256,6 +267,7 @@ void batch_flushed_by_another_thread() {
     turns.await(3);
     flushed_by = cuCtxGetCurrent(&b_sees);
     after = fake_counter("crossctx");
+    runs_flushed = fake_counter("memsets");
     turns.advance(4);
     turns.await(5);
     CHECK(cuCtxSetCurrent(nullptr));
@@ -263,8 +275,24 @@ void batch_flushed_by_another_thread() {
   a.join();
   b.join();
 
-  EXPECT(before >= 0 && after >= 0,
+  EXPECT(before >= 0 && after >= 0 && runs_before >= 0,
          "could not read the fake's counters (is RGPU_FAKE_STATS set?)");
+  if (runs_queued != runs_before) {
+    char msg[200];
+    std::snprintf(msg, sizeof(msg),
+                  "%ld of the memsets ran before another thread's call "
+                  "flushed them: they were not batched (is RGPU_BATCH=1?)",
+                  runs_queued - runs_before);
+    fail_at(__FILE__, __LINE__, msg);
+  }
+  if (runs_flushed != runs_before + kQueued) {
+    char msg[200];
+    std::snprintf(msg, sizeof(msg),
+                  "the other thread's call flushed %ld memsets, not the %d "
+                  "queued",
+                  runs_flushed - runs_queued, kQueued);
+    fail_at(__FILE__, __LINE__, msg);
+  }
   EXPECT(flushed_by == CUDA_SUCCESS,
          "the call that flushed the batch reported a failure");
   EXPECT(b_sees == p1, "the flushing thread's own context changed");
