@@ -15,7 +15,11 @@
 // `reconnect_smoke threads` breaks the connection in the middle of a batch
 // queued by two client threads with different contexts, and needs a server of
 // its own with two devices and a stats file (see run_smoke.sh).
+//
+// `reconnect_smoke expired` breaks the connection and stays away until the
+// session has expired; it too needs a server of its own (see run_smoke.sh).
 
+#include <chrono>
 #include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
@@ -208,11 +212,124 @@ int threads_across_a_break() {
   return 0;
 }
 
+// How many sessions the server has said expired, from its log
+// (RGPU_SERVER_LOG), or -1 if there is no log to read.
+int sessions_expired() {
+  const char* path = std::getenv("RGPU_SERVER_LOG");
+  if (!path) return -1;
+  std::FILE* f = std::fopen(path, "r");
+  if (!f) return -1;
+  int n = 0;
+  char line[1024];
+  while (std::fgets(line, sizeof(line), f)) {
+    if (std::strstr(line, " expired;")) n++;
+  }
+  std::fclose(f);
+  return n;
+}
+
+// The connection breaks while the client is idle and the client does not come
+// back until its session has expired, and with it everything the session
+// held: the memory is freed, and its addresses may already belong to another
+// session. The client has to learn that its session is gone, say so, and fail
+// every call from then on. It must not replay what the server never
+// acknowledged into whatever session answers - a replayed copy, free or
+// launch would land on addresses it no longer owns - and the application must
+// not carry on as if nothing happened.
+//
+// The server breaks the connection on reading the asynchronous copy, which is
+// large enough to be written on its own (run_smoke.sh counts the frames), so
+// the client has nothing outstanding and does not notice. The server runs
+// with RGPU_SESSION_GRACE=1 and publishes its counters to RGPU_FAKE_STATS,
+// which is how a call that ran again would show.
+int expired_while_away() {
+  CHECK(cuInit(0));
+  CUdevice dev = 0;
+  CHECK(cuDeviceGet(&dev, 0));
+  CUcontext ctx = nullptr;
+  CHECK(cuCtxCreate(&ctx, 0, dev));
+  const size_t n = 512u << 10;
+  CUdeviceptr d = 0;
+  CHECK(cuMemAlloc(&d, n));
+  size_t total = 0;
+  CHECK(cuDeviceTotalMem(&total, dev));
+  const long ran_before = fake_counter("totalmem");
+
+  std::vector<unsigned char> bytes(n, 0x5a);
+  CHECK(cuMemcpyHtoDAsync(d, bytes.data(), n, nullptr));
+
+  bool expired = false;
+  for (int waited = 0; waited < 20000; waited += 100) {
+    if (sessions_expired() >= 1) {
+      expired = true;
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+  if (!expired) {
+    fail("the session never expired: either the connection did not break on "
+         "the asynchronous copy (check where RGPU_DROP_AFTER lands) or "
+         "RGPU_SERVER_LOG is not set");
+  }
+
+  const auto start = std::chrono::steady_clock::now();
+  const CUresult lost = cuDeviceTotalMem(&total, dev);
+  const CUresult sync = cuCtxSynchronize();
+  int count = 0;
+  const CUresult counted = cuDeviceGetCount(&count);
+  const CUresult freed = cuMemFree(d);
+  const double waited = std::chrono::duration<double>(
+                            std::chrono::steady_clock::now() - start)
+                            .count();
+  char msg[200];
+  if (lost == CUDA_SUCCESS) {
+    fail("the first call after the session expired succeeded");
+  }
+  if (sync == CUDA_SUCCESS || counted == CUDA_SUCCESS ||
+      freed == CUDA_SUCCESS) {
+    std::snprintf(msg, sizeof(msg),
+                  "a later call succeeded in a session that is gone "
+                  "(synchronize %d, device count %d, free %d)",
+                  (int)sync, (int)counted, (int)freed);
+    fail(msg);
+  }
+  const long ran_after = fake_counter("totalmem");
+  if (ran_before < 0 || ran_after < 0) {
+    fail("could not read the fake's counters (is RGPU_FAKE_STATS set?)");
+  } else if (ran_after != ran_before) {
+    std::snprintf(msg, sizeof(msg),
+                  "a call ran on the server after the session was gone (%ld "
+                  "more cuDeviceTotalMem), so the client replayed it",
+                  ran_after - ran_before);
+    fail(msg);
+  }
+  // RGPU_RECONNECT_SECONDS is 20 in run_smoke.sh: a client that kept trying
+  // after being told the session was gone takes about that long.
+  if (waited > 10.0) {
+    std::snprintf(msg, sizeof(msg),
+                  "failing four calls took %.1fs; the client kept trying to "
+                  "reach a session the server said was gone",
+                  waited);
+    fail(msg);
+  }
+
+  if (g_failures) {
+    std::printf("\nFAILED: %d check(s)\n", g_failures);
+    return 1;
+  }
+  std::printf("\nPASS: a session that expired while the client was away "
+              "stays gone, and nothing was replayed into it\n");
+  return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
   if (argc > 1 && std::strcmp(argv[1], "threads") == 0) {
     return threads_across_a_break();
+  }
+  if (argc > 1 && std::strcmp(argv[1], "expired") == 0) {
+    return expired_while_away();
   }
   CHECK(cuInit(0));
   CUdevice dev = 0;

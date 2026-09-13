@@ -119,6 +119,49 @@ if [[ -x "$BUILD/reconnect_smoke" ]]; then
   fi
   kill $THREADS_DROP_SRV 2>/dev/null
   rm -f "$THREADS_DROP_STATS" "$THREADS_DROP_STATS.tmp"
+
+  # The same break, but the client stays away until its session has expired.
+  # Its own server: a grace period short enough to wait out, a stats file
+  # counting the calls that ran, a log the test waits on, and a drop point of
+  # its own. Frames 1-5 are cuInit, the device, the context, the allocation
+  # and cuDeviceTotalMem; the server drops on reading frame 6, the
+  # asynchronous copy, which goes out on its own and wants no reply.
+  echo
+  EXPIRED_PORT=$((PORT + 19))
+  EXPIRED_STATS=$(mktemp "${TMPDIR:-/tmp}/rgpu-stats.XXXXXX")
+  EXPIRED_LOG=$(mktemp "${TMPDIR:-/tmp}/rgpu-expired-log.XXXXXX")
+  RGPU_DROP_AFTER=6 RGPU_SESSION_GRACE=1 RGPU_FAKE_STATS="$EXPIRED_STATS" \
+    "$BUILD/rgpu-server-fake" "$EXPIRED_PORT" >"$EXPIRED_LOG" 2>&1 &
+  EXPIRED_SRV=$!
+  for _ in $(seq 1 50); do
+    if (exec 3<>/dev/tcp/127.0.0.1/"$EXPIRED_PORT") 2>/dev/null; then
+      exec 3<&- 3>&-
+      break
+    fi
+    sleep 0.1
+  done
+  expired_out=$(LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$EXPIRED_PORT" \
+    RGPU_BATCH=1 RGPU_RECONNECT_SECONDS=20 RGPU_FAKE_STATS="$EXPIRED_STATS" \
+    RGPU_SERVER_LOG="$EXPIRED_LOG" "$BUILD/reconnect_smoke" expired 2>&1) || rc=1
+  printf '%s\n' "$expired_out"
+  kill $EXPIRED_SRV 2>/dev/null
+  # Said by the client, and never undone: no resume on either side.
+  if ! printf '%s\n' "$expired_out" | grep -q "no longer has our session"; then
+    echo "FAIL: the client never said the server no longer has its session"
+    rc=1
+  fi
+  if grep -q "resumed" "$EXPIRED_LOG" ||
+    printf '%s\n' "$expired_out" | grep -q "and resumed"; then
+    echo "FAIL: a session that had expired was resumed"
+    grep "resumed" "$EXPIRED_LOG" | sed 's/^/  /'
+    rc=1
+  fi
+  if ! grep -q "dropping the connection after 6 frames" "$EXPIRED_LOG"; then
+    echo "FAIL: the server never broke the connection, so reconnect_smoke"
+    echo "      expired proved nothing"
+    rc=1
+  fi
+  rm -f "$EXPIRED_STATS" "$EXPIRED_STATS.tmp" "$EXPIRED_LOG"
 fi
 
 # A request still running when its client reconnects, sent again by the client

@@ -793,6 +793,22 @@ void serve_session(std::shared_ptr<Session> session, SessionKey key) {
        summary.c_str());
 }
 
+// Tells a client that the session it is coming back to is not here, and closes
+// the connection. Not resumed, and nothing completed: the client, which has
+// talked to a session under this id before, takes that to mean the session is
+// gone and stops. No session is made.
+void session_gone(int fd, uint64_t session, uint32_t last_req) {
+  logf("session %llx is not here: its client has had replies up to request "
+       "%u, so it is coming back to a session that expired or belonged to a "
+       "server that restarted. Telling it the session is gone",
+       (unsigned long long)session, last_req);
+  HandshakeReply gone{};
+  gone.magic = kMagicHello;
+  gone.version = kProtocolVersion;
+  write_exact(fd, &gone, sizeof(gone));
+  ::close(fd);
+}
+
 // Reads the handshake and either starts a session or hands the connection to
 // the thread already serving one.
 void accept_connection(int fd) {
@@ -832,10 +848,20 @@ void accept_connection(int fd) {
         resumed = true;
       }
     }
-    if (!session) {
+    // A client that has already had replies is not starting: it is coming
+    // back to a session this server no longer has - it expired, or the server
+    // restarted - and every handle it holds names nothing here. An empty
+    // session made for it would be found by its next attempt and reported as
+    // resumed, and the client would send its unacknowledged calls into it.
+    // A client starting afresh always says 0.
+    if (!session && hello.last_req_id == 0) {
       session = std::make_shared<Session>();
       g_sessions[key] = session;
     }
+  }
+  if (!session) {
+    session_gone(fd, key.first, hello.last_req_id);
+    return;
   }
 
   HandshakeReply reply{};

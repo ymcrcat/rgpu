@@ -591,6 +591,76 @@ void wire_cases() {
              ::close(fd);
            });
 
+  // A session the server no longer has - it expired, or the server restarted
+  // - is gone for good: every pointer and handle the application holds names
+  // nothing. So the client stops. It does not try again, and above all it
+  // does not send its unacknowledged calls to whatever answers next: a server
+  // that has just said "not resumed" may well say "resumed" to the next
+  // attempt - it made an empty session for the first, say - and a replay
+  // into that runs frees, copies and launches against addresses another
+  // session may since have been given.
+  run_case("a session the server no longer has stays gone, and nothing is "
+           "replayed",
+           [] {
+             CUresult first = CUDA_ERROR_UNKNOWN;
+             CUresult lost = CUDA_SUCCESS, later = CUDA_SUCCESS;
+             const std::string log = capture_stderr([&] {
+               first = sync_call(kApiA);
+               Buffer req;
+               req.put<uint32_t>(0xB0);
+               EXPECT(rgpu::call_async(kApiB, req) == CUDA_SUCCESS,
+                      "could not queue a call");
+               lost = sync_call(kApiC);
+               later = sync_call(kApiD);
+             });
+             EXPECT(first == CUDA_SUCCESS, "the first call failed");
+             EXPECT(lost != CUDA_SUCCESS,
+                    "a call made after the session was lost succeeded");
+             EXPECT(later != CUDA_SUCCESS,
+                    "a call made after the session was found gone succeeded");
+             EXPECT(log.find("no longer has our session") != std::string::npos,
+                    "the client did not say its session is gone");
+             EXPECT(log.find("and resumed") == std::string::npos,
+                    "the client resumed after the server said its session "
+                    "was gone");
+           },
+           [](int& lfd) {
+             int fd = accept_session(lfd, nullptr);
+             if (fd < 0) return;
+             Frame a;
+             const bool got = read_frame(fd, &a);
+             EXPECT(got && a.h.api_id == kApiA,
+                    "the client did not send its first call");
+             if (got) reply(fd, a, CUDA_SUCCESS);
+             ::close(fd);
+
+             fd = accept_within(lfd, 10000);
+             EXPECT(fd >= 0, "the client did not come back after the break");
+             if (fd < 0) return;
+             Handshake again{};
+             EXPECT(read_hello(fd, &again), "no handshake on reconnect");
+             EXPECT(!got || again.last_req_id == a.h.req_id,
+                    "the reconnect did not name the last reply received");
+             send_hello(fd, rgpu::kProtocolVersion, false, 0);
+             EXPECT(read_until_closed(fd).empty(),
+                    "the client sent calls on a connection whose session is "
+                    "not its own");
+             ::close(fd);
+
+             // Whatever answers next must be offered nothing.
+             fd = accept_within(lfd, 2500);
+             EXPECT(fd < 0, "the client tried again after the server said its "
+                            "session was gone");
+             if (fd < 0) return;
+             Handshake third{};
+             read_hello(fd, &third);
+             send_hello(fd, rgpu::kProtocolVersion, true, 0);
+             EXPECT(read_until_closed(fd).empty(),
+                    "the client replayed its calls into a session after the "
+                    "server said its own was gone");
+             ::close(fd);
+           });
+
   // The shim remembers each primary context's flags so that PyTorch's
   // constant state queries need no round trip, and forgets them when the
   // context is reset. A reset that ran must be forgotten even when its reply

@@ -551,6 +551,44 @@ void frames_without_a_request_id() {
   ::close(fd);
 }
 
+// A handshake saying the client has already had replies, for a session this
+// server does not have, comes from a client whose session expired or whose
+// server restarted. Every handle it holds names nothing here. The server says
+// the session is gone and closes, rather than starting an empty session under
+// that id: the client's next attempt would find that one and be told it
+// resumed, and would send its unacknowledged calls into it.
+void claimed_progress_in_an_unknown_session() {
+  std::printf("-- a handshake claiming progress in a session the server does "
+              "not have is refused\n");
+  const uint64_t session = 9;
+
+  rgpu::HandshakeReply hs{};
+  int fd = connect_session(session, 7, &hs);
+  EXPECT(fd >= 0, "no answer to a handshake for an unknown session");
+  if (fd >= 0) {
+    EXPECT(hs.resumed == 0, "the server resumed a session it never had");
+    EXPECT(closed_by_server(fd),
+           "the server kept a connection open after saying its session was "
+           "gone");
+    ::close(fd);
+  }
+
+  // Nothing was left behind under that id.
+  fd = connect_session(session, 7, &hs);
+  EXPECT(fd >= 0 && hs.resumed == 0,
+         "a second attempt resumed an empty session made for the first");
+  if (fd >= 0) ::close(fd);
+
+  // A client starting afresh is still served, under the same id too.
+  fd = connect_session(session, 0, &hs);
+  EXPECT(fd >= 0 && hs.resumed == 0, "a fresh handshake did not start a session");
+  if (fd < 0) return;
+  const Frame first = device_count(1);
+  EXPECT(send(fd, first), "could not send the first request");
+  expect_answer(fd, first, CUDA_SUCCESS, "the first request of a fresh session");
+  ::close(fd);
+}
+
 }  // namespace
 
 int main() {
@@ -562,6 +600,7 @@ int main() {
   malformed_request_is_recorded();
   malformed_request_without_reply_is_recorded();
   frames_without_a_request_id();
+  claimed_progress_in_an_unknown_session();
 
   if (g_failures) {
     std::printf("\nFAILED: %d check(s)\n", g_failures);

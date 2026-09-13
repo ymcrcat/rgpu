@@ -39,6 +39,13 @@ bool g_req_ids_started = false;
 bool g_connect_failed = false;
 uint32_t g_last_reply = 0;   // last request id we have seen a reply for; 0: none
 bool g_had_session = false;  // we have talked to this server before
+// The server has said it no longer has our session: it expired while we were
+// away, or the server restarted. Final. Every pointer and handle the
+// application holds named something in that session, so nothing is sent
+// again - not the calls the server never acknowledged, which would run against
+// addresses another session may since have been given, and not new calls,
+// which would run against state that is not there.
+bool g_session_gone = false;
 
 // Frames queued by call_async and not yet written. Holding them lets a run of
 // launches leave the client in one write instead of one per call, and lets
@@ -220,7 +227,7 @@ bool batching() {
 bool ensure_connected_locked() {
   arm_stats_report();
   if (g_fd >= 0) return true;
-  if (g_connect_failed) return false;
+  if (g_session_gone || g_connect_failed) return false;
 
   std::string spec = std::getenv("RGPU_SERVER") ? std::getenv("RGPU_SERVER")
                                                 : "127.0.0.1:9713";
@@ -288,10 +295,20 @@ bool ensure_connected_locked() {
 
   if (g_had_session && !reply.resumed) {
     // The session is gone rather than merely unreachable: every device
-    // pointer and handle the application is holding refers to nothing.
-    log("the server no longer has our session; GPU state is gone");
+    // pointer and handle the application is holding refers to nothing. That
+    // does not change on another attempt. A server that has just said so can
+    // still answer the next one with a session under our id - an empty one,
+    // made for this handshake by a server that does not refuse it - and a
+    // replay into that would run our calls against nothing we own.
+    log("the server no longer has our session (it expired, or the server "
+        "restarted); its GPU state is gone, and every call from here on "
+        "fails");
     ::close(fd);
+    g_session_gone = true;
     g_connect_failed = true;
+    g_queued.clear();
+    g_unacked.clear();
+    g_unacked_bytes = 0;
     return false;
   }
 
@@ -336,9 +353,9 @@ bool reconnect_locked() {
     attempt++;
     g_connect_failed = false;
     if (ensure_connected_locked()) return true;
-    if (g_connect_failed && g_had_session && g_fd < 0 && !g_replay_possible) {
-      break;
-    }
+    // Reached, and told the session is gone. It stays gone, and
+    // ensure_connected_locked has said so.
+    if (g_session_gone) return false;
   }
   log("could not reach the server again within %ds", seconds);
   g_connect_failed = true;
