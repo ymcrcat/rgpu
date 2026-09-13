@@ -182,9 +182,14 @@ def encode_element(value):
     return bytes(out)
 
 
+def _list_header(count):
+    """The "L" tag and element count a list's encoding starts with."""
+    return b"L" + struct.pack("<I", count)
+
+
 def encode_elements(parts):
     """The encoding of the list whose elements encode_element() produced."""
-    return b"L" + struct.pack("<I", len(parts)) + b"".join(parts)
+    return _list_header(len(parts)) + b"".join(parts)
 
 
 def _put_str(tag, s, out):
@@ -212,7 +217,7 @@ def _enc(v, out, depth):
     elif isinstance(v, (bytes, bytearray, memoryview)):
         out += b"B" + struct.pack("<Q", len(v)) + bytes(v)
     elif isinstance(v, (list, tuple)):
-        out += b"L" + struct.pack("<I", len(v))
+        out += _list_header(len(v))
         for x in v:
             _enc(x, out, depth + 1)
     elif isinstance(v, Ref):
