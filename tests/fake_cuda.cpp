@@ -163,22 +163,33 @@ CUresult need_context() {
 // A fake stricter than the hardware would let a test pass for a reason the
 // hardware does not share.
 //
-// Two calls are stricter, each because the header says so:
+// Two calls are stricter:
 //   - cuModuleUnload "Unloads a module hmod from the current context", so a
-//     module from another context is refused, with the
-//     CUDA_ERROR_INVALID_HANDLE this fake gives for any module it cannot use;
-//   - a kernel launches in its stream's context, or the current context's for
-//     a null stream ("the context to launch the kernel on will either be taken
-//     from the specified stream hStream or the current context in case of NULL
-//     stream"), and "The CUDA context associated with this stream must match
-//     that associated with function f" (cuLaunchKernelEx), so a function from
-//     another context is CUDA_ERROR_INVALID_HANDLE.
+//     module from another context is refused. The code is
+//     CUDA_ERROR_INVALID_VALUE, the one its return list names, for a module
+//     from another context and for one that does not exist alike.
+//   - cuLaunchKernel with a stream whose context is not the function's is
+//     CUDA_ERROR_INVALID_HANDLE. The header says it for cuLaunchKernelEx:
+//     "The CUDA context associated with this stream must match that
+//     associated with function f". With a null stream the launch is refused
+//     unless the function's context is current. That case is INFERRED: the
+//     only text on it ("the context to launch the kernel on will either be
+//     taken from the specified stream hStream or the current context in case
+//     of NULL stream") is written about context-less CUkernel handles, and is
+//     read here as saying a null stream means the current context's.
+//
+// Objects made from other objects - a graph captured on a stream, a clone of
+// a graph, an executable instantiated from one - belong to the context of the
+// object they were made from, whichever context is current. That is also
+// INFERRED, not documented. The nearest text is cuGraphInstantiate's, for
+// graphs instantiated for device launch: "The graph's nodes must reside on a
+// single context".
 //
 // What still needs a context is unchanged: a call the header documents
 // CUDA_ERROR_INVALID_CONTEXT for still needs one current and usable. A handle
 // that names nothing - never issued, or destroyed with its context - is
-// CUDA_ERROR_INVALID_VALUE for memory and graphs and CUDA_ERROR_INVALID_HANDLE
-// for streams, events and modules.
+// CUDA_ERROR_INVALID_VALUE for memory, graphs and module unloads, and
+// CUDA_ERROR_INVALID_HANDLE for streams, events and other module calls.
 
 // Device pointers are not host addresses. They are handed out from a range no
 // host allocation can occupy - above 48 bits, so dereferencing one on the host
@@ -849,10 +860,11 @@ CUresult cuModuleLoadData(CUmodule* module, const void* image) {
 }
 
 // "Unloads a module hmod from the current context": the one destroy the
-// header confines to the current context.
+// header confines to the current context. Its return list names
+// CUDA_ERROR_INVALID_VALUE and not CUDA_ERROR_INVALID_HANDLE.
 CUresult cuModuleUnload(CUmodule m) {
   CUresult r = retire(&g_modules, reinterpret_cast<unsigned long long>(m),
-                      CUDA_ERROR_INVALID_HANDLE, /*current_only=*/true);
+                      CUDA_ERROR_INVALID_VALUE, /*current_only=*/true);
   if (r != CUDA_SUCCESS) return r;
   rgpu_fake::count(rgpu_fake::kModule, -1);
   return CUDA_SUCCESS;
@@ -905,8 +917,8 @@ CUresult cuLaunchKernel(CUfunction f, unsigned int gx, unsigned int gy,
   r = stream_ok(stream, &sctx);
   if (r != CUDA_SUCCESS) return r;
   // The launch runs in the stream's context - the current one for a null
-  // stream - and the function has to be from that context (see the note on
-  // what lives in a context, above).
+  // stream, which is inferred - and the function has to be from that context
+  // (see the note on what lives in a context, above).
   if (fctx != sctx) return CUDA_ERROR_INVALID_HANDLE;
   if (gx == 0 || bx == 0) return CUDA_ERROR_INVALID_VALUE;
   // The client always packs arguments and hands them over through extra.
@@ -999,7 +1011,8 @@ CUresult cuStreamBeginCapture_v2(CUstream stream, CUstreamCaptureMode mode) {
   return CUDA_SUCCESS;
 }
 
-// The graph belongs to the stream's context, which is where it was captured.
+// The graph belongs to the stream's context, which is where it was captured
+// (inferred; see the note on what lives in a context).
 CUresult cuStreamEndCapture(CUstream stream, CUgraph* graph) {
   unsigned long long h = 0;
   {
@@ -1046,7 +1059,8 @@ CUresult cuStreamGetCaptureInfo_v2(CUstream stream,
   return CUDA_SUCCESS;
 }
 
-// An executable, and a clone, belong to the graph's context.
+// An executable, and a clone, belong to the graph's context (inferred; see
+// the note on what lives in a context).
 CUresult cuGraphInstantiateWithFlags(CUgraphExec* exec, CUgraph graph,
                                      unsigned long long) {
   unsigned long long h = 0;
