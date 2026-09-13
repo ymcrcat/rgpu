@@ -160,6 +160,21 @@ CUresult w_cuCtxPopCurrent_v2(CUcontext* pctx) {
   return r;
 }
 
+// The thread's current context is the top of its stack, so that is what is
+// answered - including a destroyed one, which CUDA leaves current and names,
+// though the serving thread has nothing current for it. The driver is still
+// asked, for its errors.
+CUresult w_cuCtxGetCurrent(CUcontext* pctx) {
+  ClientThreads* threads = t_threads;
+  ClientThread* t = threads ? threads->caller : nullptr;
+  if (!t || !pctx) return cuCtxGetCurrent(pctx);
+  CUcontext driver = nullptr;
+  CUresult r = cuCtxGetCurrent(&driver);
+  if (r != CUDA_SUCCESS) return r;
+  *pctx = t->stack.empty() ? nullptr : t->stack.back().ctx;
+  return CUDA_SUCCESS;
+}
+
 struct Wrapper {
   const char* name;
   void* fn;
@@ -169,6 +184,7 @@ const Wrapper kWrappers[] = {
     {"cuCtxSetCurrent", reinterpret_cast<void*>(&w_cuCtxSetCurrent)},
     {"cuCtxPushCurrent_v2", reinterpret_cast<void*>(&w_cuCtxPushCurrent_v2)},
     {"cuCtxPopCurrent_v2", reinterpret_cast<void*>(&w_cuCtxPopCurrent_v2)},
+    {"cuCtxGetCurrent", reinterpret_cast<void*>(&w_cuCtxGetCurrent)},
 };
 
 }  // namespace

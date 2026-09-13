@@ -122,8 +122,9 @@ CUresult client_thread_show(ClientThreads& threads, ClientThread& t);
 void client_thread_after(ClientThreads& threads, ClientThread& t,
                          uint32_t api_id, CUresult* result);
 
-// The interception of cuCtxSetCurrent, cuCtxPushCurrent_v2 and
-// cuCtxPopCurrent_v2, or nullptr for any other name. See driver_wrapper().
+// The interception of cuCtxSetCurrent, cuCtxPushCurrent_v2,
+// cuCtxPopCurrent_v2 and cuCtxGetCurrent, or nullptr for any other name. See
+// driver_wrapper().
 void* client_threads_wrapper(const char* name);
 
 // Told by the inventory's wrappers, after the driver call succeeded: a context

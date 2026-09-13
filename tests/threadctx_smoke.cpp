@@ -339,6 +339,7 @@ void context_destroyed_by_another_thread() {
   CUresult after_destroy = CUDA_SUCCESS;
   int landed_on = -1;
   CUcontext a_sees = reinterpret_cast<CUcontext>(0xbadull);
+  CUresult device_query = CUDA_SUCCESS;
   int reselected_on = -1;
   std::thread a([&] {
     CHECK(cuCtxCreate(&made, 0, 0));
@@ -350,6 +351,8 @@ void context_destroyed_by_another_thread() {
       landed_on = ordinal_of(d);
       cuMemFree(d);
     }
+    CUdevice device = -1;
+    device_query = cuCtxGetDevice(&device);
     CHECK(cuCtxGetCurrent(&a_sees));
     CHECK(cuCtxSetCurrent(p0));
     CUdeviceptr e = 0;
@@ -386,9 +389,15 @@ void context_destroyed_by_another_thread() {
                   (int)after_destroy, landed_on);
     fail_at(__FILE__, __LINE__, msg);
   }
-  EXPECT(a_sees != other && a_sees != p1,
+  EXPECT(device_query != CUDA_SUCCESS,
          "a thread whose context was destroyed was bound to another thread's "
          "context");
+  // CUDA leaves the destroyed context current, and names it. Here that is
+  // also the address the new context took, which is why binding is checked
+  // above by what a call does, not by the handle.
+  EXPECT(a_sees == made,
+         "cuCtxGetCurrent on a thread whose context was destroyed did not name "
+         "the destroyed context");
   EXPECT(reselected_on == 0,
          "a thread whose context was destroyed could not select another");
   CHECK(cuDevicePrimaryCtxRelease(0));
@@ -411,6 +420,7 @@ void recovery_after_destroy() {
   CUresult under_push = CUDA_ERROR_UNKNOWN, after_pop = CUDA_SUCCESS;
   int pushed_on = -1, set_on = -1;
   CUcontext at_end = reinterpret_cast<CUcontext>(0xbadull);
+  CUcontext destroyed_sees = nullptr;
   std::thread a([&] {
     CHECK(cuCtxCreate(&made, 0, 0));
     turns.advance(1);
@@ -423,6 +433,7 @@ void recovery_after_destroy() {
       CHECK(cuMemFree(d));
     }
     CHECK(cuCtxPopCurrent(&popped));
+    CHECK(cuCtxGetCurrent(&destroyed_sees));
     CUdeviceptr e = 0;
     after_pop = cuMemAlloc(&e, 64);
     if (after_pop == CUDA_SUCCESS) cuMemFree(e);
@@ -457,6 +468,9 @@ void recovery_after_destroy() {
   EXPECT(under_push == CUDA_SUCCESS && pushed_on == 0,
          "an allocation under the pushed context did not land on its device");
   EXPECT(popped == p0, "the pop did not return the pushed context");
+  EXPECT(destroyed_sees == made,
+         "after popping back to the destroyed context, cuCtxGetCurrent did not "
+         "name it, as CUDA does");
   if (after_pop != CUDA_ERROR_CONTEXT_IS_DESTROYED) {
     char msg[160];
     std::snprintf(msg, sizeof(msg),
