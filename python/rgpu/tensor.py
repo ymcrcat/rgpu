@@ -67,6 +67,17 @@ class RemoteTensor(torch.Tensor):
             cls, meta.shape, strides=meta.stride(), storage_offset=meta.storage_offset(),
             dtype=meta.dtype, device=torch.device("rgpu", 0), requires_grad=requires_grad)
         r._rgpu_meta = meta
+        # The conjugate and negative bits are metadata, like the strides, and
+        # _make_wrapper_subclass has no argument for them. They have to be on
+        # the wrapper and not only on the meta inside it: torch reads them
+        # above __torch_dispatch__ - conj() is a bit flip, and .real, .imag
+        # and resolve_conj() each branch on the bit before any op is
+        # dispatched - so a wrapper without them describes a different tensor
+        # from the one the server holds.
+        if meta.is_conj():
+            torch._C._set_conj(r, True)
+        if meta.is_neg():
+            torch._C._set_neg(r, True)
         return r
 
     def __init__(self, meta, requires_grad=False):

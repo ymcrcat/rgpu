@@ -6,10 +6,13 @@
 // wrong width sends the wrong number of bytes and would corrupt a graph rather
 // than fail it.
 
+#include <atomic>
 #include <cstdio>
 #include <cstring>
 
 #include <cudnn.h>
+
+#include "tests/fake_stats.h"
 
 namespace {
 
@@ -30,14 +33,20 @@ void* const kOpDescriptor = reinterpret_cast<void*>(
 
 extern "C" {
 
+// One handle per create, counted, so a test can see whether a session's
+// handles were given back.
 cudnnStatus_t cudnnCreate(cudnnHandle_t* h) {
   if (!h) return CUDNN_STATUS_BAD_PARAM;
-  *h = reinterpret_cast<cudnnHandle_t>(0xD00Dull);
+  static std::atomic<unsigned long long> next{1};
+  *h = reinterpret_cast<cudnnHandle_t>(0xD00D0000ull + next.fetch_add(1));
+  rgpu_fake::count(rgpu_fake::kCudnn, 1);
   return CUDNN_STATUS_SUCCESS;
 }
 
 cudnnStatus_t cudnnDestroy(cudnnHandle_t h) {
-  return h ? CUDNN_STATUS_SUCCESS : CUDNN_STATUS_BAD_PARAM;
+  if (!h) return CUDNN_STATUS_BAD_PARAM;
+  rgpu_fake::count(rgpu_fake::kCudnn, -1);
+  return CUDNN_STATUS_SUCCESS;
 }
 
 cudnnStatus_t cudnnSetStream(cudnnHandle_t h, cudaStream_t) {

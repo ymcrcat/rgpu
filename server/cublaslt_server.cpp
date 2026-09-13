@@ -15,6 +15,7 @@
 
 #include "common/cublaslt_ids.h"
 #include "common/wire.h"
+#include "server/inventory.h"
 
 namespace rgpu {
 namespace {
@@ -45,6 +46,15 @@ Fn lt_sym(const char* name) {
   void* fn = ::dlsym(lib, name);
   if (!fn) std::fprintf(stderr, "[rgpu-server] cuBLASLt has no %s\n", name);
   return reinterpret_cast<Fn>(fn);
+}
+
+// How a handle is given back when the session that made it never comes back.
+CUresult destroy_handle(uint64_t h) {
+  auto fn = lt_sym<cublasStatus_t (*)(cublasLtHandle_t)>("cublasLtDestroy");
+  if (!fn) return CUDA_ERROR_NOT_SUPPORTED;
+  return fn(reinterpret_cast<cublasLtHandle_t>(h)) == CUBLAS_STATUS_SUCCESS
+             ? CUDA_SUCCESS
+             : CUDA_ERROR_UNKNOWN;
 }
 
 void put_status(Buffer* rsp, cublasStatus_t s) {
@@ -141,10 +151,13 @@ bool dispatch_cublaslt(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       auto fn = lt_sym<cublasStatus_t (*)(cublasLtHandle_t*)>("cublasLtCreate");
       if (!fn) { put_status(rsp, CUBLAS_STATUS_NOT_INITIALIZED); return true; }
       cublasLtHandle_t h = nullptr;
+      const InventoryStamp made = inventory_stamp();
       cublasStatus_t s = fn(&h);
       put_status(rsp, s);
       if (s == CUBLAS_STATUS_SUCCESS) {
         rsp->put<uint64_t>(reinterpret_cast<uint64_t>(h));
+        inventory_note_handle(reinterpret_cast<uint64_t>(h), made, "cuBLASLt",
+                              &destroy_handle);
       }
       return true;
     }
@@ -152,7 +165,11 @@ bool dispatch_cublaslt(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       auto fn = lt_sym<cublasStatus_t (*)(cublasLtHandle_t)>("cublasLtDestroy");
       auto h = static_cast<cublasLtHandle_t>(get_ptr(req, &ok));
       if (!fn || !ok) { put_status(rsp, CUBLAS_STATUS_INVALID_VALUE); return true; }
-      put_status(rsp, fn(h));
+      cublasStatus_t s = fn(h);
+      if (s == CUBLAS_STATUS_SUCCESS) {
+        inventory_forget_handle(reinterpret_cast<uint64_t>(h));
+      }
+      put_status(rsp, s);
       return true;
     }
     case API_cublasLtGetVersion:

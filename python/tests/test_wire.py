@@ -56,6 +56,30 @@ def test_unsupported_values_raise_where_encoded(value):
         wire.encode(value)
 
 
+def test_a_list_can_be_built_from_its_elements_encoded_one_at_a_time():
+    """The client encodes each queued message on its own, so an unsendable
+    argument is caught at the call - and then joins them into the batch frame,
+    which has to come out byte for byte the same as encoding the whole list."""
+    values = [[1, wire.SEED, 7], [2, wire.DOWNLOAD, wire.Ref(3)], [3, wire.SYNC]]
+    parts = [wire.encode_element(v) for v in values]
+    assert wire.encode_elements(parts) == wire.encode(values)
+    assert wire.encode_elements([]) == wire.encode([])
+
+
+def test_an_element_that_cannot_be_encoded_raises_on_its_own():
+    with pytest.raises(wire.EncodeError):
+        wire.encode_element([1, wire.SEED, object()])
+
+
+def test_an_element_is_measured_for_depth_as_part_of_its_list():
+    deep = "x"
+    for _ in range(wire.MAX_DEPTH):
+        deep = [deep]
+    with pytest.raises(wire.EncodeError):
+        wire.encode_element(deep)          # one level deeper inside a list
+    assert wire.encode_elements([wire.encode_element(deep[0])]) == wire.encode([deep[0]])
+
+
 @pytest.mark.parametrize("data", [
     b"Q",                                     # unknown tag
     b"I\x01",                                 # truncated

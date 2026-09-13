@@ -173,6 +173,11 @@ report itself where it happened rather than at the next synchronization.
 | `RGPU_VERBOSE` | log every forwarded call |
 | `RGPU_BATCH` | `0` to make every call a round trip, for debugging |
 | `RGPU_CUBLAS`, `RGPU_CUBLASLT` | paths the server opens for the real maths libraries |
+| `RGPU_SESSION_GRACE` | seconds the server keeps a session whose connection dropped, default `120` |
+| `RGPU_MAX_SESSIONS` | server: most sessions kept at once, those waiting out their grace included, default `64` |
+| `RGPU_RECONNECT_SECONDS` | seconds the client keeps trying to reach the server again, default `60` |
+| `RGPU_MAX_CLIENT_THREADS` | server: most client threads a session may have live at once, default `4096` |
+| `RGPU_MAX_CONTEXT_STACK` | server: deepest context stack a client thread may push, default `64` |
 
 ## How the code is organized
 
@@ -215,10 +220,50 @@ CUDA libraries by absolute path. Use `LD_PRELOAD`, or install without the stock
 `nvidia-cuda-runtime` package.
 
 Managed memory and zero-copy host mapping cannot work across a network and are
-refused explicitly. Kernel launches with `cuLaunchKernelEx` launch
-configurations are not marshalled yet. A dropped connection loses all
-server-side GPU state, so the client fails subsequent calls rather than
-silently reconnecting to an empty GPU.
+refused explicitly. So are the deprecated `cuCtxAttach` and the green-context
+calls (`cuGreenCtx*` and `cuCtxFromGreenCtx`), which would hand a client a
+context the server cannot account for; `cuCtxDetach` works, and destroys the
+context as `cuCtxDestroy` does. Kernel launches with `cuLaunchKernelEx` launch
+configurations are not marshalled yet, and `cuLaunchCooperativeKernel` is
+refused: the launch message has no way to say "cooperative", and running it as
+an ordinary launch would drop the guarantees the kernel was written around.
+
+A dropped connection does not lose the GPU state. The server keeps the session
+for `RGPU_SESSION_GRACE` seconds, and the client reconnects, sends again what
+the server never acknowledged, and carries on. A call that still gets no reply
+after that one retry fails with `CUDA_ERROR_UNKNOWN` and is then treated as
+answered: it is never sent again, so it ran at most once - whether it ran at
+all depends on whether it had reached the server - and calls after it carry on
+normally once the link is back. If the client does not get back
+in time, the session expires and the server releases what it held. The same
+happens if the server restarts. The client is then told its session is gone:
+it says so, sends nothing more, and every later call fails. It never carries on
+against an empty GPU. Expiry ends any stream capture the session left open, releasing the graph it
+yields, and releases the allocations, contexts, modules, loaded libraries
+(`cuLibraryLoadData`, `cuLibraryLoadFromFile`), streams, events, graphs and
+maths-library handles a session made. It does not track `cuMemAddressReserve`
+ranges, `cuGraphConditionalHandleCreate` handles, user-object retains, cuDNN
+descriptors minted on the client, or texture references (`cuTexRefCreate`,
+deprecated and needing a current context). Those stay until the server exits.
+
+A server keeps at most `RGPU_MAX_SESSIONS` sessions, counting those waiting
+out their grace period. Past that a new client is refused at the handshake: it
+says the server has no room, and every call fails. A client coming back to a
+session the server still has is never refused.
+
+`cuDevicePrimaryCtxReset` destroys what every session on the server holds in
+that context, so the server refuses it with `CUDA_ERROR_NOT_SUPPORTED` while
+any other session is live, including one waiting out its grace period.
+
+Each client thread keeps its own current context, context stack and stream
+capture mode on the server, but calls are still served one at a time, not in
+parallel. A session may have at most `RGPU_MAX_CLIENT_THREADS` live client
+threads, and a thread may push at most `RGPU_MAX_CONTEXT_STACK` contexts. Past
+either limit the call is refused. A call sent without a reply that fails has
+its error handed to the same thread's next call that replies. If that thread
+never makes one, the error shows up only in the server log. PyTorch's autograd
+threads are real threads, but they also allocate and call cuBLAS, which reply,
+so in practice their errors still arrive.
 
 ## The macOS path: `rgpu` as a PyTorch device
 

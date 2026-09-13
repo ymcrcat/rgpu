@@ -17,6 +17,10 @@
 // from its own header is covered too: a wrong size truncates the image and the
 // load fails.
 //
+// It also pins down what the launch path refuses: a cooperative launch, whose
+// guarantees nothing here can carry, must come back as an error rather than as
+// an ordinary launch that looks like it worked.
+//
 //   LD_LIBRARY_PATH=build RGPU_SERVER=127.0.0.1:9713 ./launch_smoke
 
 #include <cstdio>
@@ -116,10 +120,76 @@ int main() {
   void* bad_args[] = {&a, &b, &c, &wrong};
   const CUresult launch_rc =
       cuLaunchKernel(fn, 8, 1, 1, 256, 1, 1, 0, nullptr, bad_args, nullptr);
+
+  // A waiting error must not displace an error of the call's own. This lookup
+  // fails on its own account, so that is what it has to report, and the
+  // launch's failure stays where it is for the next call that succeeds.
+  // Handing the older one over here would report the wrong failure and lose
+  // the real one, which costs both errors to save neither.
+  CUfunction missing = nullptr;
+  const CUresult own = cuModuleGetFunction(&missing, mod, "no_such_kernel");
+  if (own != CUDA_ERROR_NOT_FOUND) {
+    std::fprintf(stderr, "FAIL: a lookup that fails on its own account "
+                         "reported %d, expected CUDA_ERROR_NOT_FOUND (%d)\n",
+                 own, CUDA_ERROR_NOT_FOUND);
+    g_failures++;
+  }
+
   const CUresult sync_rc = cuCtxSynchronize();
   if (launch_rc == CUDA_SUCCESS && sync_rc == CUDA_SUCCESS) {
     std::fprintf(stderr, "FAIL: a launch with wrong arguments was never "
                          "reported, so the checks above prove nothing\n");
+    g_failures++;
+  }
+
+  // A cooperative launch is refused, not quietly turned into an ordinary one.
+  // Nothing on the wire says "cooperative", so forwarding it would run a
+  // kernel written around a grid-wide barrier without that barrier, and it
+  // would hang or produce wrong numbers rather than fail.
+  const CUresult coop =
+      cuLaunchCooperativeKernel(fn, 8, 1, 1, 256, 1, 1, 0, nullptr, args);
+  if (coop != CUDA_ERROR_NOT_SUPPORTED) {
+    std::fprintf(stderr, "FAIL: cuLaunchCooperativeKernel -> %d, expected "
+                         "CUDA_ERROR_NOT_SUPPORTED (%d)\n",
+                 coop, CUDA_ERROR_NOT_SUPPORTED);
+    g_failures++;
+  }
+
+  // And refused through cuGetProcAddress, which is how cudart reaches driver
+  // functions from CUDA 11.3 on. Refusing the exported symbol but handing back
+  // a working pointer here would refuse nothing that matters.
+  void* resolved = nullptr;
+  CUdriverProcAddressQueryResult status = CU_GET_PROC_ADDRESS_SYMBOL_NOT_FOUND;
+  CHECK(cuGetProcAddress("cuLaunchCooperativeKernel", &resolved, CUDA_VERSION,
+                         CU_GET_PROC_ADDRESS_DEFAULT, &status));
+  if (!resolved || status != CU_GET_PROC_ADDRESS_SUCCESS) {
+    std::fprintf(stderr, "FAIL: cuGetProcAddress did not resolve "
+                         "cuLaunchCooperativeKernel (status %d)\n", status);
+    g_failures++;
+  } else {
+    using CoopFn = CUresult (*)(CUfunction, unsigned int, unsigned int,
+                                unsigned int, unsigned int, unsigned int,
+                                unsigned int, unsigned int, CUstream, void**);
+    const CUresult via_table =
+        reinterpret_cast<CoopFn>(resolved)(fn, 8, 1, 1, 256, 1, 1, 0, nullptr,
+                                           args);
+    if (via_table != CUDA_ERROR_NOT_SUPPORTED) {
+      std::fprintf(stderr, "FAIL: cuLaunchCooperativeKernel through "
+                           "cuGetProcAddress -> %d, expected %d\n",
+                   via_table, CUDA_ERROR_NOT_SUPPORTED);
+      g_failures++;
+    }
+  }
+
+  // The multi-device form is refused for the same reason, before it looks at
+  // anything in the launch parameters.
+  CUDA_LAUNCH_PARAMS one{};
+  one.function = fn;
+  const CUresult coop_multi = cuLaunchCooperativeKernelMultiDevice(&one, 1, 0);
+  if (coop_multi != CUDA_ERROR_NOT_SUPPORTED) {
+    std::fprintf(stderr, "FAIL: cuLaunchCooperativeKernelMultiDevice -> %d, "
+                         "expected CUDA_ERROR_NOT_SUPPORTED (%d)\n",
+                 coop_multi, CUDA_ERROR_NOT_SUPPORTED);
     g_failures++;
   }
 

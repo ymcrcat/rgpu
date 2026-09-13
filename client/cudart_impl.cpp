@@ -13,6 +13,7 @@
 // Definitions here are strong and override the weak, logging ones in
 // client/generated/cudart_stubs.cpp.
 
+#include <atomic>
 #include <cstring>
 #include <map>
 #include <mutex>
@@ -25,6 +26,12 @@
 #include "client/rpc.h"
 
 namespace {
+
+// Every global below that a CUDA call can reach is allocated and never
+// destroyed. Threads keep calling in while the process exits - a thread's
+// late thread-local destructors free device memory, say - and a mutex or
+// container that static destruction has already taken down is undefined
+// behaviour (on libc++ a destroyed mutex throws, from places that cannot).
 
 // ---------------------------------------------------------------------------
 // Error state
@@ -74,12 +81,23 @@ cudaError_t record_cu(CUresult r) { return record(from_cu(r)); }
 // The runtime binds a primary context to each device lazily on first use and
 // keeps a current device per thread. We reproduce that here.
 
-std::mutex g_ctx_mu;
-std::map<int, CUcontext> g_primary;  // device ordinal -> retained context
+auto& g_ctx_mu = *new std::mutex();
+// device ordinal -> retained context
+auto& g_primary = *new std::map<int, CUcontext>();
 bool g_inited = false;
 
 thread_local int t_device = 0;
-thread_local bool t_ctx_set = false;
+
+// Whether this thread's context is already current, so a runtime call need
+// not send cuCtxSetCurrent first. Every request names the client thread that
+// sent it, so that the server can keep each thread's current context apart;
+// then nothing another thread does can change this one's - except releasing
+// the context itself, which cudaDeviceReset does for every thread at once.
+// So instead of a flag, a generation: this thread's selection holds while it
+// matches the process's, and a reset moves the process's on. Zero never
+// matches.
+std::atomic<uint64_t> g_ctx_gen{1};
+thread_local uint64_t t_ctx_gen = 0;
 
 CUresult ensure_init() {
   std::lock_guard<std::mutex> lk(g_ctx_mu);
@@ -93,11 +111,18 @@ CUresult ensure_init() {
 CUresult ensure_context() {
   CUresult r = ensure_init();
   if (r != CUDA_SUCCESS) return r;
-  if (t_ctx_set) return CUDA_SUCCESS;
+  if (t_ctx_gen == g_ctx_gen.load(std::memory_order_relaxed)) {
+    return CUDA_SUCCESS;
+  }
 
   CUcontext ctx = nullptr;
+  uint64_t gen = 0;
   {
     std::lock_guard<std::mutex> lk(g_ctx_mu);
+    // Read with the context it describes: a reset that lands after this
+    // leaves the selection below already stale, and the next call selects
+    // again.
+    gen = g_ctx_gen.load(std::memory_order_relaxed);
     auto it = g_primary.find(t_device);
     if (it != g_primary.end()) {
       ctx = it->second;
@@ -111,7 +136,7 @@ CUresult ensure_context() {
     }
   }
   r = cuCtxSetCurrent(ctx);
-  if (r == CUDA_SUCCESS) t_ctx_set = true;
+  if (r == CUDA_SUCCESS) t_ctx_gen = gen;
   return r;
 }
 
@@ -123,8 +148,8 @@ CUresult ensure_context() {
 // host or device. With remoting we cannot probe a device pointer, since it is
 // an address in the server's process, so we remember what we handed out.
 
-std::mutex g_alloc_mu;
-std::map<CUdeviceptr, size_t> g_device_allocs;
+auto& g_alloc_mu = *new std::mutex();
+auto& g_device_allocs = *new std::map<CUdeviceptr, size_t>();
 
 void note_alloc(CUdeviceptr p, size_t n) {
   std::lock_guard<std::mutex> lk(g_alloc_mu);
@@ -212,10 +237,12 @@ struct Kernel {
   CUfunction fn = nullptr;
 };
 
-std::mutex g_reg_mu;
-std::vector<Module*> g_modules;
-std::map<const void*, Kernel> g_kernels;   // host function pointer -> kernel
-std::map<const void*, std::string> g_vars;  // host variable -> device symbol
+auto& g_reg_mu = *new std::mutex();
+auto& g_modules = *new std::vector<Module*>();
+// host function pointer -> kernel
+auto& g_kernels = *new std::map<const void*, Kernel>();
+// host variable -> device symbol
+auto& g_vars = *new std::map<const void*, std::string>();
 
 // Loads a module the first time one of its kernels is launched.
 CUresult ensure_module(Module* m) {
@@ -372,7 +399,7 @@ cudaError_t cudaSetDevice(int device) {
   if (device < 0 || device >= count) return record(cudaErrorInvalidDevice);
   if (device != t_device) {
     t_device = device;
-    t_ctx_set = false;  // the new device needs its own context made current
+    t_ctx_gen = 0;  // the new device needs its own context made current
   }
   return record_cu(ensure_context());
 }
@@ -467,8 +494,10 @@ cudaError_t cudaDeviceSynchronize(void) {
 }
 
 cudaError_t cudaDeviceReset(void) {
-  // Releasing the primary contexts is the observable part; the server drops
-  // the rest when the connection closes.
+  // Releasing the primary contexts is the observable part; the rest of what
+  // this process took stays on the server until its session expires, which is
+  // when the server releases what a session holds - a connection closing does
+  // not, because the session outlives it.
   std::lock_guard<std::mutex> lk(g_ctx_mu);
   for (auto& kv : g_primary) {
     CUdevice dev;
@@ -477,7 +506,9 @@ cudaError_t cudaDeviceReset(void) {
     }
   }
   g_primary.clear();
-  t_ctx_set = false;
+  // Every thread's selection named a context just released, not only this
+  // thread's.
+  g_ctx_gen.fetch_add(1, std::memory_order_relaxed);
   return cudaSuccess;
 }
 

@@ -150,7 +150,9 @@ find_library(CUDA_DRIVER_LIB NAMES cuda libcuda.so.1
         /usr/local/cuda/lib64/stubs /usr/local/cuda/lib64)
 
 if(CUDA_DRIVER_LIB)
-  set(SERVER_SOURCES server/main.cpp ${GEN_SERVER} ${GEN_NAMES})
+  set(SERVER_SOURCES server/main.cpp server/inventory.cpp
+      server/client_threads.cpp ${GEN_SERVER}
+      ${GEN_NAMES})
   if(EXISTS ${CUBLAS_INCLUDE_DIR}/cublas_v2.h)
     list(APPEND SERVER_SOURCES server/cublas_server.cpp)
   endif()
@@ -186,6 +188,17 @@ enable_testing()
 add_executable(test_wire tests/test_wire.cpp)
 add_test(NAME wire COMMAND test_wire)
 
+# The fake driver on its own, driven from several OS threads on two devices.
+# Everything else reaches the fake through the server, where one thread serves
+# a session, so this is the only test that can see whether the fake keeps
+# contexts apart the way a real driver does.
+add_executable(test_fake_cuda tests/test_fake_cuda.cpp tests/fake_cuda.cpp
+  tests/fake_stats.cpp tests/generated/fake_driver.cpp)
+target_link_libraries(test_fake_cuda PRIVATE Threads::Threads)
+target_compile_options(test_fake_cuda PRIVATE -Wno-deprecated-declarations)
+add_test(NAME fake_cuda COMMAND test_fake_cuda)
+set_tests_properties(fake_cuda PROPERTIES ENVIRONMENT RGPU_FAKE_DEVICES=2)
+
 # The GPU-free end-to-end test: client stubs and server dispatch over a real
 # socket, with a fake driver underneath.
 add_test(NAME remoting
@@ -199,6 +212,9 @@ target_link_libraries(rpc_smoke PRIVATE rgpu_client)
 # the extra[] handoff.
 add_executable(launch_smoke tests/launch_smoke.cpp)
 target_link_libraries(launch_smoke PRIVATE rgpu_client)
+# It calls the deprecated multi-device cooperative launch on purpose, to check
+# that the shim refuses it.
+target_compile_options(launch_smoke PRIVATE -Wno-deprecated-declarations)
 
 # Checks that cuBLAS and cuBLASLt arguments survive the wire. Needs both shims
 # and the fake libraries in the test server.
@@ -233,9 +249,58 @@ endif()
 add_executable(hostile_smoke tests/hostile_smoke.cpp)
 target_link_libraries(hostile_smoke PRIVATE rgpu_client)
 
+# Checks that every request names the client thread that issued it. Its wire
+# cases bring their own scripted server; its runtime case needs the fake one.
+add_executable(thread_id_smoke tests/thread_id_smoke.cpp)
+target_link_libraries(thread_id_smoke PRIVATE rgpu_cudart rgpu_client
+                      Threads::Threads)
+add_test(NAME thread_id COMMAND thread_id_smoke wire)
+
+# Checks that each client thread keeps its own CUDA context on the server.
+# Needs the fake server with two devices; run from run_smoke.sh.
+add_executable(threadctx_smoke tests/threadctx_smoke.cpp)
+target_link_libraries(threadctx_smoke PRIVATE rgpu_cudart rgpu_client
+                      Threads::Threads)
+# It calls cuCtxAttach and cuCtxDetach, which the header marks deprecated.
+target_compile_options(threadctx_smoke PRIVATE -Wno-deprecated-declarations)
+
 # Checks that a dropped connection does not lose the session.
 add_executable(reconnect_smoke tests/reconnect_smoke.cpp)
 target_link_libraries(reconnect_smoke PRIVATE rgpu_client)
+
+# Checks that a request replayed after a reconnect never runs twice, even when
+# it was still running as the client came back. Speaks the protocol itself;
+# needs the fake server with a slow call, so it is run from run_smoke.sh.
+add_executable(replay_smoke tests/replay_smoke.cpp)
+target_link_libraries(replay_smoke PRIVATE rgpu_client)
+
+# Checks that request ids wrapping past 0xFFFFFFFF break nothing, a reconnect
+# across the wrap included. Needs a fake server that breaks the connection;
+# run from run_smoke.sh.
+add_executable(wrap_smoke tests/wrap_smoke.cpp)
+target_link_libraries(wrap_smoke PRIVATE rgpu_client)
+
+# Checks that a session which never comes back gives its GPU resources up, and
+# that a session which is still there keeps its own. Re-executes itself to get
+# a second client process, so it needs nothing from the shell but a server.
+add_executable(expiry_smoke tests/expiry_smoke.cpp)
+target_link_libraries(expiry_smoke PRIVATE rgpu_client)
+target_compile_options(expiry_smoke PRIVATE -Wno-deprecated-declarations)
+if(TARGET rgpu_cublas)
+  target_link_libraries(expiry_smoke PRIVATE rgpu_cublas)
+  target_include_directories(expiry_smoke PRIVATE ${CUBLAS_INCLUDE_DIR})
+  target_compile_definitions(expiry_smoke PRIVATE RGPU_EXPIRY_CUBLAS)
+endif()
+if(TARGET rgpu_cublaslt)
+  target_link_libraries(expiry_smoke PRIVATE rgpu_cublaslt)
+  target_include_directories(expiry_smoke PRIVATE ${CUBLAS_INCLUDE_DIR})
+  target_compile_definitions(expiry_smoke PRIVATE RGPU_EXPIRY_CUBLASLT)
+endif()
+if(TARGET rgpu_cudnn)
+  target_link_libraries(expiry_smoke PRIVATE rgpu_cudnn)
+  target_include_directories(expiry_smoke PRIVATE ${CUDNN_INCLUDE_DIR})
+  target_compile_definitions(expiry_smoke PRIVATE RGPU_EXPIRY_CUDNN)
+endif()
 
 # Checks the CUDA graph path, which is what torch.compile's reduce-overhead
 # mode uses. Linked against our runtime shim, since that is where the
@@ -248,10 +313,13 @@ target_link_libraries(graph_smoke PRIVATE rgpu_cudart rgpu_client)
 # real server dispatch, fake bottom layer.
 add_executable(rgpu_server_fake
   server/main.cpp
+  server/inventory.cpp
+  server/client_threads.cpp
   ${GEN_SERVER}
   ${GEN_NAMES}
   tests/generated/fake_driver.cpp
   tests/fake_cuda.cpp
+  tests/fake_stats.cpp
   ${FAKE_CUBLAS_SOURCES}
 )
 if(FAKE_CUBLAS_SOURCES)

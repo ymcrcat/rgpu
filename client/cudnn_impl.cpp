@@ -32,6 +32,12 @@
 
 namespace {
 
+// Every global below that a CUDA call can reach is allocated and never
+// destroyed. Threads keep calling in while the process exits - a thread's
+// late thread-local destructors free device memory, say - and a mutex or
+// container that static destruction has already taken down is undefined
+// behaviour (on libc++ a destroyed mutex throws, from places that cannot).
+
 // Width of one element of an attribute array. Getting this wrong would send
 // the wrong number of bytes, so the unknown case refuses rather than guesses.
 size_t element_size(cudnnBackendAttributeType_t t) {
@@ -101,8 +107,8 @@ void put_ptr(rgpu::Buffer& b, const void* p) {
 // whose width follows from it: double for a double tensor, float otherwise.
 // Reading the wrong width off the caller's stack is the sort of bug that only
 // shows up as slightly wrong numbers, so this is worth tracking.
-std::mutex g_type_mu;
-std::unordered_map<const void*, int> g_tensor_type;
+auto& g_type_mu = *new std::mutex();
+auto& g_tensor_type = *new std::unordered_map<const void*, int>();
 
 void remember_type(const void* desc, int type) {
   std::lock_guard<std::mutex> lock(g_type_mu);

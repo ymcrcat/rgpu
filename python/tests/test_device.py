@@ -154,3 +154,14 @@ def test_an_inplace_reshape_raises_and_leaves_the_shape_unchanged():
     with pytest.raises(NotImplementedError):
         x.unsqueeze_(0)
     assert x.shape == (4,)
+
+
+def test_an_unsupported_argument_raises_at_the_call_and_spares_the_queue():
+    """The wire carries a fixed set of types; anything else raises on the
+    client, at the call that passed it. It must not be queued first, or the
+    batch it is sitting in poisons every later flush in the process."""
+    r = torch.tensor([1.0, 2.0]).to("rgpu")
+    with pytest.raises(TypeError, match="Generator"):
+        torch.normal(0.0, 1.0, size=(3,), device="rgpu", generator=torch.Generator())
+    assert torch.equal(r.cpu(), torch.tensor([1.0, 2.0]))
+    assert torch.equal(r.cpu(), torch.tensor([1.0, 2.0]))

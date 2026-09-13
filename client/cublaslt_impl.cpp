@@ -33,13 +33,19 @@
 
 namespace {
 
+// Every global below that a CUDA call can reach is allocated and never
+// destroyed. Threads keep calling in while the process exits - a thread's
+// late thread-local destructors free device memory, say - and a mutex or
+// container that static destruction has already taken down is undefined
+// behaviour (on libc++ a destroyed mutex throws, from places that cannot).
+
 struct DescState {
   cudaDataType_t scale_type = CUDA_R_32F;
   bool device_pointers = false;  // CUBLASLT_POINTER_MODE_DEVICE
 };
 
-std::mutex g_desc_mu;
-std::map<cublasLtMatmulDesc_t, DescState> g_descs;
+auto& g_desc_mu = *new std::mutex();
+auto& g_descs = *new std::map<cublasLtMatmulDesc_t, DescState>();
 
 DescState desc_state(cublasLtMatmulDesc_t d) {
   std::lock_guard<std::mutex> lk(g_desc_mu);

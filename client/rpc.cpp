@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
@@ -19,22 +20,39 @@
 #include <string>
 
 #include "common/generated/api_ids.h"
+#include "common/internal_ids.h"
 #include "common/net.h"
 
 namespace rgpu {
 namespace {
 
-std::mutex g_mu;          // guards the socket, the counter and the send queue
+// Every global below that a CUDA call can reach is allocated and never
+// destroyed. Threads keep calling in while the process exits - a thread's
+// late thread-local destructors free device memory, say - and a mutex or
+// container that static destruction has already taken down is undefined
+// behaviour (on libc++ a destroyed mutex throws, from places that cannot).
+
+auto& g_mu = *new std::mutex();  // the socket, the counter and the send queue
 int g_fd = -1;
-uint32_t g_next_req = 1;
+uint32_t g_next_req = 0;       // the next request id; see mint_req_id_locked
+bool g_req_ids_started = false;
 bool g_connect_failed = false;
-uint32_t g_last_reply = 0;   // last request id we have seen a reply for
+// The last request id we have seen a reply for, or given up waiting for
+// (abandon_call_locked); 0: neither.
+uint32_t g_last_reply = 0;
 bool g_had_session = false;  // we have talked to this server before
+// The server has said it no longer has our session: it expired while we were
+// away, or the server restarted. Final. Every pointer and handle the
+// application holds named something in that session, so nothing is sent
+// again - not the calls the server never acknowledged, which would run against
+// addresses another session may since have been given, and not new calls,
+// which would run against state that is not there.
+bool g_session_gone = false;
 
 // Frames queued by call_async and not yet written. Holding them lets a run of
 // launches leave the client in one write instead of one per call, and lets
 // none of them wait for a reply.
-std::vector<uint8_t> g_queued;
+auto& g_queued = *new std::vector<uint8_t>();
 
 // What the remoting layer actually cost, printed at exit when RGPU_STATS is
 // set. Round trips are the number that matters: on a real network each one
@@ -115,6 +133,64 @@ SessionId make_session_id() {
 
 const SessionId g_session = make_session_id();
 
+// --- client threads ---------------------------------------------------------
+//
+// Every request says which client thread issued it, so that the server can
+// keep CUDA's per-thread state - the current context above all - for each one.
+// The id is ours rather than the OS's: minted from 1 in the order threads first
+// call, not reused (a recycled OS tid would inherit a dead thread's context),
+// and the same size on every platform.
+
+std::atomic<uint32_t> g_next_thread{1};
+thread_local uint32_t t_thread_id = 0;  // 0 until this thread first calls
+// Set once this thread's id has been retired. It can still call after that:
+// see queue_frame_locked.
+thread_local bool t_retired = false;
+
+// Ids of threads that have exited, for the server to forget. Its own lock, so
+// a thread can exit without waiting behind a call that is blocked on the
+// network, and a flag so that the common case - nothing to report - costs a
+// load rather than a lock.
+auto& g_retired_mu = *new std::mutex();
+auto& g_retired = *new std::vector<uint32_t>();
+std::atomic<bool> g_have_retired{false};
+
+// Gives the thread's id back when the thread exits. Only records it: no I/O
+// in a thread-exit path, which can run while the process is being torn down.
+struct ThreadRetirer {
+  ~ThreadRetirer() {
+    std::lock_guard<std::mutex> lk(g_retired_mu);
+    g_retired.push_back(t_thread_id);
+    g_have_retired.store(true, std::memory_order_relaxed);
+    t_retired = true;
+  }
+};
+
+// ponytail: the counter is 32 bits and is not reclaimed. After about 4.3
+// billion threads that ever called, it wraps and hands out ids that live
+// threads - the main thread's 1 among them - still hold, and two threads would
+// share one context on the server. Skipping zero only keeps "no thread"
+// meaningful; it does not make the wrap safe. No process gets near it.
+__attribute__((noinline)) uint32_t mint_thread_id() {
+  uint32_t id;
+  do {
+    id = g_next_thread.fetch_add(1, std::memory_order_relaxed);
+  } while (id == 0);
+  t_thread_id = id;
+  // Constructed here, on first use, so its destructor runs when this thread
+  // exits and threads that never call cost nothing.
+  static thread_local ThreadRetirer retirer;
+  (void)retirer;
+  return id;
+}
+
+// The calling thread's id. A plain thread-local read on every call after the
+// first.
+inline uint32_t this_thread_id() {
+  const uint32_t id = t_thread_id;
+  return id ? id : mint_thread_id();
+}
+
 // Frames written but not yet known to have reached the server. A reply
 // acknowledges every frame up to its own id, because the server works through
 // them in order, so this holds the batch since the last reply and nothing
@@ -123,7 +199,7 @@ struct SentFrame {
   uint32_t req_id;
   std::vector<uint8_t> bytes;
 };
-std::deque<SentFrame> g_unacked;
+auto& g_unacked = *new std::deque<SentFrame>();
 size_t g_unacked_bytes = 0;
 
 // A module image is megabytes, and holding several of them to replay would
@@ -132,10 +208,52 @@ size_t g_unacked_bytes = 0;
 constexpr size_t kMaxUnackedBytes = 64u << 20;
 bool g_replay_possible = true;
 
+// Request ids wrap, so "up to" is req_at_or_before's order (common/wire.h),
+// not <=. `up_to` 0 is no request, and forgets nothing.
 void forget_acked_locked(uint32_t up_to) {
-  while (!g_unacked.empty() && g_unacked.front().req_id <= up_to) {
+  while (!g_unacked.empty() &&
+         req_at_or_before(g_unacked.front().req_id, up_to)) {
     g_unacked_bytes -= g_unacked.front().bytes.size();
     g_unacked.pop_front();
+  }
+}
+
+// A call that is returning an error because its reply never came: the
+// connection broke, and broke again on the retry, or the stream desynced.
+// Whether it ran is not known. It may have reached the server and run, its
+// reply lost with the connection, or never have got there.
+//
+// Either way it is final. The application has been told it failed, and from
+// here the call is treated exactly like one that was answered with that
+// failure:
+//
+//   - It is not sent again. Sent on the next connection it would run a call
+//     the application was told failed, behind the application's back and
+//     after calls it has made since - a free the application will retry, a
+//     launch it will redo. So the call runs at most once, and only if it had
+//     reached the server by the time the retry failed; the server's
+//     at-most-once check (server/main.cpp) sees to the rest.
+//   - Its reply is no longer wanted. The next handshake names it as the last
+//     reply received, so a server that did run it does not send its kept
+//     reply to a client that is waiting for another call's - which is what
+//     used to fail every call after this one with a mismatched response id
+//     for as long as the process lived.
+//
+// Frames queued ahead of it - calls sent without a reply, which the
+// application was told succeeded - are not given up with it. They stay in the
+// replay buffer and are sent again as usual. Nothing can be queued behind it:
+// the lock has been held since it was queued.
+void abandon_call_locked(uint32_t req_id) {
+  if (!g_unacked.empty() && g_unacked.back().req_id == req_id) {
+    g_unacked_bytes -= g_unacked.back().bytes.size();
+    g_unacked.pop_back();
+  }
+  g_last_reply = req_id;
+  // Every path here has already dropped the connection. If one ever did not,
+  // a late reply to this call could still arrive on it.
+  if (g_fd >= 0) {
+    ::close(g_fd);
+    g_fd = -1;
   }
 }
 
@@ -150,7 +268,7 @@ bool batching() {
 bool ensure_connected_locked() {
   arm_stats_report();
   if (g_fd >= 0) return true;
-  if (g_connect_failed) return false;
+  if (g_session_gone || g_connect_failed) return false;
 
   std::string spec = std::getenv("RGPU_SERVER") ? std::getenv("RGPU_SERVER")
                                                 : "127.0.0.1:9713";
@@ -199,11 +317,47 @@ bool ensure_connected_locked() {
   hello.session_hi = g_session.hi;
   hello.session_lo = g_session.lo;
   hello.last_req_id = g_last_reply;
+  // Said even when no reply has come yet: a server that no longer has the
+  // session then says it is gone, rather than starting an empty one for a
+  // client whose first call never got its answer.
+  hello.flags = g_had_session ? kHelloResuming : 0u;
   HandshakeReply reply{};
-  if (!write_exact(fd, &hello, sizeof(hello)) ||
-      !read_exact(fd, &reply, sizeof(reply)) ||
-      reply.magic != kMagicHello) {
-    log("handshake with %s failed", spec.c_str());
+  const bool answered = write_exact(fd, &hello, sizeof(hello)) &&
+                        read_exact(fd, &reply, sizeof(reply));
+  if (answered && reply.magic == kMagicBusy) {
+    log("the server at %s refused to start a session: it already has as many "
+        "as it allows (RGPU_MAX_SESSIONS on the server). Sessions whose "
+        "clients have gone are kept for the server's grace period "
+        "(RGPU_SESSION_GRACE) before they make room",
+        spec.c_str());
+    ::close(fd);
+    g_connect_failed = true;
+    return false;
+  }
+  if (!answered || reply.magic != kMagicHello) {
+    if (!answered) {
+      // Two causes, and this client cannot tell them apart: nothing was
+      // listening behind whatever accepted - an ssh tunnel accepts locally
+      // and closes as soon as it finds the far end down, which is the usual
+      // one - or the server is older than protocol 3, which closes on a
+      // version it does not speak without a word. Said once: a reconnect
+      // tries again and again, and the same line every time buries whatever
+      // else is being logged.
+      static bool said = false;
+      if (!said) {
+        said = true;
+        log("handshake with %s failed: the server closed the connection "
+            "without answering. Either nothing is serving there - an ssh "
+            "tunnel accepts the connection locally and closes it when the "
+            "far end is down - or the server is an older rgpu-server, from "
+            "before protocol %u, which closes on a version it does not "
+            "speak. Said once per process",
+            spec.c_str(), kProtocolVersion);
+      }
+    } else {
+      log("handshake with %s failed: what answered is not an rgpu-server",
+          spec.c_str());
+    }
     ::close(fd);
     g_connect_failed = true;
     return false;
@@ -218,10 +372,20 @@ bool ensure_connected_locked() {
 
   if (g_had_session && !reply.resumed) {
     // The session is gone rather than merely unreachable: every device
-    // pointer and handle the application is holding refers to nothing.
-    log("the server no longer has our session; GPU state is gone");
+    // pointer and handle the application is holding refers to nothing. That
+    // does not change on another attempt. A server that has just said so can
+    // still answer the next one with a session under our id - an empty one,
+    // made for this handshake by a server that does not refuse it - and a
+    // replay into that would run our calls against nothing we own.
+    log("the server no longer has our session (it expired, or the server "
+        "restarted); its GPU state is gone, and every call from here on "
+        "fails");
     ::close(fd);
+    g_session_gone = true;
     g_connect_failed = true;
+    g_queued.clear();
+    g_unacked.clear();
+    g_unacked_bytes = 0;
     return false;
   }
 
@@ -266,9 +430,9 @@ bool reconnect_locked() {
     attempt++;
     g_connect_failed = false;
     if (ensure_connected_locked()) return true;
-    if (g_connect_failed && g_had_session && g_fd < 0 && !g_replay_possible) {
-      break;
-    }
+    // Reached, and told the session is gone. It stays gone, and
+    // ensure_connected_locked has said so.
+    if (g_session_gone) return false;
   }
   log("could not reach the server again within %ds", seconds);
   g_connect_failed = true;
@@ -298,13 +462,89 @@ void log(const char* fmt, ...) {
   va_end(ap);
 }
 
-// Appends one frame to the queue rather than writing it.
-void queue_frame_locked(uint32_t api_id, const Buffer& req, uint32_t flags) {
+uint32_t queue_one_locked(uint32_t api_id, const Buffer& req, uint32_t flags,
+                          uint32_t thread_id);
+
+// The next request id, in the order frames are queued. 32 bits, so it wraps,
+// and 0 is skipped: 0 means "no request" in the handshake and in the session's
+// record of what it completed (see req_at_or_before in common/wire.h).
+//
+// Ids start at 1, unless RGPU_TEST_FIRST_REQ_ID says otherwise: a test hook,
+// off by default, that starts them just short of the wrap so a test can cross
+// it without first sending four billion requests.
+uint32_t mint_req_id_locked() {
+  if (!g_req_ids_started) {
+    g_req_ids_started = true;
+    const char* v = std::getenv("RGPU_TEST_FIRST_REQ_ID");
+    g_next_req = (v && *v) ? static_cast<uint32_t>(std::strtoul(v, nullptr, 0))
+                           : 1u;
+  }
+  if (g_next_req == 0) g_next_req = 1;
+  return g_next_req++;
+}
+
+// Appends one frame to the queue rather than writing it. `thread_id` is the
+// thread that issued the call, which is not necessarily the thread that will
+// write it: a batch queued by one thread goes out with the next call any
+// thread makes, and each frame has to keep its own issuer.
+// Returns the id of the frame queued for this call, not of any notice queued
+// ahead of it.
+uint32_t queue_frame_locked(uint32_t api_id, const Buffer& req, uint32_t flags,
+                            uint32_t thread_id) {
+  if (g_have_retired.load(std::memory_order_relaxed)) {
+    // Threads have exited since the last frame. Tell the server first, so it
+    // can drop what it keeps for them; no reply, and nothing lost but a little
+    // memory on the server if it never arrives.
+    std::vector<uint32_t> gone;
+    {
+      std::lock_guard<std::mutex> lk(g_retired_mu);
+      gone.swap(g_retired);
+      // Never this thread's own id. A thread still calling is one whose
+      // thread-local destructors are running - any built before its first
+      // call run after the retirement - and announcing it ahead of those
+      // calls would have the server forget the context they are made in.
+      // It stays listed for the next frame another thread queues.
+      auto self = std::find(gone.begin(), gone.end(), thread_id);
+      if (self != gone.end()) {
+        gone.erase(self);
+        g_retired.push_back(thread_id);
+      }
+      g_have_retired.store(!g_retired.empty(), std::memory_order_relaxed);
+    }
+    if (!gone.empty()) {
+      Buffer notice;
+      notice.put<uint32_t>(static_cast<uint32_t>(gone.size()));
+      notice.put_bytes(gone.data(), gone.size() * sizeof(uint32_t));
+      queue_one_locked(API_rgpu_thread_gone, notice, kFlagNoReply, thread_id);
+    }
+  }
+  const uint32_t id = queue_one_locked(api_id, req, flags, thread_id);
+
+  if (t_retired) {
+    // A call from a thread already retired. Its notice may well have gone out
+    // already - any other thread's frame carries it, and this call may have
+    // waited for the lock behind several - so the server has been told to
+    // forget an id that is still in use. List it again, so that another
+    // notice follows this frame; the last call the thread makes is then
+    // always followed by one.
+    std::lock_guard<std::mutex> lk(g_retired_mu);
+    if (std::find(g_retired.begin(), g_retired.end(), thread_id) ==
+        g_retired.end()) {
+      g_retired.push_back(thread_id);
+    }
+    g_have_retired.store(true, std::memory_order_relaxed);
+  }
+  return id;
+}
+
+uint32_t queue_one_locked(uint32_t api_id, const Buffer& req, uint32_t flags,
+                          uint32_t thread_id) {
   ReqHeader h{};
   h.magic = kMagicReq;
   h.api_id = api_id;
-  h.req_id = g_next_req++;
+  h.req_id = mint_req_id_locked();
   h.flags = flags;
+  h.thread_id = thread_id;
   h.payload_len = static_cast<uint32_t>(req.size());
   const auto* hb = reinterpret_cast<const uint8_t*>(&h);
   g_queued.insert(g_queued.end(), hb, hb + sizeof(h));
@@ -328,6 +568,7 @@ void queue_frame_locked(uint32_t api_id, const Buffer& req, uint32_t flags) {
       g_unacked_bytes = 0;
     }
   }
+  return h.req_id;
 }
 
 // Writes everything queued as a single write. Returns false if the connection
@@ -348,13 +589,13 @@ CUresult call_async(uint32_t api_id, const Buffer& req) {
     return call(api_id, req, &rsp);
   }
 
+  const uint32_t thread_id = this_thread_id();
   std::lock_guard<std::mutex> lk(g_mu);
   if (!ensure_connected_locked()) return CUDA_ERROR_NOT_INITIALIZED;
 
   if (verbose()) log("~> %s (%zu bytes, no reply)", api_name(api_id), req.size());
 
-
-  queue_frame_locked(api_id, req, kFlagNoReply);
+  queue_frame_locked(api_id, req, kFlagNoReply, thread_id);
   g_stats.async_calls++;
   if (g_queued.size() >= kQueueFlushBytes && !flush_locked()) {
     return CUDA_ERROR_UNKNOWN;
@@ -366,6 +607,7 @@ CUresult call_async(uint32_t api_id, const Buffer& req) {
 CUresult call(uint32_t api_id, const Buffer& req, Buffer* rsp) {
   // ponytail: one connection under a global lock. Per-thread connections only
   // if profiling shows contention; correctness first.
+  const uint32_t thread_id = this_thread_id();
   std::lock_guard<std::mutex> lk(g_mu);
   if (!ensure_connected_locked()) return CUDA_ERROR_NOT_INITIALIZED;
 
@@ -373,15 +615,16 @@ CUresult call(uint32_t api_id, const Buffer& req, Buffer* rsp) {
 
   // Anything queued goes out ahead of this call, in one write, so the server
   // sees the same order the application issued.
-  queue_frame_locked(api_id, req, 0);
-  const uint32_t expect_id = g_next_req - 1;
+  const uint32_t expect_id = queue_frame_locked(api_id, req, 0, thread_id);
 
   // Two goes: one on the connection we have, and if that breaks, one on a
   // connection to the same session. The replay makes the second attempt the
-  // same request, not a new one.
+  // same request, not a new one. A call that gets no reply on either is given
+  // up for good (abandon_call_locked).
   for (int attempt = 0; attempt < 2; attempt++) {
     if (!flush_locked()) {
       if (attempt == 0 && reconnect_locked()) continue;
+      abandon_call_locked(expect_id);
       return CUDA_ERROR_UNKNOWN;
     }
 
@@ -390,11 +633,13 @@ CUresult call(uint32_t api_id, const Buffer& req, Buffer* rsp) {
     if (!recv_frame(g_fd, kMagicRsp, &rh, &payload)) {
       drop_connection_locked("recv failed");
       if (attempt == 0 && reconnect_locked()) continue;
+      abandon_call_locked(expect_id);
       return CUDA_ERROR_UNKNOWN;
     }
     if (rh.req_id != expect_id) {
       // Under the lock this cannot happen unless the stream desynced.
       drop_connection_locked("response id mismatch");
+      abandon_call_locked(expect_id);
       return CUDA_ERROR_UNKNOWN;
     }
 
@@ -411,8 +656,8 @@ CUresult call(uint32_t api_id, const Buffer& req, Buffer* rsp) {
 }
 
 CUresult unimplemented(const char* name, const char* why) {
-  static std::mutex mu;
-  static std::set<std::string> seen;
+  static auto& mu = *new std::mutex();
+  static auto& seen = *new std::set<std::string>();
   {
     std::lock_guard<std::mutex> lk(mu);
     if (!seen.insert(name).second) return CUDA_ERROR_NOT_SUPPORTED;
@@ -422,8 +667,8 @@ CUresult unimplemented(const char* name, const char* why) {
 }
 
 void unimplemented_rt(const char* name) {
-  static std::mutex mu;
-  static std::set<std::string> seen;
+  static auto& mu = *new std::mutex();
+  static auto& seen = *new std::set<std::string>();
   {
     std::lock_guard<std::mutex> lk(mu);
     if (!seen.insert(name).second) return;

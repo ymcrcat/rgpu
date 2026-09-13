@@ -21,6 +21,12 @@
 
 namespace {
 
+// Every global below that a CUDA call can reach is allocated and never
+// destroyed. Threads keep calling in while the process exits - a thread's
+// late thread-local destructors free device memory, say - and a mutex or
+// container that static destruction has already taken down is undefined
+// behaviour (on libc++ a destroyed mutex throws, from places that cannot).
+
 // ---------------------------------------------------------------------------
 // Kernel argument marshalling
 // ---------------------------------------------------------------------------
@@ -35,8 +41,8 @@ struct ParamSlot {
   uint64_t size;
 };
 
-std::mutex g_layout_mu;
-std::map<CUfunction, std::vector<ParamSlot>> g_layouts;
+auto& g_layout_mu = *new std::mutex();
+auto& g_layouts = *new std::map<CUfunction, std::vector<ParamSlot>>();
 
 bool fetch_layout(CUfunction f, std::vector<ParamSlot>* out) {
   {
@@ -145,8 +151,8 @@ CUresult launch_common(CUfunction f, unsigned gx, unsigned gy, unsigned gz,
 // local driver. We hand back ordinary aligned host memory: correct, just
 // without the DMA benefit, which a network transfer has already erased.
 
-std::mutex g_host_mu;
-std::set<void*> g_host_allocs;
+auto& g_host_mu = *new std::mutex();
+auto& g_host_allocs = *new std::set<void*>();
 
 CUresult host_alloc(void** pp, size_t size) {
   if (!pp) return CUDA_ERROR_INVALID_VALUE;
@@ -196,8 +202,8 @@ void* find_entry(const char* symbol) {
 // Names we were asked for and could not supply. Logged once each; this is the
 // discovery mechanism for what still needs implementing.
 void note_missing(const char* symbol, int version) {
-  static std::mutex mu;
-  static std::set<std::string> seen;
+  static auto& mu = *new std::mutex();
+  static auto& seen = *new std::set<std::string>();
   std::lock_guard<std::mutex> lk(mu);
   if (seen.insert(symbol).second) {
     rgpu::log("MISSING entry point %s (requested version %d)", symbol, version);
@@ -258,8 +264,8 @@ CUresult cuGetProcAddress(const char* symbol, void** pfn, int cudaVersion,
 
 namespace {
 
-std::mutex g_alloc_mu;
-std::map<CUdeviceptr, size_t> g_allocs;  // base -> size
+auto& g_alloc_mu = *new std::mutex();
+auto& g_allocs = *new std::map<CUdeviceptr, size_t>();  // base -> size
 
 bool is_ours(CUdeviceptr p) {
   std::lock_guard<std::mutex> lk(g_alloc_mu);
@@ -436,8 +442,8 @@ struct PrimaryCtx {
   bool flags_known = false;
 };
 
-std::mutex g_primary_mu;
-std::map<CUdevice, PrimaryCtx> g_primary;
+auto& g_primary_mu = *new std::mutex();
+auto& g_primary = *new std::map<CUdevice, PrimaryCtx>();
 
 }  // namespace
 
@@ -474,7 +480,26 @@ CUresult cuDevicePrimaryCtxReset_v2(CUdevice dev) {
   rgpu::Buffer req, rsp;
   req.put<CUdevice>(dev);
   CUresult r = rgpu::call(rgpu::API_cuDevicePrimaryCtxReset_v2, req, &rsp);
-  {
+  // A reset does not release the primary context ("Resetting the primary
+  // context does not release it"), so every retain this process holds is
+  // still held afterwards, on the server as in CUDA. What the reset does end is
+  // what the record says about the context: that it is active, and its flags.
+  // So a reset that may have run forgets the record, and the next state query
+  // asks the server. `retained` goes to zero with it - it is this cache's
+  // licence to answer, not the driver's count - which costs round trips, not
+  // correctness: a later release of a retain still held finds zero and leaves
+  // it there.
+  //
+  // Only a refusal leaves the record alone. The server refuses a reset while
+  // other sessions are live, and answers CUDA_ERROR_NOT_SUPPORTED without
+  // touching the device, so the record is still true. Any other answer may
+  // follow a reset that ran: the server hands an error held from an earlier
+  // call that had no reply to the next call that succeeds, and a connection
+  // that died before the answer says nothing about whether the call ran.
+  // Known gap: NOT_SUPPORTED is not proof of a refusal. A held no-reply
+  // failure with that code, folded into a reset that ran, looks the same and
+  // keeps the stale record.
+  if (r != CUDA_ERROR_NOT_SUPPORTED) {
     std::lock_guard<std::mutex> lk(g_primary_mu);
     g_primary[dev] = PrimaryCtx{};
   }
@@ -626,6 +651,11 @@ CUresult cuLaunchKernel(CUfunction f, unsigned int gridDimX,
                        blockDimZ, sharedMemBytes, hStream, kernelParams, extra);
 }
 
+// Refused rather than forwarded. The launch message carries no way to say
+// "cooperative", so the server would run this through the ordinary
+// cuLaunchKernel and the co-residency the kernel was written around would not
+// be there: a grid-wide barrier would hang or, worse, return wrong numbers
+// that look right. An error the caller can see beats an answer it cannot check.
 CUresult cuLaunchCooperativeKernel(CUfunction f, unsigned int gridDimX,
                                    unsigned int gridDimY, unsigned int gridDimZ,
                                    unsigned int blockDimX,
@@ -633,11 +663,12 @@ CUresult cuLaunchCooperativeKernel(CUfunction f, unsigned int gridDimX,
                                    unsigned int blockDimZ,
                                    unsigned int sharedMemBytes,
                                    CUstream hStream, void** kernelParams) {
-  // Cooperative launch has stricter co-residency guarantees, which the remote
-  // driver still provides; only the marshalling differs.
-  return launch_common(f, gridDimX, gridDimY, gridDimZ, blockDimX, blockDimY,
-                       blockDimZ, sharedMemBytes, hStream, kernelParams,
-                       nullptr);
+  (void)f; (void)gridDimX; (void)gridDimY; (void)gridDimZ;
+  (void)blockDimX; (void)blockDimY; (void)blockDimZ;
+  (void)sharedMemBytes; (void)hStream; (void)kernelParams;
+  return rgpu::unimplemented(
+      "cuLaunchCooperativeKernel",
+      "cooperative launch guarantees cannot be preserved across the wire");
 }
 
 CUresult cuMemAllocHost_v2(void** pp, size_t bytesize) {

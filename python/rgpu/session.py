@@ -77,9 +77,10 @@ class Connection:
         self.lock = threading.RLock()
         self.sock = None
         self.seq = 0
-        self.pending = []
+        # Both queues hold (sequence number, encoded message) - see _append.
+        self.pending = []                    # encoded, not yet written
         self.pending_bytes = 0
-        self.unacked = collections.deque()   # messages written, not yet acknowledged
+        self.unacked = collections.deque()   # written, not yet acknowledged
         self.unacked_bytes = 0
         self.replay_possible = True
         self.last_acked = 0
@@ -128,17 +129,33 @@ class Connection:
             ids = []
             while pending_frees:
                 ids.append(pending_frees.popleft())
-            self._append(wire.FREE, (ids,), 8 * len(ids))
+            try:
+                self._append(wire.FREE, (ids,), 8 * len(ids))
+            except wire.EncodeError:
+                # _append can refuse a message now, and these ids have already
+                # been taken out of the only place that remembers them: put
+                # them back rather than leak the tensors on the server for the
+                # rest of the session. (A list of small ints always encodes,
+                # so this is a guard on the invariant, not a path with a
+                # known trigger.)
+                pending_frees.extendleft(reversed(ids))
+                raise
         return self._append(kind, fields, size)
 
     def _append(self, kind, fields, size):
+        # Encoded here, before anything is committed, so a value the wire
+        # cannot carry raises at the call that passed it rather than at some
+        # later flush - and leaves the queue exactly as it was, with no gap in
+        # the numbering for _reconnect to read as a lost message. The bytes are
+        # kept, not thrown away: _flush and the replay join them up, so this
+        # costs no extra encoding on the streaming path.
+        entry = (self.seq + 1, wire.encode_element([self.seq + 1, kind, *fields]))
         self.seq += 1
-        message = [self.seq, kind, *fields]
-        self.pending.append(message)
+        self.pending.append(entry)
         self.pending_bytes += 64 + size
         self.stats["messages"] += 1
         if self.replay_possible:
-            self.unacked.append(message)
+            self.unacked.append(entry)
             self.unacked_bytes += 64 + size
             if self.unacked_bytes > MAX_UNACKED:
                 # Holding gigabytes of uploads to replay would cost more than
@@ -224,7 +241,7 @@ class Connection:
                 self.pending = []
                 self.pending_bytes = 0
                 if self.unacked:
-                    frame = wire.encode(list(self.unacked))
+                    frame = wire.encode_elements([blob for _, blob in self.unacked])
                     wire.send_frame(self.sock, frame)
                     self.stats["bytes_out"] += len(frame)
                 return
@@ -238,7 +255,7 @@ class Connection:
     def _flush(self):
         if not self.pending:
             return
-        frame = wire.encode(self.pending)
+        frame = wire.encode_elements([blob for _, blob in self.pending])
         try:
             if self.sock is None:
                 self._connect()

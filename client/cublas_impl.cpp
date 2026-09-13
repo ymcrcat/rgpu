@@ -25,11 +25,17 @@
 
 namespace {
 
+// Every global below that a CUDA call can reach is allocated and never
+// destroyed. Threads keep calling in while the process exits - a thread's
+// late thread-local destructors free device memory, say - and a mutex or
+// container that static destruction has already taken down is undefined
+// behaviour (on libc++ a destroyed mutex throws, from places that cannot).
+
 // Pointer mode per handle. cuBLAS defaults to host, meaning alpha and beta
 // point at host memory whose values have to travel with the call. In device
 // mode they are device pointers and pass through like any other.
-std::mutex g_mode_mu;
-std::map<cublasHandle_t, cublasPointerMode_t> g_modes;
+auto& g_mode_mu = *new std::mutex();
+auto& g_modes = *new std::map<cublasHandle_t, cublasPointerMode_t>();
 
 cublasPointerMode_t pointer_mode(cublasHandle_t h) {
   std::lock_guard<std::mutex> lk(g_mode_mu);

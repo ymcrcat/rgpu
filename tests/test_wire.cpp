@@ -4,14 +4,37 @@
 // assert into nothing. Undefined here, or this test checks nothing at all.
 #undef NDEBUG
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 
 #include "common/wire.h"
 
 using rgpu::Buffer;
+using rgpu::Handshake;
+using rgpu::HandshakeReply;
+using rgpu::ReqHeader;
 
 int main() {
+  // Headers go on the wire as a memcpy of the struct, so their layout is the
+  // protocol. Protocol 3 added the issuing client thread to every request.
+  assert(rgpu::kProtocolVersion == 3);
+  assert(sizeof(ReqHeader) == 24);
+  assert(offsetof(ReqHeader, magic) == 0);
+  assert(offsetof(ReqHeader, api_id) == 4);
+  assert(offsetof(ReqHeader, req_id) == 8);
+  assert(offsetof(ReqHeader, flags) == 12);
+  assert(offsetof(ReqHeader, thread_id) == 16);
+  assert(offsetof(ReqHeader, payload_len) == 20);
+
+  // The handshake is how two versions find out they disagree, so it must not
+  // change between them: a peer from another version has to be able to read
+  // the other side's version to say which one it is.
+  assert(sizeof(Handshake) == 32);
+  assert(offsetof(Handshake, version) == 4);
+  assert(sizeof(HandshakeReply) == 16);
+  assert(offsetof(HandshakeReply, version) == 4);
+
   Buffer b;
   b.put<uint32_t>(0xdeadbeef);
   b.put<uint64_t>(0x1122334455667788ull);
@@ -71,6 +94,16 @@ int main() {
   size_t evil_n = 0;
   assert(!h.get_sized(&evil, &evil_n));
   assert(!h.ok());
+
+  // Request-id order, across the 32-bit wrap. 0 is no request.
+  assert(rgpu::req_at_or_before(5, 5));
+  assert(rgpu::req_at_or_before(4, 5) && !rgpu::req_at_or_before(5, 4));
+  assert(rgpu::req_at_or_before(0xFFFFFFFFu, 1));
+  assert(!rgpu::req_at_or_before(1, 0xFFFFFFFFu));
+  assert(rgpu::req_at_or_before(0xFFFFFFF7u, 5));
+  assert(rgpu::req_at_or_before(0, 1) && rgpu::req_at_or_before(0, 0xFFFFFFFFu));
+  assert(!rgpu::req_at_or_before(1, 0) && !rgpu::req_at_or_before(0xFFFFFFFFu, 0));
+  assert(rgpu::req_at_or_before(0, 0));
 
   std::printf("wire round-trip OK\n");
   return 0;
