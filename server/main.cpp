@@ -270,8 +270,11 @@ __attribute__((noinline)) ClientThread* admit_thread(ClientThreads& threads,
       slot = std::move(it->second);
       threads.retired.erase(it);
       if (g_verbose) {
-        logf("client thread %u called after it was announced gone; its "
-             "context is still known", id);
+        // Either announced gone and calling late, or refused at the cap with
+        // a failure parked for it (deferred_home) and now let in.
+        logf("client thread %u was given back the slot kept for it: it "
+             "called after it was announced gone, or was refused earlier at "
+             "the cap", id);
       }
       break;
     }
@@ -460,8 +463,10 @@ void serve_session(std::shared_ptr<Session> session, SessionKey key);
 void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
   tune_socket(fd);
 
-  // Each connection is one client process. Its CUDA objects live in this
-  // server process and die with the connection.
+  // One connection of a session. What the client made - its CUDA objects,
+  // its client threads' slots, a failure held for a thread - belongs to the
+  // session, not to this connection, and outlives it: it goes only when the
+  // session expires (serve_session).
   for (;;) {
     ReqHeader h{};
     std::vector<uint8_t> payload;

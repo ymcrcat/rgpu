@@ -75,7 +75,9 @@ struct ClientThread {
   // Written and taken only in the same critical section, under the session's
   // mutex, that records the request as completed (server/main.cpp), so that
   // completing a request and holding or reporting its failure are one step.
-  // Nothing else reads it.
+  // The only other reader is the log line for a failure its thread never
+  // learned of (say_unreported), on the serving thread, when the slot is
+  // forgotten.
   CUresult pending_async = CUDA_SUCCESS;
   // The stream capture mode, which CUDA keeps per thread too ("A thread's mode
   // is one of the following"), starting at what the header calls the default.

@@ -142,6 +142,12 @@ request but before its reply arrived, so the server sent its cached reply
 rather than running the call twice - the harder of the two cases, exercised by
 accident.
 
+A session whose client does not come back within the grace period expires,
+and the server releases what it held. A client that comes back after that, or
+to a server that restarted, is told its session is gone. It says so, sends
+nothing again, and fails every call from then on, rather than carrying on
+against GPU state that is no longer there.
+
 Not solved, and not solvable by replaying calls: a server that actually dies
 takes the device memory with it. The `record` tag can rebuild contexts and
 modules, but the contents of memory that no longer exists need either
@@ -163,9 +169,15 @@ different problem from forwarding an API.
 
 ### 5. Smaller known limits
 
-- **Threading.** One connection under one lock, and the current-context state
-  is per connection rather than per thread. Correct for PyTorch, wrong for a
-  client that drives several contexts from several threads.
+- **Threading.** Each client thread keeps its own current context, context
+  stack and stream capture mode on the server, so a client that drives several
+  contexts from several threads is served correctly. But it is served one call
+  at a time: one connection under one lock, and one server thread per session.
+  Threads get correctness, not parallelism. A call sent without a reply that
+  fails reports its error to the same thread's next call that replies, and if
+  that thread never makes one the error appears only in the server log.
+  PyTorch's autograd threads also allocate and call cuBLAS, which reply, so
+  this rarely bites.
 - **`cuLaunchKernelEx`** is refused: it carries an attribute array we do not
   marshal. That is thread-block clusters, so Hopper and later.
 - **Managed and zero-copy memory** are refused by design. They cannot work

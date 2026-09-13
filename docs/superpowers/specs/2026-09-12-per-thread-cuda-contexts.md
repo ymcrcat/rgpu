@@ -270,10 +270,14 @@ client thread was served last, or nothing; `applied` records which. So:
   back to be restored.
 
 That only holds if every call that changes the depth of the driver's stack is
-carried out on the issuing thread's slot instead. They are intercepted through
-`driver_wrapper()`, bound to the session with `client_threads_bind` the way
-`inventory_bind` binds the inventory, so the generated dispatch learns nothing
-about any of it and `codegen/emit.py` stays out of the change:
+carried out on the issuing thread's slot instead. The context calls are
+intercepted through `driver_wrapper()`, bound to the session with
+`client_threads_bind` the way `inventory_bind` binds the inventory, so the
+generated dispatch learns nothing about any of it and `codegen/emit.py` stays
+out of the change. The capture-mode exchange is the exception: it is an
+internal call already (`API_rgpu_capture_mode`), served by
+`handle_capture_mode` in `server/main.cpp`, which calls
+`client_threads_exchange_capture_mode`:
 
 | Call | On the thread's stack | Driver calls |
 |---|---|---|
@@ -285,7 +289,7 @@ about any of it and `codegen/emit.py` stays out of the change:
 | `cuCtxGetCurrent` | answers the slot's top, even a destroyed one | 1 (for its errors) |
 | `cuCtxCreate_v2` | pushes (inventory wrapper hook) | 2, only if a context was current: back to one entry |
 | `cuCtxDestroy_v2`, `cuCtxDetach` | pops the caller's top if it names the context; sweeps | 0 or 1 |
-| `cuThreadExchangeStreamCaptureMode` | records the thread's new mode | 1 |
+| `cuThreadExchangeStreamCaptureMode` (through `handle_capture_mode`, not `driver_wrapper()`) | records the thread's new mode | 1 |
 
 **Readback is kept, as the safety net.** After every request the server asks
 the driver what is current. The interception keeps that equal to `applied`,
@@ -351,7 +355,7 @@ ping-pong between threads on different contexts pays one switch per call.
 
 A created context's handle is an address in driver memory, and once the
 context is destroyed that address may be handed to the next `cuCtxCreate`
-anywhere in the process, another tenant's included. A slot that still named
+anywhere in the process, another session's included. A slot that still named
 it would bind a thread to somebody else's context.
 
 - **Sweep on destroy.** When `cuCtxDestroy_v2` or `cuCtxDetach` succeeds, the
@@ -375,16 +379,19 @@ it would bind a thread to somebody else's context.
   `CUDA_ERROR_INVALID_CONTEXT`, since it is about their argument, not the
   current context: `cuCtxSetCurrent`, `cuCtxPushCurrent_v2`,
   `cuCtxPopCurrent_v2`, `cuCtxDestroy_v2`, `cuCtxDetach`,
-  `cuCtxGetApiVersion`, `cuCtxGetId`, `cuCtxEnablePeerAccess`,
-  `cuCtxDisablePeerAccess`, `cuCtxRecordEvent`, `cuCtxWaitEvent`,
+  `cuCtxGetApiVersion`, `cuCtxGetId`, `cuCtxRecordEvent`, `cuCtxWaitEvent`,
   `cuCtxGetDevResource`, `cuMemcpyPeer`, `cuMemcpyPeerAsync`,
   `cuGraphAddMemcpyNode`, `cuGraphAddMemsetNode`,
   `cuGraphConditionalHandleCreate`, `cuGraphExecMemcpyNodeSetParams`,
   `cuGraphExecMemsetNodeSetParams`, `cuDevicePrimaryCtxRetain` and
-  `cuDevicePrimaryCtxRelease_v2`. Each takes a `CUcontext` argument. Calls
-  that carry a context inside a structure (`cuMemcpy3DPeer`, kernel and generic
-  graph node parameters) are not listed, because a null context there means
-  the current one. The maths libraries' results are never corrected: only a
+  `cuDevicePrimaryCtxRelease_v2`. Each takes a `CUcontext` argument. Not
+  listed, because their answer may be about the current context:
+  `cuCtxEnablePeerAccess` and `cuCtxDisablePeerAccess`, which the header says
+  return `CUDA_ERROR_INVALID_CONTEXT` "if there is no current context" as well
+  as for a bad peer; and the calls that carry a context inside a structure
+  (`cuMemcpy3DPeer`, kernel and generic graph node parameters), where a null
+  context may mean the current one, as the header says of
+  `CUDA_KERNEL_NODE_PARAMS`. The maths libraries' results are never corrected: only a
   driver call's result is a `CUresult`.
 - **Fail clean on restore.** If `cuCtxSetCurrent` refuses a saved context
   anyway - destroyed where no sweep saw it - the entry is marked gone, the
@@ -714,12 +721,18 @@ destroy sweeps at most a few hundred thousand of them.
 **Contexts from another session.** A created context's handle used from
 another session's connection is not covered: another session's destroy is
 neither swept here nor recorded. Reaching it needs a handle from another
-tenant.
+session. (Isolation between tenants is one server per tenant, so the sessions
+sharing a server are one tenant's.)
 
 **Per-thread deferred errors change observable behaviour.** An error caused by
 thread A no longer surfaces on thread B. That is more correct and it is what
 CUDA does, but it is a behaviour change, and anything that happened to depend
-on the old leak will notice. Nothing single-threaded can.
+on the old leak will notice. Nothing single-threaded can. The cost: a held
+failure is lost if its thread never makes another call that replies - it exits,
+or only ever sends calls without one - and then appears only in the server log,
+where the first such loss in a session is said in full and the rest are counted
+at expiry. PyTorch's autograd threads are real threads, but they also allocate
+and call cuBLAS, which reply, so their failures still arrive.
 
 **Concurrency expectations.** The most likely way this design disappoints is
 that someone reads "per-thread contexts" as "per-thread parallelism". It is

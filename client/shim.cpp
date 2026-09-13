@@ -480,14 +480,22 @@ CUresult cuDevicePrimaryCtxReset_v2(CUdevice dev) {
   rgpu::Buffer req, rsp;
   req.put<CUdevice>(dev);
   CUresult r = rgpu::call(rgpu::API_cuDevicePrimaryCtxReset_v2, req, &rsp);
+  // A reset does not release the primary context ("Resetting the primary
+  // context does not release it"), so every retain this process holds is
+  // still held afterwards, on the server as in CUDA. What the reset does end is
+  // what the record says about the context: that it is active, and its flags.
+  // So a reset that may have run forgets the record, and the next state query
+  // asks the server. `retained` goes to zero with it - it is this cache's
+  // licence to answer, not the driver's count - which costs round trips, not
+  // correctness: a later release of a retain still held finds zero and leaves
+  // it there.
+  //
   // Only a refusal leaves the record alone. The server refuses a reset while
   // other sessions are live, and answers CUDA_ERROR_NOT_SUPPORTED without
-  // touching the device; forgetting the retains then would leave this process
-  // believing it holds nothing it still holds. Any other answer may follow a
-  // reset that ran: the server hands an error held from an earlier call that
-  // had no reply to the next call that succeeds, and a connection that died
-  // before the answer says nothing about whether the call ran. Keeping the
-  // record then would answer state queries from before the reset.
+  // touching the device, so the record is still true. Any other answer may
+  // follow a reset that ran: the server hands an error held from an earlier
+  // call that had no reply to the next call that succeeds, and a connection
+  // that died before the answer says nothing about whether the call ran.
   // Known gap: NOT_SUPPORTED is not proof of a refusal. A held no-reply
   // failure with that code, folded into a reset that ran, looks the same and
   // keeps the stale record.
