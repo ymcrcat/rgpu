@@ -462,6 +462,113 @@ void wire_cases() {
              send_hello(fd, 2, false, 0);
              ::close(fd);
            });
+
+  // The shim remembers each primary context's flags so that PyTorch's
+  // constant state queries need no round trip, and forgets them when the
+  // context is reset. A reset that ran must be forgotten even when its reply
+  // is an error: the server hands a failure held from an earlier unanswered
+  // call to the next call that succeeds, and a broken connection hides
+  // whether the reset ran at all. Only CUDA_ERROR_NOT_SUPPORTED says the
+  // server refused and nothing happened.
+  run_case("a primary-context reset forgets its record unless refused",
+           [] {
+             CUcontext ctx = nullptr;
+             unsigned int flags = 0;
+             int active = 0;
+             const unsigned int kFlags = CU_CTX_SCHED_BLOCKING_SYNC;
+
+             // Refused: nothing happened, so the record still answers.
+             EXPECT(cuDevicePrimaryCtxRetain(&ctx, 1) == CUDA_SUCCESS, "retain");
+             EXPECT(cuDevicePrimaryCtxSetFlags(1, kFlags) == CUDA_SUCCESS,
+                    "set flags");
+             EXPECT(cuDevicePrimaryCtxReset(1) == CUDA_ERROR_NOT_SUPPORTED,
+                    "the refused reset did not report the refusal");
+             EXPECT(cuDevicePrimaryCtxGetState(1, &flags, &active) ==
+                            CUDA_SUCCESS &&
+                        flags == kFlags && active == 1,
+                    "the record was lost after a refused reset");
+             EXPECT(sync_call(kApiMarker) == CUDA_SUCCESS, "marker");
+
+             // Ran, but the reply carried an older deferred failure.
+             EXPECT(cuDevicePrimaryCtxRetain(&ctx, 0) == CUDA_SUCCESS, "retain");
+             EXPECT(cuDevicePrimaryCtxSetFlags(0, kFlags) == CUDA_SUCCESS,
+                    "set flags");
+             EXPECT(cuDevicePrimaryCtxReset(0) == CUDA_ERROR_INVALID_HANDLE,
+                    "the reset did not return the deferred failure");
+             flags = kFlags;
+             EXPECT(cuDevicePrimaryCtxGetState(0, &flags, &active) ==
+                            CUDA_SUCCESS &&
+                        flags == 0,
+                    "state after a reset that ran came from the old record");
+             EXPECT(sync_call(kApiMarker) == CUDA_SUCCESS, "marker");
+
+             // Sent, and the connection died before the answer; the server
+             // does not come back, so whether it ran is unknowable.
+             EXPECT(cuDevicePrimaryCtxRetain(&ctx, 2) == CUDA_SUCCESS, "retain");
+             EXPECT(cuDevicePrimaryCtxSetFlags(2, kFlags) == CUDA_SUCCESS,
+                    "set flags");
+             EXPECT(cuDevicePrimaryCtxReset(2) != CUDA_SUCCESS,
+                    "a reset with no answer reported success");
+             EXPECT(cuDevicePrimaryCtxGetState(2, &flags, &active) !=
+                        CUDA_SUCCESS,
+                    "state after an unanswered reset came from the old record "
+                    "instead of the server, which is gone");
+           },
+           [](int& lfd) {
+             int fd = accept_session(lfd, nullptr);
+             if (fd < 0) return;
+             Frame f;
+             // Answers the retain and the flags for one device, and returns
+             // the reset frame unanswered.
+             auto setup = [&](int dev) {
+               EXPECT(read_frame(fd, &f) &&
+                          f.h.api_id == rgpu::API_cuDevicePrimaryCtxRetain,
+                      "expected a retain");
+               Buffer handle;
+               handle.put<uint64_t>(0xC0FFEE01ull + dev);
+               reply(fd, f, CUDA_SUCCESS, handle);
+               EXPECT(read_frame(fd, &f) &&
+                          f.h.api_id == rgpu::API_cuDevicePrimaryCtxSetFlags_v2,
+                      "expected flags to be set");
+               reply(fd, f, CUDA_SUCCESS);
+               EXPECT(read_frame(fd, &f) &&
+                          f.h.api_id == rgpu::API_cuDevicePrimaryCtxReset_v2,
+                      "expected a reset");
+             };
+             // The next frame is either a state query that reached us or the
+             // marker that follows one answered from the record.
+             auto asked_for_state = [&]() {
+               if (!read_frame(fd, &f)) return false;
+               if (f.h.api_id != rgpu::API_cuDevicePrimaryCtxGetState) {
+                 reply(fd, f, CUDA_SUCCESS);  // the marker
+                 return false;
+               }
+               Buffer state;
+               state.put<unsigned int>(0);
+               state.put<int>(1);
+               reply(fd, f, CUDA_SUCCESS, state);
+               EXPECT(read_frame(fd, &f) && f.h.api_id == kApiMarker,
+                      "expected the marker");
+               reply(fd, f, CUDA_SUCCESS);
+               return true;
+             };
+
+             setup(1);
+             reply(fd, f, CUDA_ERROR_NOT_SUPPORTED);
+             EXPECT(!asked_for_state(),
+                    "a refused reset threw away the record it left untouched");
+
+             setup(0);
+             reply(fd, f, CUDA_ERROR_INVALID_HANDLE);
+             EXPECT(asked_for_state(),
+                    "a reset that ran kept its old record because its reply "
+                    "carried a deferred error");
+
+             setup(2);
+             ::close(fd);
+             ::close(lfd);
+             lfd = -1;
+           });
 }
 
 // --- against the fake driver -----------------------------------------------
