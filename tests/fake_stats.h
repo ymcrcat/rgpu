@@ -26,6 +26,10 @@ enum Kind {
   kCublas,
   kCublasLt,
   kCudnn,
+  // Stream captures begun and not yet ended. Not a handle anybody frees, but
+  // one left open is a leak all the same: it holds its stream in capture and
+  // restricts the thread that began it.
+  kCapture,
   // Releases of a primary context that nobody had retained. Not a resource:
   // a mistake, and the one a test cannot otherwise see, because the fake
   // refuses the call and the count it would have corrupted stays right.

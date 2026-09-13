@@ -126,7 +126,8 @@ struct ClientThreads {
 
   // Forgets; releases nothing, and changes nothing in the driver. The
   // serving thread keeps whatever capture mode it last had, which is still
-  // recorded in applied_mode.
+  // recorded in applied_mode, until expiry puts it back
+  // (client_threads_restore_default_mode).
   void clear() {
     live.clear();
     retired.clear();
@@ -158,6 +159,13 @@ inline bool client_thread_shown(const ClientThread& t,
 // CUDA_SUCCESS, or the error to refuse the request with if the serving thread
 // could not be left without a context or given the mode.
 CUresult client_thread_show(ClientThreads& threads, ClientThread& t);
+
+// Puts the serving thread back in the default capture mode, whatever the last
+// client thread served left it in, and records that in applied_mode. For
+// expiry, before the session's inventory is released: the release then runs
+// in a known mode rather than in one a client chose. Logged if the driver
+// refuses.
+void client_threads_restore_default_mode(ClientThreads& threads);
 
 // cuThreadExchangeStreamCaptureMode for the thread whose request is running:
 // the driver's exchange on the serving thread, which already has that

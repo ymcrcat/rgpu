@@ -218,6 +218,9 @@ void forget_under(Inventory* inv, CUcontext ctx) {
   for (auto it = inv->handles.begin(); it != inv->handles.end();) {
     it = it->second.ctx == ctx ? inv->handles.erase(it) : std::next(it);
   }
+  for (auto it = inv->captures.begin(); it != inv->captures.end();) {
+    it = it->where.ctx == ctx ? inv->captures.erase(it) : std::next(it);
+  }
 }
 
 // A destroyed context takes everything inside it with it, so those entries
@@ -264,6 +267,10 @@ void forget_primary(CUdevice dev) {
   for (auto it = inv->handles.begin(); it != inv->handles.end();) {
     const bool gone = it->second.dev == dev && it->second.gen != now;
     it = gone ? inv->handles.erase(it) : std::next(it);
+  }
+  for (auto it = inv->captures.begin(); it != inv->captures.end();) {
+    const bool gone = it->where.dev == dev && it->where.gen != now;
+    it = gone ? inv->captures.erase(it) : std::next(it);
   }
 }
 
@@ -571,11 +578,28 @@ CUresult w_cuStreamCreateWithPriority(CUstream* stream, unsigned int flags,
   return r;
 }
 
+// Forgets the open capture on `stream`: for the default stream (0), the one in
+// context `ctx`.
+void forget_capture(uint64_t stream, CUcontext ctx) {
+  Inventory* inv = t_inv;
+  if (!inv) return;
+  std::lock_guard<std::mutex> lk(inv->mu);
+  for (auto it = inv->captures.begin(); it != inv->captures.end(); ++it) {
+    if (it->stream == stream && (stream != 0 || it->where.ctx == ctx)) {
+      inv->captures.erase(it);
+      return;
+    }
+  }
+}
+
 CUresult w_cuStreamDestroy_v2(CUstream stream) {
   REAL("cuStreamDestroy_v2", CUstream);
   CUresult r = fn(stream);
   if (r == CUDA_SUCCESS) {
     forget(&Inventory::streams, reinterpret_cast<uint64_t>(stream));
+    // A stream that is gone has no capture to end. Destroying one in capture
+    // is not documented either way; this assumes the capture goes with it.
+    if (stream) forget_capture(reinterpret_cast<uint64_t>(stream), nullptr);
   }
   return r;
 }
@@ -609,6 +633,24 @@ CUresult w_cuGraphCreate(CUgraph* graph, unsigned int flags) {
   return r;
 }
 
+// A capture begun is recorded where its stream is, so that expiry can end it
+// if the client never does.
+CUresult w_cuStreamBeginCapture_v2(CUstream stream, CUstreamCaptureMode mode) {
+  REAL("cuStreamBeginCapture_v2", CUstream, CUstreamCaptureMode);
+  const Stamp st =
+      stamp_of(&Inventory::streams, reinterpret_cast<uint64_t>(stream));
+  CUresult r = fn(stream, mode);
+  Inventory* inv = t_inv;
+  if (r == CUDA_SUCCESS && inv) {
+    std::lock_guard<std::mutex> lk(inv->mu);
+    Inventory::OpenCapture c;
+    c.stream = reinterpret_cast<uint64_t>(stream);
+    c.where = Inventory::Item{st.ctx, st.dev, st.gen};
+    inv->captures.push_back(c);
+  }
+  return r;
+}
+
 // A capture hands the finished graph to the client, which owns it from here
 // exactly as if it had created one.
 CUresult w_cuStreamEndCapture(CUstream stream, CUgraph* graph) {
@@ -616,8 +658,11 @@ CUresult w_cuStreamEndCapture(CUstream stream, CUgraph* graph) {
   const Stamp st =
       stamp_of(&Inventory::streams, reinterpret_cast<uint64_t>(stream));
   CUresult r = fn(stream, graph);
-  if (r == CUDA_SUCCESS && graph) {
-    note(&Inventory::graphs, reinterpret_cast<uint64_t>(*graph), st);
+  if (r == CUDA_SUCCESS) {
+    forget_capture(reinterpret_cast<uint64_t>(stream), st.ctx);
+    if (graph) {
+      note(&Inventory::graphs, reinterpret_cast<uint64_t>(*graph), st);
+    }
   }
   return r;
 }
@@ -710,6 +755,8 @@ const Tracked kTracked[] = {
     {"cuEventCreate", reinterpret_cast<void*>(&w_cuEventCreate)},
     {"cuEventDestroy_v2", reinterpret_cast<void*>(&w_cuEventDestroy_v2)},
     {"cuGraphCreate", reinterpret_cast<void*>(&w_cuGraphCreate)},
+    {"cuStreamBeginCapture_v2",
+     reinterpret_cast<void*>(&w_cuStreamBeginCapture_v2)},
     {"cuStreamEndCapture", reinterpret_cast<void*>(&w_cuStreamEndCapture)},
     {"cuGraphDestroy", reinterpret_cast<void*>(&w_cuGraphDestroy)},
     {"cuGraphInstantiateWithFlags",
@@ -735,6 +782,10 @@ CUresult destroy_stream(uint64_t h) {
 CUresult destroy_event(uint64_t h) {
   REAL("cuEventDestroy_v2", CUevent);
   return fn(reinterpret_cast<CUevent>(h));
+}
+CUresult end_capture(uint64_t stream, CUgraph* graph) {
+  REAL("cuStreamEndCapture", CUstream, CUgraph*);
+  return fn(reinterpret_cast<CUstream>(stream), graph);
 }
 CUresult destroy_graph(uint64_t h) {
   REAL("cuGraphDestroy", CUgraph);
@@ -914,8 +965,10 @@ std::string release_inventory(Inventory& inv) {
   Inventory::Items allocs, contexts, modules, streams, events, graphs, execs;
   std::unordered_map<uint64_t, Inventory::LibHandle> handles;
   std::unordered_map<int, int> retains;
+  std::vector<Inventory::OpenCapture> captures;
   {
     std::lock_guard<std::mutex> lk(inv.mu);
+    captures.swap(inv.captures);
     allocs.swap(inv.allocs);
     contexts.swap(inv.contexts);
     modules.swap(inv.modules);
@@ -930,6 +983,37 @@ std::string release_inventory(Inventory& inv) {
   unsigned failed = 0;
   unsigned skipped = 0;
   Current current;
+
+  // Captures the client left open are ended before anything else: until they
+  // are, one begun other than RELAXED restricts this thread, which began it,
+  // and the frees below could be refused. Each is ended where its stream is,
+  // and the graph that comes out is the session's to release like any other.
+  // One on a stream of unknown placement - another session's - is left alone,
+  // as everything made from such a stream is.
+  unsigned captures_ended = 0;
+  for (const Inventory::OpenCapture& c : captures) {
+    CUresult r = CUDA_SUCCESS;
+    CUgraph graph = nullptr;
+    const bool ran = unless_destroyed(c.where.dev, c.where.gen, [&] {
+      current.use(c.where.ctx);
+      r = end_capture(c.stream, &graph);
+    });
+    if (!ran) {
+      skipped++;
+      log_skipped("stream capture on stream", c.stream, c.where.dev,
+                  c.where.gen);
+      continue;
+    }
+    if (r != CUDA_SUCCESS) {
+      failed++;
+      logf("session cleanup: the stream capture on stream %llx could not be "
+           "ended (%d)",
+           (unsigned long long)c.stream, r);
+      continue;
+    }
+    captures_ended++;
+    if (graph) graphs[reinterpret_cast<uint64_t>(graph)] = c.where;
+  }
 
   // Work still running would be reading the memory about to be freed. The
   // contexts are synchronised first, once each, rather than per resource.
@@ -1071,6 +1155,10 @@ std::string release_inventory(Inventory& inv) {
       if (i) summary += i + 1 == parts.size() ? " and " : ", ";
       summary += parts[i];
     }
+  }
+  if (captures_ended) {
+    summary = "ended " + plural(captures_ended, "open stream capture") + "; " +
+              summary;
   }
   if (skipped) {
     summary += "; " + plural(skipped, "resource") +

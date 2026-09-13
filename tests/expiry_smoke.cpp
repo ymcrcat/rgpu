@@ -108,6 +108,17 @@ long field(const std::string& stats, const char* name) {
   return std::strtol(stats.c_str() + at + key.size(), nullptr, 10);
 }
 
+// A counter of calls rather than of resources, which read_stats leaves out.
+long call_count(const char* name) {
+  const char* path = std::getenv("RGPU_FAKE_STATS");
+  std::FILE* f = path ? std::fopen(path, "r") : nullptr;
+  if (!f) return -1;
+  char buf[512] = {0};
+  if (!std::fgets(buf, sizeof(buf), f)) buf[0] = 0;
+  std::fclose(f);
+  return field(std::string(" ") + buf, (std::string(" ") + name).c_str());
+}
+
 // Called in a freshly forked child, before it execs. The children wait in
 // pause() for the parent to kill them, so a parent that crashes instead would
 // leave them running, holding sessions and pipe ends open. On Linux, where
@@ -774,6 +785,125 @@ int foreign(const char* self) {
   return 0;
 }
 
+// A session that dies in the middle of a stream capture. Everything it made
+// has to come back at expiry, and the captures it left open have to be ended:
+// an open capture holds its stream in capture, and while one begun other than
+// RELAXED is open, the thread that began it - to the driver, the thread that
+// served the session, which is the one that releases it - is prohibited from
+// potentially unsafe calls, freeing memory among them, unless its own mode is
+// RELAXED. The fake driver enforces that much (tests/fake_cuda.cpp).
+//
+//   C: retains device 0's primary context and allocates; begins a capture on
+//      the context's default stream (GLOBAL) and on a stream of its own
+//      (THREAD_LOCAL); allocates again in RELAXED mode, the way PyTorch makes
+//      an allocation in the middle of a capture; leaves its thread in GLOBAL
+//      mode ("strict") or in RELAXED mode ("relaxed"); and is killed.
+//   This process: holds a retain on the same context throughout, so C's expiry
+//      is not the last release - which would destroy everything in it and
+//      hide whatever C's own release left behind - and checks what is left
+//      once C has expired.
+int capture_holder(int ready_fd, bool relaxed) {
+  CHECK(cuInit(0));
+  CUcontext primary = nullptr;
+  CHECK(cuDevicePrimaryCtxRetain(&primary, 0));
+  CHECK(cuCtxSetCurrent(primary));
+  CUdeviceptr before = 0, during = 0;
+  CHECK(cuMemAlloc(&before, kBytes));
+  CUstream stream = nullptr;
+  CHECK(cuStreamCreate(&stream, 0));
+  CHECK(cuStreamBeginCapture(nullptr, CU_STREAM_CAPTURE_MODE_GLOBAL));
+  CHECK(cuStreamBeginCapture(stream, CU_STREAM_CAPTURE_MODE_THREAD_LOCAL));
+
+  CUstreamCaptureMode mode = CU_STREAM_CAPTURE_MODE_RELAXED;
+  CHECK(cuThreadExchangeStreamCaptureMode(&mode));
+  CHECK(cuMemAlloc(&during, kBytes));
+  if (!relaxed) {
+    CHECK(cuThreadExchangeStreamCaptureMode(&mode));
+    // The restriction is real, or this case would prove nothing.
+    CUdeviceptr refused = 0;
+    if (cuMemAlloc(&refused, kBytes) == CUDA_SUCCESS) {
+      std::fprintf(stderr, "FAIL: an allocation in GLOBAL mode during this "
+                           "thread's own capture was allowed\n");
+      g_failures++;
+    }
+  }
+  const char ok = g_failures ? 'x' : 'k';
+  if (::write(ready_fd, &ok, 1) != 1) return 1;
+  for (;;) ::pause();
+}
+
+int capture(const char* self, bool relaxed) {
+  if (!std::getenv("RGPU_FAKE_STATS") || expired_sessions() < 0) {
+    std::fprintf(stderr, "FAIL: capture needs RGPU_FAKE_STATS and "
+                         "RGPU_SERVER_LOG; run it from run_smoke.sh\n");
+    return 1;
+  }
+  CHECK(cuInit(0));
+  CUcontext primary = nullptr;
+  CHECK(cuDevicePrimaryCtxRetain(&primary, 0));
+
+  int ready[2];
+  if (::pipe(ready) != 0) return 1;
+  const pid_t c = spawn(self, relaxed ? "capture-relaxed" : "capture-strict",
+                        {ready[1]});
+  if (!await_byte(ready[0], 'k')) {
+    std::fprintf(stderr, "FAIL: session C never got into its captures\n");
+    ::kill(c, SIGKILL);
+    ::waitpid(c, nullptr, 0);
+    return 1;
+  }
+  const std::string with_c = read_stats();
+  if (field(with_c, "captures") != 2 || field(with_c, "allocs") != 2) {
+    std::fprintf(stderr, "FAIL: session C should hold two captures and two "
+                         "allocations: %s\n", with_c.c_str());
+    g_failures++;
+  }
+
+  const long swaps_with_c = call_count("modeswaps");
+  const int expired_before = expired_sessions();
+  ::kill(c, SIGKILL);
+  ::waitpid(c, nullptr, 0);
+  if (!await_expired(expired_before + 1)) {
+    std::fprintf(stderr, "FAIL: session C never expired\n");
+    return 1;
+  }
+  const std::string after = read_stats();
+  // The serving thread is put back in the default mode before the release:
+  // one exchange if C left it RELAXED, none if C left it in the default.
+  const long swaps = call_count("modeswaps") - swaps_with_c;
+  if (swaps != (relaxed ? 1 : 0)) {
+    std::fprintf(stderr, "FAIL: C's expiry made %ld capture-mode exchange(s); "
+                         "expected %d, putting the serving thread back in the "
+                         "default mode only if C left it elsewhere\n",
+                 swaps, relaxed ? 1 : 0);
+    g_failures++;
+  }
+  for (const char* kind : {"allocs", "streams", "graphs", "execs", "captures",
+                           "overreleases", "stale"}) {
+    if (field(after, kind) != 0) {
+      std::fprintf(stderr,
+                   "FAIL: session C expired in the middle of its captures and "
+                   "left %s behind\n  with C: %s\n   after: %s\n",
+                   kind, with_c.c_str(), after.c_str());
+      g_failures++;
+    }
+  }
+  if (field(after, "retains") != 1) {
+    std::fprintf(stderr, "FAIL: only this session's retain should be left: "
+                         "%s\n", after.c_str());
+    g_failures++;
+  }
+
+  CHECK(cuDevicePrimaryCtxRelease(0));
+  if (g_failures) {
+    std::printf("\nFAILED: %d check(s)\n", g_failures);
+    return 1;
+  }
+  std::printf("PASS: a session that expires in the middle of a capture (%s) "
+              "gives everything back\n", relaxed ? "relaxed" : "strict");
+  return 0;
+}
+
 // The client that dies. Takes rather more than the parent, says so down the
 // pipe, and then waits to be killed: no exit handler, no frees, nothing the
 // server can read as a goodbye. That is what a crash looks like from here.
@@ -834,6 +964,15 @@ int main(int argc, char** argv) {
     return foreign_capturer(std::atoi(argv[2]), argv[3]);
   }
   if (argc > 1 && std::strcmp(argv[1], "foreign") == 0) return foreign(argv[0]);
+  if (argc > 2 && std::strcmp(argv[1], "capture-strict") == 0) {
+    return capture_holder(std::atoi(argv[2]), false);
+  }
+  if (argc > 2 && std::strcmp(argv[1], "capture-relaxed") == 0) {
+    return capture_holder(std::atoi(argv[2]), true);
+  }
+  if (argc > 2 && std::strcmp(argv[1], "capture") == 0) {
+    return capture(argv[0], std::strcmp(argv[2], "relaxed") == 0);
+  }
   if (argc > 2 && std::strcmp(argv[1], "tenants") == 0) {
     return tenants(argv[0], std::strcmp(argv[2], "expire") == 0);
   }

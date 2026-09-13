@@ -14,7 +14,7 @@ std::atomic<long> g_counts[kKindCount];
 // Must line up with enum Kind.
 const char* const kNames[kKindCount] = {
     "allocs",  "retains", "contexts", "modules",  "streams", "events",
-    "graphs",  "execs",   "cublas",   "cublaslt", "cudnn",
+    "graphs",  "execs",   "cublas",   "cublaslt", "cudnn",   "captures",
     "overreleases", "stale", "ctxsets", "crossctx", "totalmem", "modeswaps", "memsets",
 };
 

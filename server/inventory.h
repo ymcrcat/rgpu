@@ -24,6 +24,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include <cuda.h>
 
@@ -55,8 +56,21 @@ struct Inventory {
   };
   using Items = std::unordered_map<uint64_t, Item>;
 
+  // A stream capture this session began and has not ended: the stream - 0
+  // for the default stream of the context in `where` - and where the capture
+  // is, which is where the stream is. Not a handle, but a capture left open is
+  // held all the same: it keeps its stream capturing, and while one begun
+  // other than RELAXED is open, the thread that began it - the serving thread
+  // - is prohibited from potentially unsafe calls, freeing memory among them.
+  // So expiry ends it, first of all, and releases the graph it produces.
+  struct OpenCapture {
+    uint64_t stream = 0;
+    Item where;
+  };
+
   std::mutex mu;
   Items allocs, contexts, modules, streams, events, graphs, graph_execs;
+  std::vector<OpenCapture> captures;
   std::unordered_map<uint64_t, LibHandle> handles;
   // Per device, how many retains this session holds and has not released.
   // A primary context is shared, so this count, and not the handle, is what
@@ -97,8 +111,11 @@ void inventory_forget_handle(uint64_t handle);
 void* driver_wrapper(const char* name);
 
 // Gives back everything the session still holds, in an order that is safe:
-// what lives inside a context before the context itself, and the shared
-// primary context last of all. Every failure is logged and none of them stops
+// the captures it left open ended first, so that nothing after them runs
+// restricted by them, and their graphs released with the rest; what lives
+// inside a context before the context itself; and the shared primary context
+// last of all. The serving thread's own capture mode is the caller's to put
+// back first (client_threads_restore_default_mode). Every failure is logged and none of them stops
 // the rest. Returns a description of what happened, for the caller's log.
 std::string release_inventory(Inventory& inv);
 

@@ -337,6 +337,11 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
   #   detach:  cuCtxDetach destroys a created context and what is in it, so
   #            expiry must not destroy or free any of it again, which would
   #            be stale.
+  #   capture: a session killed in the middle of two stream captures, its
+  #            thread left in GLOBAL mode (strict) or RELAXED mode (relaxed),
+  #            while another session holds the primary context; its expiry has
+  #            to end both captures and give back everything, which a thread
+  #            still restricted by its own capture cannot. Two sessions.
   #   threads: two client threads on two devices, one with a created context
   #            on top of its primary one, exit holding everything; the slots
   #            the server keeps for them must not stand in the way of giving
@@ -368,7 +373,7 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
       sleep 0.1
     done
     local want="allocs=0 retains=0 contexts=0 modules=0 streams=0 events=0"
-    want="$want graphs=0 execs=0 cublas=0 cublaslt=0 cudnn=0"
+    want="$want graphs=0 execs=0 cublas=0 cublaslt=0 cudnn=0 captures=0"
     want="$want overreleases=0 stale=0"
     local got
     # The call counters at the end of the line count calls, not resources, so
@@ -397,6 +402,8 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
   then_expire foreign $((PORT + 11)) 2
   then_expire detach $((PORT + 15)) 1
   then_expire threads $((PORT + 17)) 1 2
+  then_expire "capture strict" $((PORT + 20)) 2
+  then_expire "capture relaxed" $((PORT + 21)) 2
 fi
 
 # Hostile requests get a server of their own: if one of them does take the

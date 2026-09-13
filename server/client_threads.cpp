@@ -285,6 +285,19 @@ CUresult client_thread_show(ClientThreads& threads, ClientThread& t) {
   return show_capture_mode(threads, t);
 }
 
+void client_threads_restore_default_mode(ClientThreads& threads) {
+  if (threads.applied_mode == CU_STREAM_CAPTURE_MODE_GLOBAL) return;
+  CUstreamCaptureMode mode = CU_STREAM_CAPTURE_MODE_GLOBAL;
+  const CUresult r = cuThreadExchangeStreamCaptureMode(&mode);
+  if (r == CUDA_SUCCESS) {
+    threads.applied_mode = CU_STREAM_CAPTURE_MODE_GLOBAL;
+    return;
+  }
+  logf("session cleanup: could not put the serving thread back in the default "
+       "stream capture mode (%d); releasing in the mode a client left it in",
+       r);
+}
+
 CUresult client_threads_exchange_capture_mode(CUstreamCaptureMode* mode) {
   ClientThreads* threads = t_threads;
   ClientThread* t = threads ? threads->caller : nullptr;

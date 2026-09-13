@@ -361,7 +361,57 @@ CUresult range_locked(CUdeviceptr p, size_t n, void** host) {
 struct Contents {
   std::vector<void*> host;
   int modules = 0, streams = 0, events = 0, graphs = 0, execs = 0;
+  int captures = 0;
 };
+
+// --- stream captures ---------------------------------------------------------
+//
+// Open captures, by stream: a created stream by its handle, and a null stream
+// - the current context's default stream - by that context. Each remembers
+// the mode it was begun in and the thread that began it, because both decide
+// what the capture permits: "If mode is not CU_STREAM_CAPTURE_MODE_RELAXED,
+// cuStreamEndCapture must be called on this stream from the same thread", and
+// while it is open the thread that began it "is prohibited from potentially
+// unsafe API calls" unless that thread's own mode is RELAXED.
+//
+// An open capture is counted ("captures"), as a resource is: one left open by
+// a session that went away is exactly what a test has to be able to see.
+struct Capture {
+  CUstreamCaptureMode mode;
+  std::thread::id owner;
+};
+using CaptureKey = std::pair<unsigned long long, CUcontext>;
+std::map<CaptureKey, Capture> g_captures;
+
+CaptureKey capture_key(CUstream stream, CUcontext stream_ctx) {
+  if (stream) return {reinterpret_cast<unsigned long long>(stream), nullptr};
+  return {0, stream_ctx};
+}
+
+// The calling thread's stream capture mode, which the header describes as the
+// thread's own ("A thread's mode is one of the following"), starting at the
+// mode it calls the default. Only the thread itself touches it.
+thread_local CUstreamCaptureMode t_capture_mode = CU_STREAM_CAPTURE_MODE_GLOBAL;
+
+// Whether the calling thread may make a potentially unsafe call. The header's
+// rule for a thread in GLOBAL or THREAD_LOCAL mode: not while it has a capture
+// of its own open that was not begun RELAXED. A thread in RELAXED mode may.
+// What counts as unsafe is not listed; the header's example is an allocation,
+// so the fake refuses allocating and freeing device memory, and nothing else.
+// The code is INFERRED: the header names none, and CUDA_ERROR_NOT_PERMITTED
+// is the one that reads right. Not modelled: another thread's capture begun
+// GLOBAL restricting a thread in GLOBAL mode. Called with g_mu held.
+CUresult capture_permits_locked() {
+  if (t_capture_mode == CU_STREAM_CAPTURE_MODE_RELAXED) return CUDA_SUCCESS;
+  const std::thread::id self = std::this_thread::get_id();
+  for (const auto& c : g_captures) {
+    if (c.second.owner == self &&
+        c.second.mode != CU_STREAM_CAPTURE_MODE_RELAXED) {
+      return CUDA_ERROR_NOT_PERMITTED;
+    }
+  }
+  return CUDA_SUCCESS;
+}
 
 void take_objects_locked(Objects* from, CUcontext ctx, int* n) {
   for (auto it = from->begin(); it != from->end();) {
@@ -376,6 +426,20 @@ void take_objects_locked(Objects* from, CUcontext ctx, int* n) {
 
 Contents take_contents_locked(CUcontext ctx) {
   Contents c;
+  // A capture goes with the stream it is on: the context's default stream,
+  // or a stream made in the context.
+  for (auto it = g_captures.begin(); it != g_captures.end();) {
+    const unsigned long long stream = it->first.first;
+    const auto owner = stream ? g_streams.find(stream) : g_streams.end();
+    const bool in_ctx = stream ? owner != g_streams.end() && owner->second == ctx
+                               : it->first.second == ctx;
+    if (in_ctx) {
+      it = g_captures.erase(it);
+      c.captures++;
+    } else {
+      ++it;
+    }
+  }
   for (auto a = g_allocs.begin(); a != g_allocs.end();) {
     if (a->second.ctx == ctx) {
       c.host.push_back(a->second.host);
@@ -403,6 +467,7 @@ void settle(const Contents& c) {
   if (c.events) rgpu_fake::count(rgpu_fake::kEvent, -c.events);
   if (c.graphs) rgpu_fake::count(rgpu_fake::kGraph, -c.graphs);
   if (c.execs) rgpu_fake::count(rgpu_fake::kGraphExec, -c.execs);
+  if (c.captures) rgpu_fake::count(rgpu_fake::kCapture, -c.captures);
 }
 
 }  // namespace
@@ -681,6 +746,7 @@ CUresult cuMemAlloc_v2(CUdeviceptr* dptr, size_t bytesize) {
     std::lock_guard<std::mutex> lk(g_mu);
     CUcontext ctx = nullptr;
     CUresult r = enter_locked(&ctx);
+    if (r == CUDA_SUCCESS) r = capture_permits_locked();
     if (r != CUDA_SUCCESS) {
       std::free(host);
       return r;
@@ -706,6 +772,7 @@ CUresult cuMemFree_v2(CUdeviceptr dptr) {
     known = it != g_allocs.end();
     CUcontext ctx = nullptr;
     r = enter_locked(&ctx);
+    if (r == CUDA_SUCCESS && known) r = capture_permits_locked();
     if (r == CUDA_SUCCESS) {
       if (known) {  // in its own context, whichever is current
         host = it->second.host;
@@ -1081,6 +1148,14 @@ CUresult cuStreamDestroy_v2(CUstream stream) {
                       CUDA_ERROR_INVALID_HANDLE);
   if (r != CUDA_SUCCESS) return r;
   rgpu_fake::count(rgpu_fake::kStream, -1);
+  // A capture open on it goes with it. What a real driver does here is not
+  // documented; ending it quietly is the reading that loses nothing.
+  bool had_capture;
+  {
+    std::lock_guard<std::mutex> lk(g_mu);
+    had_capture = g_captures.erase(capture_key(stream, nullptr)) > 0;
+  }
+  if (had_capture) rgpu_fake::count(rgpu_fake::kCapture, -1);
   return CUDA_SUCCESS;
 }
 
@@ -1106,22 +1181,22 @@ CUresult cuStreamSynchronize(CUstream stream) { return stream_ok(stream); }
 
 // --- stream capture --------------------------------------------------------
 //
-// Enough to tell whether the calls arrive intact. The dependency array is the
-// part worth checking: the driver owns it, so it cannot cross the wire as a
-// pointer, and the client has to be handed a copy of the contents instead.
+// Enough to tell whether the calls arrive intact, and what a capture left open
+// restricts (see g_captures). The dependency array is the part worth checking:
+// the driver owns it, so it cannot cross the wire as a pointer, and the client
+// has to be handed a copy of the contents instead.
 
 namespace {
-bool g_capturing = false;
 CUgraphNode g_nodes[2] = {reinterpret_cast<CUgraphNode>(0xDEB1),
                           reinterpret_cast<CUgraphNode>(0xDEB2)};
 
-// The calling thread's stream capture mode, which the header describes as the
-// thread's own ("A thread's mode is one of the following"), starting at the
-// mode it calls the default. Only the thread itself touches it. The fake keeps
-// the mode and gives it back; it does not enforce what a mode permits during a
-// capture.
-thread_local CUstreamCaptureMode t_capture_mode = CU_STREAM_CAPTURE_MODE_GLOBAL;
-
+// Whether `stream` has a capture open. Called with g_mu held; `r` is the
+// stream's own check.
+bool capturing_locked(CUstream stream, CUresult* r) {
+  CUcontext ctx = nullptr;
+  *r = stream_ok_locked(stream, &ctx);
+  return *r == CUDA_SUCCESS && g_captures.count(capture_key(stream, ctx)) > 0;
+}
 }  // namespace
 
 CUresult cuThreadExchangeStreamCaptureMode(CUstreamCaptureMode* mode) {
@@ -1138,15 +1213,24 @@ CUresult cuThreadExchangeStreamCaptureMode(CUstreamCaptureMode* mode) {
   return CUDA_SUCCESS;
 }
 
+// "it may only be initiated if the stream is not already in capture mode"; the
+// code for a second one is the only one the return list offers.
 CUresult cuStreamBeginCapture_v2(CUstream stream, CUstreamCaptureMode mode) {
   if (mode != CU_STREAM_CAPTURE_MODE_GLOBAL &&
       mode != CU_STREAM_CAPTURE_MODE_THREAD_LOCAL &&
       mode != CU_STREAM_CAPTURE_MODE_RELAXED) {
     return CUDA_ERROR_INVALID_VALUE;
   }
-  CUresult r = stream_ok(stream);
-  if (r != CUDA_SUCCESS) return r;
-  g_capturing = true;
+  {
+    std::lock_guard<std::mutex> lk(g_mu);
+    CUcontext ctx = nullptr;
+    CUresult r = stream_ok_locked(stream, &ctx);
+    if (r != CUDA_SUCCESS) return r;
+    const CaptureKey key = capture_key(stream, ctx);
+    if (g_captures.count(key)) return CUDA_ERROR_INVALID_VALUE;
+    g_captures[key] = Capture{mode, std::this_thread::get_id()};
+  }
+  rgpu_fake::count(rgpu_fake::kCapture, 1);
   return CUDA_SUCCESS;
 }
 
@@ -1159,22 +1243,30 @@ CUresult cuStreamEndCapture(CUstream stream, CUgraph* graph) {
     CUcontext ctx = nullptr;
     CUresult r = stream_ok_locked(stream, &ctx);
     if (r != CUDA_SUCCESS) return r;
-    if (!g_capturing) return CUDA_ERROR_ILLEGAL_STATE;
-    g_capturing = false;
-    if (!graph) return CUDA_ERROR_INVALID_VALUE;
-    h = mint_in_locked(&g_graphs, 0xC0FFEEu, ctx);
+    auto it = g_captures.find(capture_key(stream, ctx));
+    if (it == g_captures.end()) return CUDA_ERROR_ILLEGAL_STATE;
+    if (it->second.mode != CU_STREAM_CAPTURE_MODE_RELAXED &&
+        it->second.owner != std::this_thread::get_id()) {
+      return CUDA_ERROR_STREAM_CAPTURE_WRONG_THREAD;
+    }
+    g_captures.erase(it);
+    if (graph) h = mint_in_locked(&g_graphs, 0xC0FFEEu, ctx);
   }
+  rgpu_fake::count(rgpu_fake::kCapture, -1);
+  if (!graph) return CUDA_ERROR_INVALID_VALUE;
   *graph = reinterpret_cast<CUgraph>(h);
   rgpu_fake::count(rgpu_fake::kGraph, 1);
   return CUDA_SUCCESS;
 }
 
 CUresult cuStreamIsCapturing(CUstream stream, CUstreamCaptureStatus* status) {
-  CUresult r = stream_ok(stream);
+  std::lock_guard<std::mutex> lk(g_mu);
+  CUresult r = CUDA_SUCCESS;
+  const bool capturing = capturing_locked(stream, &r);
   if (r != CUDA_SUCCESS) return r;
   if (status) {
-    *status = g_capturing ? CU_STREAM_CAPTURE_STATUS_ACTIVE
-                          : CU_STREAM_CAPTURE_STATUS_NONE;
+    *status = capturing ? CU_STREAM_CAPTURE_STATUS_ACTIVE
+                        : CU_STREAM_CAPTURE_STATUS_NONE;
   }
   return CUDA_SUCCESS;
 }
@@ -1184,17 +1276,19 @@ CUresult cuStreamGetCaptureInfo_v2(CUstream stream,
                                    cuuint64_t* id, CUgraph* graph,
                                    const CUgraphNode** deps,
                                    size_t* ndeps) {
-  CUresult r = stream_ok(stream);
+  std::lock_guard<std::mutex> lk(g_mu);
+  CUresult r = CUDA_SUCCESS;
+  const bool capturing = capturing_locked(stream, &r);
   if (r != CUDA_SUCCESS) return r;
   if (status) {
-    *status = g_capturing ? CU_STREAM_CAPTURE_STATUS_ACTIVE
-                          : CU_STREAM_CAPTURE_STATUS_NONE;
+    *status = capturing ? CU_STREAM_CAPTURE_STATUS_ACTIVE
+                        : CU_STREAM_CAPTURE_STATUS_NONE;
   }
-  if (id) *id = g_capturing ? 0x1D : 0;
-  if (graph) *graph = g_capturing ? reinterpret_cast<CUgraph>(0xC0FFEEull)
-                                  : nullptr;
+  if (id) *id = capturing ? 0x1D : 0;
+  if (graph) *graph = capturing ? reinterpret_cast<CUgraph>(0xC0FFEEull)
+                                : nullptr;
   if (deps) *deps = g_nodes;
-  if (ndeps) *ndeps = g_capturing ? 2 : 0;
+  if (ndeps) *ndeps = capturing ? 2 : 0;
   return CUDA_SUCCESS;
 }
 
