@@ -993,12 +993,31 @@ class RawSession {
     rgpu::Handshake hello{};
     hello.magic = rgpu::kMagicHello;
     hello.version = rgpu::kProtocolVersion;
-    hello.session_hi = 0x7c7c000000000000ull ^ static_cast<uint64_t>(::getpid());
-    hello.session_lo = ++n;
+    if (session_lo_ == 0) {
+      session_hi_ = 0x7c7c000000000000ull ^ static_cast<uint64_t>(::getpid());
+      session_lo_ = ++n;
+    }
+    hello.session_hi = session_hi_;
+    hello.session_lo = session_lo_;
+    // Every request so far has been answered and read.
+    hello.last_req_id = next_ - 1;
+    const bool resuming = next_ > 1;
     rgpu::HandshakeReply reply{};
     return rgpu::write_exact(fd_, &hello, sizeof(hello)) &&
            rgpu::read_exact(fd_, &reply, sizeof(reply)) &&
-           reply.version == rgpu::kProtocolVersion && reply.resumed == 0;
+           reply.version == rgpu::kProtocolVersion &&
+           reply.resumed == (resuming ? 1u : 0u);
+  }
+
+  // Drops the connection and comes back to the same session, which the
+  // server has kept waiting. The server is given a moment to see the old
+  // connection close first, so that it is not still serving it when the new
+  // one is handed over.
+  bool reconnect() {
+    ::close(fd_);
+    fd_ = -1;
+    ::usleep(300 * 1000);
+    return open();
   }
 
   bool send(uint32_t api, uint32_t thread, const rgpu::Buffer& payload,
@@ -1117,6 +1136,7 @@ class RawSession {
  private:
   int fd_ = -1;
   uint32_t next_ = 1;
+  uint64_t session_hi_ = 0, session_lo_ = 0;
 };
 
 // A primary context one session's thread has current, ended by another
@@ -1195,6 +1215,48 @@ void late_call_after_notice(CUcontext p0, CUcontext p1) {
   CHECK(r);
   EXPECT(s.gone(8, {7}), "could not send the notice again");
   EXPECT(s.get_current(8) == p1, "the other thread's context changed");
+}
+
+// What the serving thread has current belongs to the thread, and the thread
+// outlives every connection its session has, so it is kept with the session.
+// Kept with the connection instead, it would start out as "nothing" after a
+// reconnect while the driver still had the last thread's context current, and
+// the next thread with no context of its own would run under that one - and
+// then be recorded as having selected it.
+void applied_context_outlives_a_connection(CUcontext p0) {
+  std::printf("-- a thread with no context has none after a reconnect\n");
+  constexpr uint32_t kSelector = 7, kEmpty = 8;
+  RawSession s;
+  if (!s.open()) {
+    fail_at(__FILE__, __LINE__, "could not open a session of our own");
+    return;
+  }
+  CHECK(s.set_current(kSelector, p0));
+  if (!s.reconnect()) {
+    fail_at(__FILE__, __LINE__, "could not resume the session");
+    return;
+  }
+  CUresult r = CUDA_ERROR_UNKNOWN;
+  EXPECT(s.get_current(kEmpty, &r) == nullptr,
+         "a thread that selected nothing saw a context after a reconnect");
+  CHECK(r);
+  CUdeviceptr d = 0;
+  const CUresult alloc = s.alloc(kEmpty, 64, &d);
+  if (alloc != CUDA_ERROR_INVALID_CONTEXT) {
+    char msg[200];
+    std::snprintf(msg, sizeof(msg),
+                  "an allocation by a thread with no context, after a "
+                  "reconnect, returned %d, not CUDA_ERROR_INVALID_CONTEXT",
+                  (int)alloc);
+    fail_at(__FILE__, __LINE__, msg);
+    if (alloc == CUDA_SUCCESS) s.free(kEmpty, d);
+  }
+  EXPECT(s.get_current(kEmpty, &r) == nullptr,
+         "a thread with no context was recorded as having the context "
+         "another thread selected before the reconnect");
+  EXPECT(s.get_current(kSelector, &r) == p0,
+         "a thread lost its context across a reconnect");
+  CHECK(s.set_current(kSelector, nullptr));
 }
 
 // The retired slots are bounded. A late call from a thread retired longer ago
@@ -1466,6 +1528,7 @@ int main(int argc, char** argv) {
   CUcontext p0 = nullptr, p1 = nullptr;
   CHECK(cuDevicePrimaryCtxRetain(&p0, 0));
   CHECK(cuDevicePrimaryCtxRetain(&p1, 1));
+  applied_context_outlives_a_connection(p0);
   late_call_after_notice(p0, p1);
   retired_slots_are_bounded(p0, p1);
   live_slots_are_capped();

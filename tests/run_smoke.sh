@@ -79,6 +79,46 @@ if [[ -x "$BUILD/reconnect_smoke" ]]; then
     rc=1
   fi
   kill $DROP_SRV 2>/dev/null
+
+  # The same break, in the middle of a batch two client threads queued under
+  # two devices' contexts. Its own server: two devices, a stats file the test
+  # reads the fake's cross-context count from, and a drop point of its own.
+  echo
+  THREADS_DROP_PORT=$((PORT + 16))
+  THREADS_DROP_STATS=$(mktemp "${TMPDIR:-/tmp}/rgpu-stats.XXXXXX")
+  RGPU_DROP_AFTER=16 RGPU_SESSION_GRACE=30 RGPU_FAKE_DEVICES=2 \
+    RGPU_FAKE_STATS="$THREADS_DROP_STATS" \
+    "$BUILD/rgpu-server-fake" "$THREADS_DROP_PORT" &
+  THREADS_DROP_SRV=$!
+  for _ in $(seq 1 50); do
+    if (exec 3<>/dev/tcp/127.0.0.1/"$THREADS_DROP_PORT") 2>/dev/null; then
+      exec 3<&- 3>&-
+      break
+    fi
+    sleep 0.1
+  done
+  threads_drop_out=$(LD_LIBRARY_PATH="$BUILD" \
+    RGPU_SERVER="127.0.0.1:$THREADS_DROP_PORT" RGPU_BATCH=1 \
+    RGPU_FAKE_STATS="$THREADS_DROP_STATS" \
+    "$BUILD/reconnect_smoke" threads 2>&1) || rc=1
+  printf '%s\n' "$threads_drop_out"
+  # Frames 1-8 are the setup (cuInit, the device count, then each thread's
+  # retain, selection and allocation), 9-24 thread A's memsets, 25-40 thread
+  # B's, 41 the call that flushes them. The server drops on reading frame 16,
+  # in the middle of A's run, so the client has to send 16-41 again: 26 calls,
+  # both threads' among them. Any other count means the break did not land
+  # inside the batch, and the test's checks would pass without a replay that
+  # crosses threads.
+  if ! printf '%s\n' "$threads_drop_out" |
+    grep -q "and resumed; 26 call(s) to send again"; then
+    echo "FAIL: reconnect_smoke threads did not resume sending exactly the 26"
+    echo "      calls from the middle of the two threads' batch; check where"
+    echo "      RGPU_DROP_AFTER lands"
+    printf '%s\n' "$threads_drop_out" | grep "and resumed" | sed 's/^/  /'
+    rc=1
+  fi
+  kill $THREADS_DROP_SRV 2>/dev/null
+  rm -f "$THREADS_DROP_STATS" "$THREADS_DROP_STATS.tmp"
 fi
 
 # A request still running when its client reconnects, sent again by the client
