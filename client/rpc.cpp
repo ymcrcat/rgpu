@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
@@ -19,6 +20,7 @@
 #include <string>
 
 #include "common/generated/api_ids.h"
+#include "common/internal_ids.h"
 #include "common/net.h"
 
 namespace rgpu {
@@ -114,6 +116,56 @@ SessionId make_session_id() {
 }
 
 const SessionId g_session = make_session_id();
+
+// --- client threads ---------------------------------------------------------
+//
+// Every request says which client thread issued it, so that the server can
+// keep CUDA's per-thread state - the current context above all - for each one.
+// The id is ours rather than the OS's: minted from 1 in the order threads first
+// call, never reused (a recycled OS tid would inherit a dead thread's context),
+// and the same size on every platform.
+
+std::atomic<uint32_t> g_next_thread{1};
+thread_local uint32_t t_thread_id = 0;  // 0 until this thread first calls
+
+// Ids of threads that have exited, for the server to forget. Never destroyed,
+// for the same reason as the stats: threads keep exiting while the process
+// does. Its own lock, so a thread can exit without waiting behind a call that
+// is blocked on the network, and a flag so that the common case - nothing to
+// report - costs a load rather than a lock.
+std::mutex g_retired_mu;
+std::vector<uint32_t>& g_retired = *new std::vector<uint32_t>();
+std::atomic<bool> g_have_retired{false};
+
+// Gives the thread's id back when the thread exits. Only records it: no I/O
+// in a thread-exit path, which can run while the process is being torn down.
+struct ThreadRetirer {
+  ~ThreadRetirer() {
+    std::lock_guard<std::mutex> lk(g_retired_mu);
+    g_retired.push_back(t_thread_id);
+    g_have_retired.store(true, std::memory_order_relaxed);
+  }
+};
+
+__attribute__((noinline)) uint32_t mint_thread_id() {
+  uint32_t id;
+  do {
+    id = g_next_thread.fetch_add(1, std::memory_order_relaxed);
+  } while (id == 0);  // zero means "no thread"; skip it if the counter wraps
+  t_thread_id = id;
+  // Constructed here, on first use, so its destructor runs when this thread
+  // exits and threads that never call cost nothing.
+  static thread_local ThreadRetirer retirer;
+  (void)retirer;
+  return id;
+}
+
+// The calling thread's id. A plain thread-local read on every call after the
+// first.
+inline uint32_t this_thread_id() {
+  const uint32_t id = t_thread_id;
+  return id ? id : mint_thread_id();
+}
 
 // Frames written but not yet known to have reached the server. A reply
 // acknowledges every frame up to its own id, because the server works through
@@ -298,13 +350,43 @@ void log(const char* fmt, ...) {
   va_end(ap);
 }
 
-// Appends one frame to the queue rather than writing it.
-void queue_frame_locked(uint32_t api_id, const Buffer& req, uint32_t flags) {
+void queue_one_locked(uint32_t api_id, const Buffer& req, uint32_t flags,
+                      uint32_t thread_id);
+
+// Appends one frame to the queue rather than writing it. `thread_id` is the
+// thread that issued the call, which is not necessarily the thread that will
+// write it: a batch queued by one thread goes out with the next call any
+// thread makes, and each frame has to keep its own issuer.
+void queue_frame_locked(uint32_t api_id, const Buffer& req, uint32_t flags,
+                        uint32_t thread_id) {
+  if (g_have_retired.load(std::memory_order_relaxed)) {
+    // Threads have exited since the last frame. Tell the server first, so it
+    // can drop what it keeps for them; no reply, and nothing lost but a little
+    // memory on the server if it never arrives.
+    std::vector<uint32_t> gone;
+    {
+      std::lock_guard<std::mutex> lk(g_retired_mu);
+      gone.swap(g_retired);
+      g_have_retired.store(false, std::memory_order_relaxed);
+    }
+    if (!gone.empty()) {
+      Buffer notice;
+      notice.put<uint32_t>(static_cast<uint32_t>(gone.size()));
+      notice.put_bytes(gone.data(), gone.size() * sizeof(uint32_t));
+      queue_one_locked(API_rgpu_thread_gone, notice, kFlagNoReply, thread_id);
+    }
+  }
+  queue_one_locked(api_id, req, flags, thread_id);
+}
+
+void queue_one_locked(uint32_t api_id, const Buffer& req, uint32_t flags,
+                      uint32_t thread_id) {
   ReqHeader h{};
   h.magic = kMagicReq;
   h.api_id = api_id;
   h.req_id = g_next_req++;
   h.flags = flags;
+  h.thread_id = thread_id;
   h.payload_len = static_cast<uint32_t>(req.size());
   const auto* hb = reinterpret_cast<const uint8_t*>(&h);
   g_queued.insert(g_queued.end(), hb, hb + sizeof(h));
@@ -348,13 +430,13 @@ CUresult call_async(uint32_t api_id, const Buffer& req) {
     return call(api_id, req, &rsp);
   }
 
+  const uint32_t thread_id = this_thread_id();
   std::lock_guard<std::mutex> lk(g_mu);
   if (!ensure_connected_locked()) return CUDA_ERROR_NOT_INITIALIZED;
 
   if (verbose()) log("~> %s (%zu bytes, no reply)", api_name(api_id), req.size());
 
-
-  queue_frame_locked(api_id, req, kFlagNoReply);
+  queue_frame_locked(api_id, req, kFlagNoReply, thread_id);
   g_stats.async_calls++;
   if (g_queued.size() >= kQueueFlushBytes && !flush_locked()) {
     return CUDA_ERROR_UNKNOWN;
@@ -366,6 +448,7 @@ CUresult call_async(uint32_t api_id, const Buffer& req) {
 CUresult call(uint32_t api_id, const Buffer& req, Buffer* rsp) {
   // ponytail: one connection under a global lock. Per-thread connections only
   // if profiling shows contention; correctness first.
+  const uint32_t thread_id = this_thread_id();
   std::lock_guard<std::mutex> lk(g_mu);
   if (!ensure_connected_locked()) return CUDA_ERROR_NOT_INITIALIZED;
 
@@ -373,7 +456,7 @@ CUresult call(uint32_t api_id, const Buffer& req, Buffer* rsp) {
 
   // Anything queued goes out ahead of this call, in one write, so the server
   // sees the same order the application issued.
-  queue_frame_locked(api_id, req, 0);
+  queue_frame_locked(api_id, req, 0, thread_id);
   const uint32_t expect_id = g_next_req - 1;
 
   // Two goes: one on the connection we have, and if that breaks, one on a

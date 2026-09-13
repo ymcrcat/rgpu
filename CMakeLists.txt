@@ -248,6 +248,12 @@ endif()
 add_executable(hostile_smoke tests/hostile_smoke.cpp)
 target_link_libraries(hostile_smoke PRIVATE rgpu_client)
 
+# Checks that every request names the client thread that issued it, against a
+# scripted server of its own.
+add_executable(thread_id_smoke tests/thread_id_smoke.cpp)
+target_link_libraries(thread_id_smoke PRIVATE rgpu_client Threads::Threads)
+add_test(NAME thread_id COMMAND thread_id_smoke wire)
+
 # Checks that a dropped connection does not lose the session.
 add_executable(reconnect_smoke tests/reconnect_smoke.cpp)
 target_link_libraries(reconnect_smoke PRIVATE rgpu_client)

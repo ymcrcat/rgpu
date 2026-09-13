@@ -33,6 +33,11 @@ enum InternalId : uint32_t {
   // The generator saw only a pointer being written to, sent no value, and so
   // asked for mode zero whatever the caller wanted.
   API_rgpu_capture_mode = kInternalBase + 6,
+  // Client threads that have exited, so the server can drop whatever it keeps
+  // for them. Payload: a uint32_t count, then that many thread ids. Sent
+  // without a reply, ahead of the next frame any thread queues; best-effort,
+  // since a lost one only leaks a little until the session expires.
+  API_rgpu_thread_gone = kInternalBase + 7,
 };
 
 // api_name() is generated from cuda.h and so knows only CUDA's own ids;
@@ -47,6 +52,7 @@ inline const char* call_name(uint32_t id) {
     case API_rgpu_capture_info: return "rgpu_capture_info";
     case API_rgpu_graph_nodes: return "rgpu_graph_nodes";
     case API_rgpu_capture_mode: return "rgpu_capture_mode";
+    case API_rgpu_thread_gone: return "rgpu_thread_gone";
     default: return api_name(id);
   }
 }

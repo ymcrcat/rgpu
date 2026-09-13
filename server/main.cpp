@@ -203,6 +203,20 @@ CUresult handle_hello(Buffer& req, Buffer* rsp) {
   return CUDA_SUCCESS;
 }
 
+// Client threads that have exited. Nothing on this side keeps per-thread state
+// yet, so there is nothing to drop; the payload is still read, so a malformed
+// notice is caught like any other malformed request.
+CUresult handle_thread_gone(Buffer& req, Buffer* rsp) {
+  (void)rsp;
+  uint32_t count = 0;
+  if (!req.get(&count)) return CUDA_ERROR_INVALID_VALUE;
+  for (uint32_t i = 0; i < count; i++) {
+    uint32_t id = 0;
+    if (!req.get(&id)) return CUDA_ERROR_INVALID_VALUE;
+  }
+  return CUDA_SUCCESS;
+}
+
 bool dispatch_internal(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
   switch (id) {
     case API_rgpu_param_layout: *out = handle_param_layout(req, rsp); return true;
@@ -211,6 +225,7 @@ bool dispatch_internal(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
     case API_rgpu_capture_info: *out = handle_capture_info(req, rsp); return true;
     case API_rgpu_graph_nodes: *out = handle_graph_nodes(req, rsp); return true;
     case API_rgpu_capture_mode: *out = handle_capture_mode(req, rsp); return true;
+    case API_rgpu_thread_gone: *out = handle_thread_gone(req, rsp); return true;
     default: return false;
   }
 }
