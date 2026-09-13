@@ -588,6 +588,7 @@ void recovery_after_destroy() {
   CUcontext at_end = reinterpret_cast<CUcontext>(0xbadull);
   CUcontext destroyed_sees = nullptr;
   CUresult about_handle = CUDA_SUCCESS, about_event_ctx = CUDA_SUCCESS;
+  CUresult peer_on = CUDA_SUCCESS, peer_off = CUDA_SUCCESS;
   std::thread a([&] {
     CHECK(cuCtxCreate(&made, 0, 0));
     turns.advance(1);
@@ -608,6 +609,12 @@ void recovery_after_destroy() {
         reinterpret_cast<CUcontext>(0xdeadbeefull), &version);
     about_event_ctx = cuCtxRecordEvent(
         reinterpret_cast<CUcontext>(0xdeadbeefull), nullptr);
+    // Peer access is from the current context, and is refused with
+    // CUDA_ERROR_INVALID_CONTEXT "if there is no current context": about the
+    // current context too, so corrected like any other call. The peer here is
+    // a live context.
+    peer_on = cuCtxEnablePeerAccess(p1, 0);
+    peer_off = cuCtxDisablePeerAccess(p1);
     CUdeviceptr e = 0;
     after_pop = cuMemAlloc(&e, 64);
     if (after_pop == CUDA_SUCCESS) cuMemFree(e);
@@ -667,6 +674,16 @@ void recovery_after_destroy() {
                   "after popping back to the destroyed context an allocation "
                   "returned %d, not CUDA_ERROR_CONTEXT_IS_DESTROYED",
                   (int)after_pop);
+    fail_at(__FILE__, __LINE__, msg);
+  }
+  if (peer_on != CUDA_ERROR_CONTEXT_IS_DESTROYED ||
+      peer_off != CUDA_ERROR_CONTEXT_IS_DESTROYED) {
+    char msg[200];
+    std::snprintf(msg, sizeof(msg),
+                  "peer access from a destroyed current context returned %d "
+                  "(enable) and %d (disable), not "
+                  "CUDA_ERROR_CONTEXT_IS_DESTROYED",
+                  (int)peer_on, (int)peer_off);
     fail_at(__FILE__, __LINE__, msg);
   }
   EXPECT(set_on == 1,

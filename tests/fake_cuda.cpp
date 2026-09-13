@@ -880,6 +880,33 @@ CUresult cuCtxRecordEvent(CUcontext ctx, CUevent event) {
   return CUDA_SUCCESS;
 }
 
+// Peer access from the current context to another. Both calls report
+// CUDA_ERROR_INVALID_CONTEXT "if there is no current context" as well as for a
+// bad peer, so their answer can be about either. Which peers have been enabled
+// is not kept: nothing here copies between contexts.
+CUresult cuCtxEnablePeerAccess(CUcontext peerContext, unsigned int Flags) {
+  std::lock_guard<std::mutex> lk(g_mu);
+  CUcontext ctx = nullptr;
+  const CUresult r = enter_locked(&ctx);
+  if (r != CUDA_SUCCESS) return r;
+  if (!peerContext || !bindable_locked(peerContext) || peerContext == ctx) {
+    return CUDA_ERROR_INVALID_CONTEXT;
+  }
+  if (Flags != 0) return CUDA_ERROR_INVALID_VALUE;
+  return CUDA_SUCCESS;
+}
+
+CUresult cuCtxDisablePeerAccess(CUcontext peerContext) {
+  std::lock_guard<std::mutex> lk(g_mu);
+  CUcontext ctx = nullptr;
+  const CUresult r = enter_locked(&ctx);
+  if (r != CUDA_SUCCESS) return r;
+  if (!peerContext || !bindable_locked(peerContext)) {
+    return CUDA_ERROR_INVALID_CONTEXT;
+  }
+  return CUDA_SUCCESS;
+}
+
 // "Returns in *device the handle of the current context's device." A context
 // destroyed under this thread is reported the way every other call here
 // reports it; a primary context is on its device whether or not it is

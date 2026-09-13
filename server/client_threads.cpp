@@ -325,14 +325,20 @@ void client_thread_after(ClientThreads& threads, ClientThread& t,
   // CUDA_ERROR_CONTEXT_IS_DESTROYED, and the context stays current, so it
   // goes on doing so until the thread selects another. Here nothing is current
   // instead, so the driver says CUDA_ERROR_INVALID_CONTEXT; while the thread's
-  // top is still the destroyed context, that is corrected. The calls that
-  // report CUDA_ERROR_INVALID_CONTEXT about a context they were handed as an
-  // argument, rather than the current one, keep their own answer. (Calls
-  // that name a context inside a structure - cuMemcpy3DPeer, the kernel and
-  // generic node parameters - are not listed: there a null context means the
-  // current one, so the answer may be about either.) So do the maths
-  // libraries, whose calls carry no driver result here: only a driver call's
-  // result is a CUresult to correct.
+  // top is still the destroyed context, that is corrected.
+  //
+  // Not corrected: the calls listed below, which report
+  // CUDA_ERROR_INVALID_CONTEXT about a context they were handed as an
+  // argument rather than the current one, and keep their own answer; and the
+  // maths libraries, whose calls carry no driver result here - only a driver
+  // call's result is a CUresult to correct.
+  //
+  // Not listed, because their answer may be about the current context:
+  // cuCtxEnablePeerAccess and cuCtxDisablePeerAccess, which the header says
+  // return it "if there is no current context" as well as for a bad peer; and
+  // the calls that name a context inside a structure - cuMemcpy3DPeer, the
+  // kernel and generic node parameters - where a null context may mean the
+  // current one, as the header says of CUDA_KERNEL_NODE_PARAMS.
   if (*result != CUDA_ERROR_INVALID_CONTEXT) return;
   if (t.stack.empty() || !t.stack.back().gone) return;
   const bool driver_call =
@@ -346,8 +352,6 @@ void client_thread_after(ClientThreads& threads, ClientThread& t,
     case API_cuCtxDetach:
     case API_cuCtxGetApiVersion:
     case API_cuCtxGetId:
-    case API_cuCtxEnablePeerAccess:
-    case API_cuCtxDisablePeerAccess:
     case API_cuCtxRecordEvent:
     case API_cuCtxWaitEvent:
     case API_cuCtxGetDevResource:
