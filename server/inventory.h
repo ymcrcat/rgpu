@@ -53,7 +53,8 @@ struct Inventory {
   // one more, or a session still using the device loses it.
   std::unordered_map<int, int> primary_retains;
   // The primary context handle per device, learned when it was retained. Only
-  // used to find what a reset of that device threw away.
+  // used to find what a reset of that device, or the last release of its
+  // primary context, threw away.
   std::unordered_map<int, CUcontext> primary_ctx;
 };
 

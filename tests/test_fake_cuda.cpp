@@ -393,6 +393,11 @@ void last_release_resets() {
   CHECK(cuDevicePrimaryCtxRelease(1));
   EXPECT(stat(rgpu_fake::kAlloc) == allocs,
          "releasing the last retain should free the primary context's memory");
+  // What the server asks to learn that a release was the last one.
+  unsigned int flags = 0;
+  int active = -1;
+  CHECK(cuDevicePrimaryCtxGetState(1, &flags, &active));
+  EXPECT(active == 0, "a primary context with no retains must report inactive");
   // Still current here, but no longer initialised.
   EXPECT_RC(cuMemAlloc(&a, 64), CUDA_ERROR_CONTEXT_IS_DESTROYED);
   CHECK(cuCtxSetCurrent(nullptr));

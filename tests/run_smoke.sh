@@ -116,6 +116,8 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
   #            session still owes both its retains and expiry has to pay them:
   #            a retain left held is a leak, one released twice an
   #            over-release.
+  #   release: releasing the only retain destroys what is in the context, so
+  #            expiry must not free any of it again, which would be stale.
   alone_then_expire() {
     local mode=$1 port=$2
     local stats log
@@ -158,6 +160,7 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
     rm -f "$stats" "$stats.tmp" "$log"
   }
   alone_then_expire reset $((PORT + 4))
+  alone_then_expire release $((PORT + 5))
 fi
 
 # Hostile requests get a server of their own: if one of them does take the

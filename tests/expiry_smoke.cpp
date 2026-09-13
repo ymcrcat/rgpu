@@ -229,6 +229,43 @@ int reset_alone() {
   return 0;
 }
 
+// Releasing the last retain on a primary context resets it, in the driver's
+// words "automatically ... once the last reference to it is released", so
+// everything in it is destroyed without the client freeing any of it. Alone
+// on a server this session's release is the last one, and the server has to
+// notice: if it still thought it held the memory, stream and module, it would
+// free them at expiry, and the fake driver would count every one as stale.
+int release_alone() {
+  CHECK(cuInit(0));
+  CUdevice dev = 0;
+  CHECK(cuDeviceGet(&dev, 0));
+  CUcontext primary = nullptr;
+  CHECK(cuDevicePrimaryCtxRetain(&primary, dev));
+  CHECK(cuCtxSetCurrent(primary));
+  Held held;
+  take_driver_resources(&held);
+  CHECK(cuDevicePrimaryCtxRelease(dev));
+
+  const std::string after = read_stats();
+  if (!after.empty()) {
+    for (const char* kind : {"allocs", "retains", "modules", "streams",
+                             "events", "graphs", "execs"}) {
+      if (field(after, kind) != 0) {
+        std::fprintf(stderr,
+                     "FAIL: releasing the last retain left %s behind: %s\n",
+                     kind, after.c_str());
+        g_failures++;
+      }
+    }
+  }
+  if (g_failures) {
+    std::printf("\nFAILED: %d check(s)\n", g_failures);
+    return 1;
+  }
+  std::printf("PASS: releasing the last retain destroys what was in it\n");
+  return 0;
+}
+
 // The client that dies. Takes rather more than the parent, says so down the
 // pipe, and then waits to be killed: no exit handler, no frees, nothing the
 // server can read as a goodbye. That is what a crash looks like from here.
@@ -266,6 +303,7 @@ int main(int argc, char** argv) {
     return hold_and_wait(std::atoi(argv[2]));
   }
   if (argc > 1 && std::strcmp(argv[1], "reset") == 0) return reset_alone();
+  if (argc > 1 && std::strcmp(argv[1], "release") == 0) return release_alone();
 
   if (!std::getenv("RGPU_FAKE_STATS")) {
     std::fprintf(stderr,

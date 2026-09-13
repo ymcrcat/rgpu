@@ -125,6 +125,11 @@ void forget_context(CUcontext ctx) {
 // life of the server. The handle stays recorded too, since the context was not
 // released: a later reset has to find what was made in it afterwards, and a
 // retain that hands back a new handle overwrites it.
+//
+// The last release of a primary context in the process destroys what is in it
+// the same way, and comes here too. The handle is left recorded then as well;
+// if the driver hands out a new one when the context is next retained, that
+// retain overwrites it.
 void forget_primary(CUdevice dev) {
   Inventory* inv = t_inv;
   if (!inv) return;
@@ -186,17 +191,44 @@ CUresult w_cuMemFreeAsync(CUdeviceptr dptr, CUstream stream) {
   return r;
 }
 
+// Held across a session's retain, and across a session's release together with
+// the question that follows it, so that no other session's retain can bring a
+// primary context back to life between a release that ended it and the check
+// that notices. Retains and releases are rare next to everything else, so
+// making them wait for each other costs nothing that shows. Lock order is
+// this, then the inventory's own mutex; nothing takes them the other way round.
+std::mutex g_primary_mu;
+
 CUresult w_cuDevicePrimaryCtxRetain(CUcontext* pctx, CUdevice dev) {
   REAL("cuDevicePrimaryCtxRetain", CUcontext*, CUdevice);
+  std::lock_guard<std::mutex> lk(g_primary_mu);
   CUresult r = fn(pctx, dev);
   if (r == CUDA_SUCCESS) note_primary_retain(dev, 1, pctx ? *pctx : nullptr);
   return r;
 }
 
+// Releasing the last retain in the process destroys the primary context and
+// everything in it - "The context is automatically reset once the last
+// reference to it is released" - so whatever this session recorded in there is
+// no longer its to free. Its own count cannot say whether this release was the
+// last one, because other sessions may hold retains on the same context, so
+// the driver is asked instead. If the state cannot be read, the record is left
+// as it is: the driver will refuse frees in a context that is gone.
 CUresult w_cuDevicePrimaryCtxRelease_v2(CUdevice dev) {
   REAL("cuDevicePrimaryCtxRelease_v2", CUdevice);
+  static auto get_state =
+      reinterpret_cast<CUresult (*)(CUdevice, unsigned int*, int*)>(
+          driver_sym_raw("cuDevicePrimaryCtxGetState"));
+  std::lock_guard<std::mutex> lk(g_primary_mu);
   CUresult r = fn(dev);
-  if (r == CUDA_SUCCESS) note_primary_retain(dev, -1, nullptr);
+  if (r != CUDA_SUCCESS) return r;
+  note_primary_retain(dev, -1, nullptr);
+  unsigned int flags = 0;
+  int active = 1;
+  if (get_state && get_state(dev, &flags, &active) == CUDA_SUCCESS &&
+      !active) {
+    forget_primary(dev);
+  }
   return r;
 }
 
