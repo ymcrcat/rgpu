@@ -161,10 +161,12 @@ void take_resources(CUdevice dev, Held* held, bool own_context) {
 }
 
 // The other half of the reset ruling: alone on a server, a client may reset
-// the device, and the session must come out of it owing nothing. Everything
-// taken here is in the primary context, so the reset destroys all of it; if
-// the server still thought it held two retains it would try to release them
-// at expiry, and the fake driver would count the over-release.
+// the device. Everything taken here is in the primary context, so the reset
+// destroys all of it, and a server that went on to free any of it at expiry
+// would show as stale. The two retains are another matter: a reset does not
+// release a primary context, so the session still holds both, and expiry has
+// to release exactly those two - a server that forgot them would leak them,
+// and one that released a third would show as an over-release.
 //
 // Not only memory. The server forgets every kind of thing it recorded in the
 // primary context when the device is reset, so every kind the driver hands
@@ -195,11 +197,34 @@ int reset_alone() {
                  r);
     g_failures++;
   }
+
+  // The driver's side of it, which the server has to agree with: everything
+  // in the context is gone, and both retains are still held. The header is
+  // explicit that "resetting the primary context does not release it", so the
+  // session still owes its two releases, and run_smoke.sh checks that expiry
+  // pays them - no more, no fewer.
+  const std::string after = read_stats();
+  if (!after.empty()) {
+    for (const char* kind :
+         {"allocs", "modules", "streams", "events", "graphs", "execs"}) {
+      if (field(after, kind) != 0) {
+        std::fprintf(stderr, "FAIL: the reset left %s behind: %s\n", kind,
+                     after.c_str());
+        g_failures++;
+      }
+    }
+    if (field(after, "retains") != 2) {
+      std::fprintf(stderr,
+                   "FAIL: a reset should leave both retains held: %s\n",
+                   after.c_str());
+      g_failures++;
+    }
+  }
   if (g_failures) {
     std::printf("\nFAILED: %d check(s)\n", g_failures);
     return 1;
   }
-  // Left exactly as it is: the server has to be right about owing nothing.
+  // Left exactly as it is: the server has to be right about what it owes.
   std::printf("PASS: the only session on a server may reset the device\n");
   return 0;
 }

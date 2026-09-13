@@ -115,6 +115,16 @@ void forget_context(CUcontext ctx) {
 // suddenly wrong. Only this session's record can be corrected here; a reset is
 // a process-wide act, and a client that makes one while another session is
 // using the device has already broken that session, driver or no driver.
+//
+// Only the resources go. The retains stay: the driver says "Resetting the
+// primary context does not release it, an application that has retained the
+// primary context should explicitly release its usage", and that "it is safe
+// for other modules to call cuDevicePrimaryCtxRelease() even after resetting
+// the device". So every retain this session held is still held, and expiry
+// owes exactly that many releases; forgetting them would leak them for the
+// life of the server. The handle stays recorded too, since the context was not
+// released: a later reset has to find what was made in it afterwards, and a
+// retain that hands back a new handle overwrites it.
 void forget_primary(CUdevice dev) {
   Inventory* inv = t_inv;
   if (!inv) return;
@@ -122,13 +132,6 @@ void forget_primary(CUdevice dev) {
   auto it = inv->primary_ctx.find(dev);
   if (it == inv->primary_ctx.end()) return;
   forget_under(inv, it->second);
-  // The retains go too. A reset destroys the primary context and all its
-  // state, and the driver is entitled to have dropped the reference count with
-  // it; owing releases against a count that no longer exists would take a
-  // retain off whoever retains it next. Forgetting them can at worst leak one
-  // retain, which is the safe way to be wrong.
-  inv->primary_retains.erase(dev);
-  inv->primary_ctx.erase(it);
 }
 
 // --- the wrappers ---------------------------------------------------------

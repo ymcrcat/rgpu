@@ -11,7 +11,8 @@
 // is loose about them hides exactly the class of bug that issue #2 is:
 //
 //   - There are RGPU_FAKE_DEVICES devices (default 1), each with a primary
-//     context of its own, retained, released and reset on its own count.
+//     context of its own, with its own retain count, released and reset
+//     independently of every other device.
 //   - The current context is state of the calling OS thread, kept as a stack,
 //     as the real driver keeps it. In the server one thread serves a session,
 //     so that is where this state lives there too; nothing here is shortened
@@ -88,7 +89,8 @@ int primary_device(CUcontext ctx) {
 
 // Per device, how many retains the whole process holds. A primary context is
 // shared, so this is the count that must not go negative, and while it is zero
-// the context is not initialised and nothing can run in it.
+// the context is not initialised and nothing can run in it. Only retains and
+// releases move it; a reset does not.
 std::map<int, int> g_primary_retains;
 
 // Contexts the client created, and the device each is on.
@@ -115,8 +117,8 @@ bool bindable_locked(CUcontext ctx) {
 //
 // Two different failures, as the driver documents them: no context at all is
 // CUDA_ERROR_INVALID_CONTEXT, and a current context that has since been
-// destroyed - by this thread's reset, or by another thread entirely, which
-// leaves it current here - is CUDA_ERROR_CONTEXT_IS_DESTROYED. A primary
+// destroyed - by another thread, which leaves it current here - is
+// CUDA_ERROR_CONTEXT_IS_DESTROYED. A primary
 // context nobody holds a retain on is "not yet initialised", which the driver
 // reports the same way.
 CUresult enter_locked(CUcontext* ctx) {
@@ -510,29 +512,28 @@ CUresult cuDevicePrimaryCtxRelease_v2(CUdevice dev) {
 
 // Destroys everything in the device's primary context - memory, modules,
 // streams, events and graphs, which is what the server's inventory forgets for
-// it - and nothing in any other context. It also drops the reference count,
-// which is the reading the server is careful to survive: a session that had
-// retains before a reset owes nothing afterwards. The handle stays current on
-// any thread that had it current, and stays unusable there until somebody
-// retains it again.
+// it - and nothing in any other context.
+//
+// It does not touch the retain count. The driver is explicit: "Resetting the
+// primary context does not release it, an application that has retained the
+// primary context should explicitly release its usage", and "it is safe for
+// other modules to call cuDevicePrimaryCtxRelease() even after resetting the
+// device". So every retain taken before a reset is still owed a release after
+// it, the context stays active while any are held, and it is usable again
+// straight away, empty.
 CUresult cuDevicePrimaryCtxReset_v2(CUdevice dev) {
   if (!valid_device(dev)) return CUDA_ERROR_INVALID_DEVICE;
-  int dropped = 0;
   Contents gone;
   {
     std::lock_guard<std::mutex> lk(g_mu);
-    auto it = g_primary_retains.find(dev);
-    if (it != g_primary_retains.end()) {
-      dropped = it->second;
-      it->second = 0;
-    }
     gone = take_contents_locked(primary_token(dev));
   }
   settle(gone);
-  if (dropped) rgpu_fake::count(rgpu_fake::kPrimaryRetain, -dropped);
   return CUDA_SUCCESS;
 }
 
+// Active while anybody holds a retain, which is the state the server reads to
+// learn whether a release it made was the last one in the process.
 CUresult cuDevicePrimaryCtxGetState(CUdevice dev, unsigned int* flags,
                                     int* active) {
   if (!valid_device(dev)) return CUDA_ERROR_INVALID_DEVICE;

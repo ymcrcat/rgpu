@@ -298,11 +298,14 @@ void addresses_are_not_reused() {
 }
 
 // Resetting a device throws away everything in its primary context - not only
-// memory - and nothing in any other context, on this device or another.
+// memory - and nothing in any other context, on this device or another. It
+// leaves the retain count alone.
 void reset_releases_the_primary_context() {
   const long base[] = {stat(rgpu_fake::kAlloc),  stat(rgpu_fake::kModule),
                        stat(rgpu_fake::kStream), stat(rgpu_fake::kEvent),
                        stat(rgpu_fake::kGraph),  stat(rgpu_fake::kGraphExec)};
+  const long base_retains = stat(rgpu_fake::kPrimaryRetain);
+  const long over = stat(rgpu_fake::kOverRelease);
   CUcontext p0 = nullptr, p1 = nullptr;
   CHECK(cuDevicePrimaryCtxRetain(&p0, 0));
   CHECK(cuDevicePrimaryCtxRetain(&p1, 1));
@@ -345,14 +348,30 @@ void reset_releases_the_primary_context() {
   EXPECT(stat(rgpu_fake::kGraphExec) == base[5],
          "reset should destroy graph executables");
 
+  // A reset does not release the context: "Resetting the primary context
+  // does not release it, an application that has retained the primary
+  // context should explicitly release its usage." The retain is still held,
+  // the context is still active and usable, and releasing it later succeeds.
+  unsigned int flags = 0;
+  int active = -1;
+  CHECK(cuDevicePrimaryCtxGetState(0, &flags, &active));
+  EXPECT(active == 1, "a reset must not deactivate a retained primary context");
+  EXPECT(stat(rgpu_fake::kPrimaryRetain) == base_retains + 2,
+         "a reset must not drop the retain count");
+  CUdeviceptr after = 0;
+  CHECK(cuMemAlloc(&after, 64));
+  CHECK(cuMemFree(after));
+
   // What the reset destroyed is gone, and freeing it again is stale.
   const long stale = stat(rgpu_fake::kStale);
-  CHECK(cuDevicePrimaryCtxRetain(&p0, 0));
   EXPECT_RC(cuMemFree(a), CUDA_ERROR_INVALID_VALUE);
   EXPECT_RC(cuStreamDestroy(s), CUDA_ERROR_INVALID_HANDLE);
   EXPECT(stat(rgpu_fake::kStale) == stale + 2,
          "releasing what a reset destroyed should count as stale");
   CHECK(cuDevicePrimaryCtxRelease(0));
+  EXPECT_RC(cuDevicePrimaryCtxRelease(0), CUDA_ERROR_INVALID_CONTEXT);
+  EXPECT(stat(rgpu_fake::kOverRelease) == over + 1,
+         "one release per retain, reset or not");
 
   CHECK(cuCtxSetCurrent(p1));
   CHECK(cuMemFree(other_device));
