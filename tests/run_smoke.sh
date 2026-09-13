@@ -197,15 +197,17 @@ if [[ -x "$BUILD/replay_smoke" ]]; then
   rm -f "$REPLAY_STATS" "$REPLAY_STATS.tmp" "$REPLAY_LOG"
 fi
 
-# A session lost while the server was busy with it. Its own server: a grace
-# period short enough to run out in the middle of a reconnect's hand-over, and
-# a hand-over held back past it (RGPU_TEST_HANDOFF_DELAY_MS, a test hook).
-# replay_smoke.cpp says more.
+# Sessions lost while the server was busy with them. Its own server: a grace
+# period short enough to run out in the middle of a reconnect's hand-over, a
+# hand-over held back past it (RGPU_TEST_HANDOFF_DELAY_MS, a test hook), a cap
+# of two client threads so that a client can be refused at it, and a log to
+# count lines in. replay_smoke.cpp says more about each case.
 if [[ -x "$BUILD/replay_smoke" ]]; then
   echo
   LOST_PORT=$((PORT + 18))
   LOST_LOG=$(mktemp "${TMPDIR:-/tmp}/rgpu-lost-log.XXXXXX")
   RGPU_SESSION_GRACE=1 RGPU_TEST_HANDOFF_DELAY_MS=2500 \
+    RGPU_MAX_CLIENT_THREADS=2 \
     "$BUILD/rgpu-server-fake" "$LOST_PORT" >"$LOST_LOG" 2>&1 &
   LOST_SRV=$!
   for _ in $(seq 1 50); do
@@ -216,7 +218,33 @@ if [[ -x "$BUILD/replay_smoke" ]]; then
     sleep 0.1
   done
   RGPU_SERVER="127.0.0.1:$LOST_PORT" "$BUILD/replay_smoke" handoff || rc=1
+  echo
+  RGPU_SERVER="127.0.0.1:$LOST_PORT" "$BUILD/replay_smoke" flood || rc=1
+  # Both sessions expire; what the flood leaves is only said at expiry.
+  for _ in $(seq 1 100); do
+    [[ $(grep -c " expired;" "$LOST_LOG") -ge 2 ]] && break
+    sleep 0.1
+  done
   kill $LOST_SRV 2>/dev/null
+  # A client can make these failures as fast as it can send frames, so each
+  # kind is said once per session, and the count comes at expiry. The flood
+  # holds 201 failures: thread 1's first and one for each of the 200 refused
+  # threads. Two reach their thread; the other 199 are evicted, or still held
+  # when the session expires.
+  held_lines=$(grep -c "had no reply to report it in" "$LOST_LOG")
+  lost_lines=$(grep -c "without learning that a call it sent" "$LOST_LOG")
+  if [[ "$held_lines" != 1 || "$lost_lines" != 1 ]]; then
+    echo "FAIL: the server logged $held_lines held failures and $lost_lines"
+    echo "      failures that never reached their thread; once per session each"
+    rc=1
+  fi
+  if ! grep "expired;" "$LOST_LOG" |
+    grep -q "201 failure(s) of calls sent without a reply were held, 199 of them never reached"; then
+    echo "FAIL: the flood's session did not report at expiry how many failures"
+    echo "      it held (201) and how many never reached their thread (199)"
+    grep "session .* expired\|without a reply were held" "$LOST_LOG" | sed 's/^/  /'
+    rc=1
+  fi
   rm -f "$LOST_LOG"
 fi
 

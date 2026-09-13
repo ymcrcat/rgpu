@@ -34,6 +34,7 @@
 #include <cuda.h>
 
 #include "common/generated/api_ids.h"
+#include "common/internal_ids.h"
 #include "common/net.h"
 #include "common/wire.h"
 
@@ -652,11 +653,97 @@ int expiry_during_handoff() {
   return 0;
 }
 
+// --- replay_smoke flood -----------------------------------------------------
+//
+// A client can make failures of calls sent without a reply as fast as it can
+// send frames: calls from threads refused at the session's cap are each
+// parked in a new retired slot, which evicts the oldest. Each used to be a
+// line or two in the server log. They are now said once per session and
+// counted, and the count is reported at expiry; run_smoke.sh counts the lines.
+//
+// What is held and what is evicted does not change: a thread's failure still
+// reaches its next call that replies, and a refused thread let in later still
+// gets its own failure back. The server runs with RGPU_MAX_CLIENT_THREADS=2.
+Frame device_get(uint32_t req_id, uint32_t thread, int ordinal, bool no_reply) {
+  Frame f;
+  f.payload.put<uint8_t>(1);
+  f.payload.put<int>(ordinal);
+  f.h.magic = rgpu::kMagicReq;
+  f.h.api_id = rgpu::API_cuDeviceGet;
+  f.h.req_id = req_id;
+  f.h.flags = no_reply ? static_cast<uint32_t>(rgpu::kFlagNoReply) : 0u;
+  f.h.thread_id = thread;
+  f.h.payload_len = static_cast<uint32_t>(f.payload.size());
+  return f;
+}
+
+constexpr int kRefused = 200;
+
+int deferred_error_flood() {
+  std::printf("-- failures of calls without a reply are logged once per "
+              "session\n");
+  const uint64_t session = 2;
+  rgpu::HandshakeReply hs{};
+  int fd = connect_session(session, 0, &hs);
+  EXPECT(fd >= 0 && hs.resumed == 0, "could not start a session");
+  if (fd < 0) return 1;
+
+  uint32_t id = 1;
+  Frame f = device_get(id++, 1, 0, false);
+  EXPECT(send(fd, f), "send");
+  expect_answer(fd, f, CUDA_SUCCESS, "thread 1's first call");
+  f = device_get(id++, 2, 0, false);
+  EXPECT(send(fd, f), "send");
+  expect_answer(fd, f, CUDA_SUCCESS, "thread 2's first call");
+
+  // Thread 1 fails twice without a reply: the first is held, the second is
+  // dropped behind it.
+  EXPECT(send(fd, device_get(id++, 1, 99, true)), "send");
+  EXPECT(send(fd, device_get(id++, 1, 99, true)), "send");
+  // Threads refused at the cap, each failing without a reply.
+  constexpr uint32_t kFirstRefused = 1000;
+  for (int i = 0; i < kRefused; i++) {
+    EXPECT(send(fd, device_get(id++, kFirstRefused + i, 0, true)), "send");
+  }
+
+  f = device_count(id++);
+  EXPECT(send(fd, f), "send");
+  expect_answer(fd, f, CUDA_ERROR_INVALID_DEVICE,
+                "thread 1's next call that replies, after its failures");
+
+  // Thread 2 goes, making room; the last refused thread comes in and gets
+  // back the failure its refused call left.
+  Frame gone;
+  gone.payload.put<uint32_t>(1);
+  gone.payload.put<uint32_t>(2);
+  gone.h.magic = rgpu::kMagicReq;
+  gone.h.api_id = rgpu::API_rgpu_thread_gone;
+  gone.h.req_id = id++;
+  gone.h.flags = rgpu::kFlagNoReply;
+  gone.h.thread_id = 1;
+  gone.h.payload_len = static_cast<uint32_t>(gone.payload.size());
+  EXPECT(send(fd, gone), "send");
+  f = device_count(id++);
+  f.h.thread_id = kFirstRefused + kRefused - 1;
+  EXPECT(send(fd, f), "send");
+  expect_answer(fd, f, CUDA_ERROR_INVALID_VALUE,
+                "the last thread refused at the cap, once let in");
+  ::close(fd);
+
+  if (g_failures) {
+    std::printf("\nFAILED: %d check(s)\n", g_failures);
+    return 1;
+  }
+  std::printf("\nPASS: failures of calls without a reply were held as before\n");
+  return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
   const std::string mode = argc > 1 ? argv[1] : "";
   if (mode == "handoff") return expiry_during_handoff();
+  if (mode == "flood") return deferred_error_flood();
 
   reply_expected_request_in_flight();
   no_reply_request_in_flight();

@@ -307,8 +307,11 @@ inline ClientThread* thread_slot(ClientThreads& threads, uint32_t id,
 
 // Says so when a client thread's slot is forgotten while it still holds the
 // failure of a call it sent without a reply: the thread will never make the
-// call that would have carried it. Always said, like the failure itself was
-// when it was held, because this is the last place it is named.
+// call that would have carried it. This is the last place it is named, but a
+// client can have slots forgotten as fast as it sends frames - calls from
+// threads refused at the cap each park a failure in a new retired slot, which
+// evicts the oldest - so the first in a session is said in full, every one
+// with RGPU_VERBOSE, and the rest are counted and the count given at expiry.
 //
 // CUDA has no exact counterpart to lose. A sticky error belongs to the context,
 // not the thread, and survives the thread's exit - every later call in that
@@ -316,19 +319,23 @@ inline ClientThread* thread_slot(ClientThreads& threads, uint32_t id,
 // here, on its own. A thread's last error dies with the thread. What is held
 // here is neither: it is the ordinary result of one call, which CUDA would have
 // returned to the thread at the call, so it goes with its thread.
-void say_unreported(uint64_t session, uint32_t id, const ClientThread& t,
-                    const char* why) {
+void say_unreported(ClientThreads& threads, uint64_t session, uint32_t id,
+                    const ClientThread& t, const char* why) {
   if (t.pending_async == CUDA_SUCCESS) return;
+  if (threads.unreported_failures++ > 0 && !g_verbose) return;
   logf("session %llx: client thread %u %s without learning that a call it "
        "sent without a reply failed with %d; no call from it that replies "
-       "came after",
-       (unsigned long long)session, id, why, t.pending_async);
+       "came after. %s",
+       (unsigned long long)session, id, why, t.pending_async,
+       g_verbose ? ""
+                 : "Any more in this session are counted, and the count "
+                   "given when it expires");
 }
 
 // Forgets the oldest retired slots past the bound.
 void trim_retired(ClientThreads& threads, uint64_t session) {
   while (threads.retired.size() > kRetiredSlots) {
-    say_unreported(session, threads.retired.front().first,
+    say_unreported(threads, session, threads.retired.front().first,
                    threads.retired.front().second, "was forgotten");
     threads.retired.pop_front();
   }
@@ -677,12 +684,20 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
         }
       }
       if (held) {
-        // Always logged: this is the only place the failure is named, and an
-        // application that ignores the next return value would otherwise never
-        // learn it happened at all.
-        logf("%s from client thread %u failed with %d and had no reply to "
-             "report it in; that thread's next call that replies will carry it",
-             call_name(h.api_id), h.thread_id, result);
+        // Logged, because an application that ignores the next return value
+        // would otherwise never learn it happened at all. But a client can
+        // make these as fast as it sends frames, so the first in a session is
+        // said in full, every one with RGPU_VERBOSE, and the rest counted
+        // and the count given at expiry.
+        if (threads.held_failures++ == 0 || g_verbose) {
+          logf("%s from client thread %u failed with %d and had no reply to "
+               "report it in; that thread's next call that replies will carry "
+               "it. %s",
+               call_name(h.api_id), h.thread_id, result,
+               g_verbose ? ""
+                         : "Any more in this session are counted, and the "
+                           "count given when it expires");
+        }
       } else if (result != CUDA_SUCCESS && g_verbose) {
         // One slot holds one error, so everything that fails behind the first
         // one is dropped. CUDA's own sticky error behaves the same way, and
@@ -775,13 +790,23 @@ void serve_session(std::shared_ptr<Session> session, SessionKey key) {
   // current as it goes, so a slot that outlived this line would name a
   // context that is gone. Nothing is ever released from the slots.
   client_threads_bind(nullptr);
-  for (const auto& entry : session->threads.live) {
-    say_unreported(key.first, entry.first, entry.second, "expired");
+  ClientThreads& threads = session->threads;
+  for (const auto& entry : threads.live) {
+    say_unreported(threads, key.first, entry.first, entry.second, "expired");
   }
-  for (const auto& entry : session->threads.retired) {
-    say_unreported(key.first, entry.first, entry.second, "expired");
+  for (const auto& entry : threads.retired) {
+    say_unreported(threads, key.first, entry.first, entry.second, "expired");
   }
-  session->threads.clear();
+  // What was said once above, in numbers.
+  char failures[256] = "";
+  if (threads.held_failures > 0) {
+    std::snprintf(failures, sizeof(failures),
+                  "; %llu failure(s) of calls sent without a reply were held, "
+                  "%llu of them never reached their client thread",
+                  (unsigned long long)threads.held_failures,
+                  (unsigned long long)threads.unreported_failures);
+  }
+  threads.clear();
 
   // The client is gone but its GPU resources are not: they were created in
   // this process and nothing else will ever free them. This is the only point
@@ -789,8 +814,8 @@ void serve_session(std::shared_ptr<Session> session, SessionKey key) {
   // because the contexts they live in are this thread's.
   const std::string summary = release_inventory(session->inventory);
   inventory_bind(nullptr);
-  logf("session %llx expired; %s", (unsigned long long)key.first,
-       summary.c_str());
+  logf("session %llx expired; %s%s", (unsigned long long)key.first,
+       summary.c_str(), failures);
 }
 
 // Tells a client that the session it is coming back to is not here, and closes

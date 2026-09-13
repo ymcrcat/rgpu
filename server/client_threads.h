@@ -114,6 +114,13 @@ struct ClientThreads {
   bool said_stuck = false;
   bool said_deep = false;
   bool said_mode = false;
+  // Failures of calls sent without a reply, for the log: how many were held
+  // for their thread, and how many of those never reached it because the
+  // thread's slot was forgotten first. A client can make both as fast as it
+  // can send frames, so the server says the first of each and gives the counts
+  // when the session expires (server/main.cpp), unless RGPU_VERBOSE is set.
+  uint64_t held_failures = 0;
+  uint64_t unreported_failures = 0;
 
   // Forgets; releases nothing, and changes nothing in the driver. The
   // serving thread keeps whatever capture mode it last had, which is still
