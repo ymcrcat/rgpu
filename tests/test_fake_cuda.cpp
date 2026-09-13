@@ -550,7 +550,8 @@ int main() {
 
   for (int k = 0; k < rgpu_fake::kKindCount; k++) {
     if (k == rgpu_fake::kStale || k == rgpu_fake::kOverRelease ||
-        k == rgpu_fake::kCtxSetCurrent || k == rgpu_fake::kCrossContextUse) {
+        k == rgpu_fake::kCtxSetCurrent || k == rgpu_fake::kCrossContextUse ||
+        k == rgpu_fake::kTotalMem) {
       continue;  // mistakes and observations, not resources
     }
     if (rgpu_fake::value(static_cast<rgpu_fake::Kind>(k)) != 0) {

@@ -266,6 +266,12 @@ target_link_libraries(threadctx_smoke PRIVATE rgpu_cudart rgpu_client
 add_executable(reconnect_smoke tests/reconnect_smoke.cpp)
 target_link_libraries(reconnect_smoke PRIVATE rgpu_client)
 
+# Checks that a request replayed after a reconnect never runs twice, even when
+# it was still running as the client came back. Speaks the protocol itself;
+# needs the fake server with a slow call, so it is run from run_smoke.sh.
+add_executable(replay_smoke tests/replay_smoke.cpp)
+target_link_libraries(replay_smoke PRIVATE rgpu_client)
+
 # Checks that a session which never comes back gives its GPU resources up, and
 # that a session which is still there keeps its own. Re-executes itself to get
 # a second client process, so it needs nothing from the shell but a server.

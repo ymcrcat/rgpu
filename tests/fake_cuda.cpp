@@ -30,10 +30,12 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <chrono>
 #include <cstring>
 #include <map>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <cuda.h>
@@ -449,7 +451,21 @@ CUresult cuDeviceGetAttribute(int* pi, CUdevice_attribute attrib, CUdevice dev) 
   return CUDA_SUCCESS;
 }
 
+// Counted, and slowed down by RGPU_FAKE_SLOW_TOTALMEM_MS (off by default), for
+// tests/replay_smoke.cpp: a request still running when its client reconnects
+// is the one a server must not run twice. Picked because nothing depends on
+// how fast it is, and it has no effects to undo. Counted before the delay, so
+// a test can see it has started; an invalid device fails after the delay, so
+// a failing call is as slow as a succeeding one.
 CUresult cuDeviceTotalMem_v2(size_t* bytes, CUdevice dev) {
+  rgpu_fake::count(rgpu_fake::kTotalMem, 1);
+  static const long delay_ms = [] {
+    const char* s = std::getenv("RGPU_FAKE_SLOW_TOTALMEM_MS");
+    return s ? std::atol(s) : 0L;
+  }();
+  if (delay_ms > 0) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+  }
   if (!bytes) return CUDA_ERROR_INVALID_VALUE;
   if (!valid_device(dev)) return CUDA_ERROR_INVALID_DEVICE;
   *bytes = size_t(24) << 30;

@@ -45,6 +45,11 @@ enum Kind {
   // wrong context, which is what a batch flushed by another thread would do if
   // the server ran it under the flushing thread's context.
   kCrossContextUse,
+  // Not a resource either: how many times cuDeviceTotalMem ran, counted as it
+  // starts. With RGPU_FAKE_SLOW_TOTALMEM_MS it is also slow, which is how a
+  // test gets a request still running when its client reconnects, and this is
+  // how it sees whether the server ran the request again.
+  kTotalMem,
   kKindCount,
 };
 

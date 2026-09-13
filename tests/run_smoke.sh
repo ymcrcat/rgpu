@@ -81,6 +81,30 @@ if [[ -x "$BUILD/reconnect_smoke" ]]; then
   kill $DROP_SRV 2>/dev/null
 fi
 
+# A request still running when its client reconnects, sent again by the client
+# and never run again by the server. Its own server: one fake call made slow
+# enough to reconnect in the middle of, and a stats file counting how often it
+# ran.
+if [[ -x "$BUILD/replay_smoke" ]]; then
+  echo
+  REPLAY_PORT=$((PORT + 13))
+  REPLAY_STATS=$(mktemp "${TMPDIR:-/tmp}/rgpu-stats.XXXXXX")
+  RGPU_FAKE_SLOW_TOTALMEM_MS=1500 RGPU_FAKE_STATS="$REPLAY_STATS" \
+    "$BUILD/rgpu-server-fake" "$REPLAY_PORT" &
+  REPLAY_SRV=$!
+  for _ in $(seq 1 50); do
+    if (exec 3<>/dev/tcp/127.0.0.1/"$REPLAY_PORT") 2>/dev/null; then
+      exec 3<&- 3>&-
+      break
+    fi
+    sleep 0.1
+  done
+  RGPU_SERVER="127.0.0.1:$REPLAY_PORT" RGPU_FAKE_STATS="$REPLAY_STATS" \
+    "$BUILD/replay_smoke" || rc=1
+  kill $REPLAY_SRV 2>/dev/null
+  rm -f "$REPLAY_STATS" "$REPLAY_STATS.tmp"
+fi
+
 # What an expired session leaves behind. Its own server, with a grace period
 # short enough to wait out and a file the fake driver publishes its outstanding
 # resource counts to; both are server-wide settings that the other tests want
@@ -161,7 +185,8 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
     local got
     # The call counters at the end of the line count calls, not resources, so
     # they are not part of what has to come back to zero.
-    got=$(sed -e 's/ ctxsets=[0-9]*//' -e 's/ crossctx=[0-9]*//' "$stats" 2>/dev/null)
+    got=$(sed -e 's/ ctxsets=[0-9]*//' -e 's/ crossctx=[0-9]*//' \
+      -e 's/ totalmem=[0-9]*//' "$stats" 2>/dev/null)
     if [[ "$got" != "$want" ]]; then
       echo "FAIL: after a $mode and an expiry the server should hold nothing"
       echo "      and have released nothing it no longer owned"

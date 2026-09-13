@@ -420,6 +420,62 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
       break;
     }
 
+    // At most once. A request that already ran is not run again, whatever
+    // connection it arrives on. The client sends again every frame after the
+    // last request the handshake says completed, and that is a snapshot: this
+    // thread may have been in the middle of the request when the handshake
+    // was answered, and has since finished it. So the copy is caught here,
+    // where requests run, and not at the handshake.
+    //
+    // Before anything else looks at the request: not the refusals, not the
+    // thread table, not the context restore or readback. A copy changes no
+    // client thread's slot and no deferred error; it is only answered.
+    //
+    // Relies on the client numbering requests in the order it sends them and
+    // sending a copy with its original id, which client/rpc.cpp does.
+    {
+      bool already_ran = false;
+      bool answer = false;
+      uint32_t kept = 0;
+      std::vector<uint8_t> cached;
+      {
+        std::lock_guard<std::mutex> lk(session->mu);
+        if (h.req_id <= session->last_req) {
+          already_ran = true;
+          kept = session->last_reply_id;
+          if (!(h.flags & kFlagNoReply) && h.req_id == session->last_reply_id) {
+            answer = true;
+            cached = session->last_reply;
+          }
+        }
+      }
+      if (already_ran) {
+        if (answer) {
+          // Its reply went to a connection that is gone. This is it.
+          if (g_verbose) {
+            logf("%s (request %u) already ran; sending its reply again",
+                 call_name(h.api_id), h.req_id);
+          }
+          if (!write_exact(fd, cached.data(), cached.size())) break;
+        } else if (!(h.flags & kFlagNoReply)) {
+          // Should not happen. The client forgets a frame once its reply
+          // arrives, and sends nothing behind a call that is waiting for one,
+          // so the only request that replies it can send again is the last
+          // one - whose reply is the one kept. There is nothing right to
+          // answer this with, and running it is what must not happen.
+          logf("session %llx: request %u (%s) already ran and its reply is no "
+               "longer kept (the last reply kept is for request %u); not "
+               "running it again and not answering it",
+               (unsigned long long)key, h.req_id, call_name(h.api_id),
+               kept);
+        } else if (g_verbose) {
+          logf("%s (request %u, no reply) already ran; skipping it",
+               call_name(h.api_id), h.req_id);
+        }
+        continue;
+      }
+    }
+
     Buffer req(std::move(payload));
     Buffer rsp;
     CUresult result = CUDA_ERROR_NOT_SUPPORTED;
@@ -536,6 +592,10 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
       continue;
     }
 
+    RspHeader rh{};
+    rh.magic = kMagicRsp;
+    rh.req_id = h.req_id;
+    rh.payload_len = static_cast<uint32_t>(rsp.size());
     {
       std::lock_guard<std::mutex> lk(session->mu);
       // Only a call that succeeded on its own can carry someone else's error.
@@ -546,17 +606,12 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
         result = session->pending_async;
         session->pending_async = CUDA_SUCCESS;
       }
-      session->last_req = h.req_id;
-    }
-
-    RspHeader rh{};
-    rh.magic = kMagicRsp;
-    rh.req_id = h.req_id;
-    rh.result = static_cast<int32_t>(result);
-    rh.payload_len = static_cast<uint32_t>(rsp.size());
-    {
+      rh.result = static_cast<int32_t>(result);
+      // Completed and its reply kept in one step. A handshake that saw the
+      // one without the other would tell the client this request is done and
+      // not resend its reply, and the client would wait for it forever.
       const auto* rb = reinterpret_cast<const uint8_t*>(&rh);
-      std::lock_guard<std::mutex> lk(session->mu);
+      session->last_req = h.req_id;
       session->last_reply_id = h.req_id;
       session->last_reply.assign(rb, rb + sizeof(rh));
       session->last_reply.insert(session->last_reply.end(), rsp.data().begin(),
@@ -673,10 +728,27 @@ void accept_connection(int fd) {
   HandshakeReply reply{};
   reply.magic = kMagicHello;
   reply.version = kProtocolVersion;
+  // What the session has completed, and the reply the client never received,
+  // read together. The count is only advice to the client about what to send
+  // again - a request can still be running as it is read, and the serving
+  // loop is what makes sure no copy runs twice - but the two have to agree:
+  // a count that includes a request whose reply is not resent would leave the
+  // client waiting for that reply forever, and a reply resent for a request
+  // the count leaves out would be answered again when its copy arrives.
+  std::vector<uint8_t> unanswered;
+  uint32_t unanswered_id = 0;
   {
     std::lock_guard<std::mutex> lk(session->mu);
     reply.resumed = resumed ? 1u : 0u;
     reply.last_req_id = session->last_req;
+    // A reply the client never received. It is safe to send again and it is
+    // the only way that request can be answered, because running it a second
+    // time would not be the same thing.
+    if (resumed && session->last_reply_id > hello.last_req_id &&
+        !session->last_reply.empty()) {
+      unanswered = session->last_reply;
+      unanswered_id = session->last_reply_id;
+    }
   }
   if (!write_exact(fd, &reply, sizeof(reply))) {
     ::close(fd);
@@ -686,19 +758,14 @@ void accept_connection(int fd) {
   if (resumed) {
     logf("session %llx resumed; %u requests completed before the break",
          (unsigned long long)key.first, reply.last_req_id);
-    std::lock_guard<std::mutex> lk(session->mu);
-    // A reply the client never received. It is safe to send again and it is
-    // the only way that request can be answered, because running it a second
-    // time would not be the same thing.
-    if (session->last_reply_id > hello.last_req_id &&
-        !session->last_reply.empty()) {
-      if (!write_exact(fd, session->last_reply.data(),
-                       session->last_reply.size())) {
+    if (!unanswered.empty()) {
+      if (!write_exact(fd, unanswered.data(), unanswered.size())) {
         ::close(fd);
         return;
       }
-      logf("  resent the reply to request %u", session->last_reply_id);
+      logf("  resent the reply to request %u", unanswered_id);
     }
+    std::lock_guard<std::mutex> lk(session->mu);
     session->fd = fd;
     session->cv.notify_all();
     return;
