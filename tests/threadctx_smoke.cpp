@@ -19,6 +19,12 @@
 //   LD_LIBRARY_PATH=build RGPU_SERVER=127.0.0.1:9723 RGPU_BATCH=1
 //     RGPU_FAKE_STATS=/tmp/s RGPU_MAX_CLIENT_THREADS=16 ./threadctx_smoke
 
+#include <netdb.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <unistd.h>
+
+#include <atomic>
 #include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
@@ -26,9 +32,15 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include <cuda.h>
 #include <cuda_runtime_api.h>
+
+#include "common/generated/api_ids.h"
+#include "common/internal_ids.h"
+#include "common/net.h"
+#include "common/wire.h"
 
 namespace {
 
@@ -228,6 +240,7 @@ void batch_flushed_by_another_thread() {
     CHECK(cuMemcpyDtoH(&last, mem, 1));
     CHECK(cuMemFree(mem));
     CHECK(cuCtxSetCurrent(nullptr));
+    turns.advance(5);
   });
   std::thread b([&] {
     turns.await(1);
@@ -237,6 +250,7 @@ void batch_flushed_by_another_thread() {
     flushed_by = cuCtxGetCurrent(&b_sees);
     after = fake_counter("crossctx");
     turns.advance(4);
+    turns.await(5);
     CHECK(cuCtxSetCurrent(nullptr));
   });
   a.join();
@@ -299,6 +313,262 @@ void one_thread_costs_no_switches() {
   CHECK(cuDevicePrimaryCtxRelease(0));
 }
 
+// A context one thread made current and another thread then destroyed. The
+// first thread's next call must not run under whatever the other thread left
+// current: it fails with CUDA_ERROR_INVALID_CONTEXT, as CUDA fails a thread
+// whose context went away under it, and the thread can select again.
+void context_destroyed_by_another_thread() {
+  std::printf("-- a context destroyed by another thread is not replaced by "
+              "that thread's\n");
+  CUcontext p0 = nullptr, p1 = nullptr;
+  CHECK(cuDevicePrimaryCtxRetain(&p0, 0));
+  CHECK(cuDevicePrimaryCtxRetain(&p1, 1));
+
+  Turns turns;
+  CUcontext made = nullptr;
+  CUresult after_destroy = CUDA_SUCCESS;
+  int reselected_on = -1;
+  std::thread a([&] {
+    CHECK(cuCtxCreate(&made, 0, 0));
+    turns.advance(1);
+    turns.await(2);
+    CUdeviceptr d = 0;
+    after_destroy = cuMemAlloc(&d, 64);
+    if (after_destroy == CUDA_SUCCESS) cuMemFree(d);
+    CHECK(cuCtxSetCurrent(p0));
+    CUdeviceptr e = 0;
+    CHECK(cuMemAlloc(&e, 64));
+    if (e) {
+      reselected_on = ordinal_of(e);
+      CHECK(cuMemFree(e));
+    }
+    CHECK(cuCtxSetCurrent(nullptr));
+    turns.advance(3);
+  });
+  std::thread b([&] {
+    turns.await(1);
+    CHECK(cuCtxSetCurrent(p1));
+    CHECK(cuCtxDestroy(made));
+    turns.advance(2);
+    turns.await(3);
+    CHECK(cuCtxSetCurrent(nullptr));
+  });
+  a.join();
+  b.join();
+  if (after_destroy != CUDA_ERROR_INVALID_CONTEXT) {
+    char msg[200];
+    std::snprintf(msg, sizeof(msg),
+                  "a call after another thread destroyed this thread's context "
+                  "returned %d, not CUDA_ERROR_INVALID_CONTEXT",
+                  (int)after_destroy);
+    fail_at(__FILE__, __LINE__, msg);
+  }
+  EXPECT(reselected_on == 0,
+         "a thread whose context was destroyed could not select another");
+  CHECK(cuDevicePrimaryCtxRelease(0));
+  CHECK(cuDevicePrimaryCtxRelease(1));
+}
+
+// --- the slot table, from a connection of our own ---------------------------
+//
+// A real client mints thread ids and announces their end itself, and cannot be
+// made to send a call after its thread was announced gone, or to have more
+// threads than a server allows, on cue. These cases speak the protocol
+// directly, as their own session, and choose the thread ids.
+
+class RawSession {
+ public:
+  ~RawSession() {
+    if (fd_ >= 0) ::close(fd_);
+  }
+
+  bool open() {
+    const char* env = std::getenv("RGPU_SERVER");
+    std::string spec = env ? env : "127.0.0.1:9713";
+    const size_t c = spec.rfind(':');
+    addrinfo hints{};
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    addrinfo* res = nullptr;
+    if (::getaddrinfo(spec.substr(0, c).c_str(), spec.substr(c + 1).c_str(),
+                      &hints, &res) != 0) {
+      return false;
+    }
+    for (addrinfo* ai = res; ai; ai = ai->ai_next) {
+      fd_ = ::socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+      if (fd_ < 0) continue;
+      if (::connect(fd_, ai->ai_addr, ai->ai_addrlen) == 0) break;
+      ::close(fd_);
+      fd_ = -1;
+    }
+    ::freeaddrinfo(res);
+    if (fd_ < 0) return false;
+    timeval tv{5, 0};
+    ::setsockopt(fd_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+    static std::atomic<uint64_t> n{0};
+    rgpu::Handshake hello{};
+    hello.magic = rgpu::kMagicHello;
+    hello.version = rgpu::kProtocolVersion;
+    hello.session_hi = 0x7c7c000000000000ull ^ static_cast<uint64_t>(::getpid());
+    hello.session_lo = ++n;
+    rgpu::HandshakeReply reply{};
+    return rgpu::write_exact(fd_, &hello, sizeof(hello)) &&
+           rgpu::read_exact(fd_, &reply, sizeof(reply)) &&
+           reply.version == rgpu::kProtocolVersion && reply.resumed == 0;
+  }
+
+  bool send(uint32_t api, uint32_t thread, const rgpu::Buffer& payload,
+            bool no_reply) {
+    rgpu::ReqHeader h{};
+    h.magic = rgpu::kMagicReq;
+    h.api_id = api;
+    h.req_id = next_++;
+    h.flags = no_reply ? static_cast<uint32_t>(rgpu::kFlagNoReply) : 0u;
+    h.thread_id = thread;
+    h.payload_len = static_cast<uint32_t>(payload.size());
+    return rgpu::send_frame(fd_, h, payload);
+  }
+
+  // A call that replies. CUDA_ERROR_UNKNOWN if the connection failed.
+  CUresult call(uint32_t api, uint32_t thread, const rgpu::Buffer& payload,
+                rgpu::Buffer* rsp) {
+    if (!send(api, thread, payload, false)) return CUDA_ERROR_UNKNOWN;
+    rgpu::RspHeader rh{};
+    std::vector<uint8_t> body;
+    if (!rgpu::recv_frame(fd_, rgpu::kMagicRsp, &rh, &body)) {
+      return CUDA_ERROR_UNKNOWN;
+    }
+    *rsp = rgpu::Buffer(std::move(body));
+    return static_cast<CUresult>(rh.result);
+  }
+
+  CUresult set_current(uint32_t thread, CUcontext ctx) {
+    rgpu::Buffer req, rsp;
+    req.put<uint64_t>(reinterpret_cast<uint64_t>(ctx));
+    return call(rgpu::API_cuCtxSetCurrent, thread, req, &rsp);
+  }
+
+  // The thread's current context, or a marker value if the call failed.
+  CUcontext get_current(uint32_t thread, CUresult* r = nullptr) {
+    rgpu::Buffer req, rsp;
+    req.put<uint8_t>(1);
+    const CUresult got = call(rgpu::API_cuCtxGetCurrent, thread, req, &rsp);
+    if (r) *r = got;
+    uint64_t h = 0;
+    if (got != CUDA_SUCCESS || !rsp.get(&h)) {
+      return reinterpret_cast<CUcontext>(0xbadull);
+    }
+    return reinterpret_cast<CUcontext>(h);
+  }
+
+  // Announces threads gone, sent by `sender` without a reply, as the client
+  // sends it.
+  bool gone(uint32_t sender, const std::vector<uint32_t>& ids) {
+    rgpu::Buffer req;
+    req.put<uint32_t>(static_cast<uint32_t>(ids.size()));
+    for (uint32_t id : ids) req.put<uint32_t>(id);
+    return send(rgpu::API_rgpu_thread_gone, sender, req, true);
+  }
+
+ private:
+  int fd_ = -1;
+  uint32_t next_ = 1;
+};
+
+// Late thread-local destructors on a client thread can call after the client
+// has announced the thread gone. Such a call finds the context its thread had,
+// not an empty slot and not another thread's context.
+void late_call_after_notice(CUcontext p0, CUcontext p1) {
+  std::printf("-- a call after its thread was announced gone keeps its "
+              "context\n");
+  RawSession s;
+  if (!s.open()) {
+    fail_at(__FILE__, __LINE__, "could not open a session of our own");
+    return;
+  }
+  CHECK(s.set_current(7, p0));
+  CHECK(s.set_current(8, p1));
+  EXPECT(s.gone(8, {7}), "could not send the notice");
+  CUresult r = CUDA_SUCCESS;
+  EXPECT(s.get_current(7, &r) == p0,
+         "a late call from a thread announced gone lost its context");
+  CHECK(r);
+  EXPECT(s.gone(8, {7}), "could not send the notice again");
+  EXPECT(s.get_current(8) == p1, "the other thread's context changed");
+}
+
+// The retired slots are bounded. A late call from a thread retired longer ago
+// than the most recent 64 finds an empty slot - no context - and never another
+// thread's. The bound is kRetiredSlots in server/main.cpp.
+void retired_slots_are_bounded(CUcontext p0, CUcontext p1) {
+  std::printf("-- only the most recently retired threads keep their "
+              "context\n");
+  constexpr uint32_t kRetiredSlots = 64;
+  constexpr uint32_t kFirst = 100;
+  RawSession s;
+  if (!s.open()) {
+    fail_at(__FILE__, __LINE__, "could not open a session of our own");
+    return;
+  }
+  // One more than the bound, each retired straight after it selects, so the
+  // live table never holds more than two and the cap is not what is tested.
+  for (uint32_t id = kFirst; id <= kFirst + kRetiredSlots; id++) {
+    CHECK(s.set_current(id, p0));
+    EXPECT(s.gone(id, {id}), "could not send a notice");
+  }
+  // Each late call below brings its thread back to the live table, which
+  // leaves the retired set as it was, and no notice follows.
+  CHECK(s.set_current(99, p1));
+  EXPECT(s.get_current(kFirst + 1) == p0,
+         "the oldest thread still within the bound lost its context");
+  EXPECT(s.get_current(kFirst + kRetiredSlots) == p0,
+         "the most recently retired thread lost its context");
+  CUresult r = CUDA_SUCCESS;
+  EXPECT(s.get_current(kFirst, &r) == nullptr,
+         "a late call from a thread retired past the bound did not get an "
+         "empty slot");
+  CHECK(r);
+}
+
+// A client mints thread ids and nothing authenticates it, so the live slots a
+// session may hold are capped (RGPU_MAX_CLIENT_THREADS). A thread past the cap
+// is refused, and a notice still gets through and makes room.
+void live_slots_are_capped() {
+  std::printf("-- a session's live client threads are capped\n");
+  const char* env = std::getenv("RGPU_MAX_CLIENT_THREADS");
+  const uint32_t cap = env ? static_cast<uint32_t>(std::atol(env)) : 0;
+  if (cap == 0 || cap > 1024) {
+    fail_at(__FILE__, __LINE__,
+            "RGPU_MAX_CLIENT_THREADS must name the server's cap, and a small "
+            "one");
+    return;
+  }
+  RawSession s;
+  if (!s.open()) {
+    fail_at(__FILE__, __LINE__, "could not open a session of our own");
+    return;
+  }
+  for (uint32_t id = 1; id <= cap; id++) {
+    CUresult r = CUDA_ERROR_UNKNOWN;
+    s.get_current(id, &r);
+    if (r != CUDA_SUCCESS) {
+      fail_at(__FILE__, __LINE__, "a thread within the cap was refused");
+      return;
+    }
+  }
+  CUresult r = CUDA_SUCCESS;
+  s.get_current(cap + 1, &r);
+  EXPECT(r == CUDA_ERROR_INVALID_VALUE,
+         "a thread past the cap was not refused with CUDA_ERROR_INVALID_VALUE");
+  // Sent by the refused thread itself, which is how a client whose new thread
+  // has just announced an old one would send it.
+  EXPECT(s.gone(cap + 1, {1}), "could not send a notice");
+  s.get_current(cap + 1, &r);
+  EXPECT(r == CUDA_SUCCESS,
+         "a notice from a thread past the cap did not make room for it");
+}
+
 }  // namespace
 
 int main() {
@@ -315,6 +585,16 @@ int main() {
   issue_scenario_by_placement();
   batch_flushed_by_another_thread();
   one_thread_costs_no_switches();
+  context_destroyed_by_another_thread();
+
+  CUcontext p0 = nullptr, p1 = nullptr;
+  CHECK(cuDevicePrimaryCtxRetain(&p0, 0));
+  CHECK(cuDevicePrimaryCtxRetain(&p1, 1));
+  late_call_after_notice(p0, p1);
+  retired_slots_are_bounded(p0, p1);
+  live_slots_are_capped();
+  CHECK(cuDevicePrimaryCtxRelease(0));
+  CHECK(cuDevicePrimaryCtxRelease(1));
 
   if (g_failures) {
     std::printf("\nFAILED: %d check(s)\n", g_failures);

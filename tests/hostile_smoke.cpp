@@ -138,6 +138,55 @@ int main() {
     still_serving("a protocol 2 handshake");
   }
 
+  // A request that names no client thread. Thread ids start at 1, so zero is
+  // a zero-filled or corrupt header, and the server keeps each thread's
+  // context by that id: running the call would mean guessing whose context
+  // it belongs under. It is refused with an error, and the same call naming a
+  // thread still works on the same connection.
+  {
+    int fd = dial();
+    EXPECT(fd >= 0, "could not open a raw connection to the server");
+    if (fd >= 0) {
+      rgpu::Handshake hello{};
+      hello.magic = rgpu::kMagicHello;
+      hello.version = rgpu::kProtocolVersion;
+      hello.session_hi = 0x01d0c11e47ull;
+      hello.session_lo = 0x3ull;
+      rgpu::HandshakeReply reply{};
+      EXPECT(rgpu::write_exact(fd, &hello, sizeof(hello)) &&
+                 rgpu::read_exact(fd, &reply, sizeof(reply)) &&
+                 reply.version == rgpu::kProtocolVersion,
+             "a protocol 3 handshake was not accepted");
+      auto count_as = [&](uint32_t thread, uint32_t req_id, int* count) {
+        rgpu::Buffer req;
+        req.put<uint8_t>(1);
+        rgpu::ReqHeader h{};
+        h.magic = rgpu::kMagicReq;
+        h.api_id = rgpu::API_cuDeviceGetCount;
+        h.req_id = req_id;
+        h.thread_id = thread;
+        h.payload_len = static_cast<uint32_t>(req.size());
+        rgpu::RspHeader rh{};
+        std::vector<uint8_t> body;
+        if (!rgpu::send_frame(fd, h, req) ||
+            !rgpu::recv_frame(fd, rgpu::kMagicRsp, &rh, &body)) {
+          return CUDA_ERROR_UNKNOWN;
+        }
+        rgpu::Buffer rsp(std::move(body));
+        if (rh.result == CUDA_SUCCESS && !rsp.get(count)) *count = -1;
+        return static_cast<CUresult>(rh.result);
+      };
+      int count = 0;
+      EXPECT(count_as(0, 1, &count) == CUDA_ERROR_INVALID_VALUE,
+             "a request naming thread 0 was not refused");
+      count = 0;
+      EXPECT(count_as(1, 2, &count) == CUDA_SUCCESS && count > 0,
+             "the connection stopped working after a request naming thread 0");
+      ::close(fd);
+    }
+    still_serving("a request naming thread 0");
+  }
+
   // Device to host: the reply buffer is sized by the client's length field,
   // the driver by ByteCount. A client claiming 16 bytes and asking for 4096
   // had the driver write 4096 bytes into a 16-byte buffer on the server.
