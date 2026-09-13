@@ -26,11 +26,13 @@
 namespace rgpu {
 namespace {
 
-// Guards the socket, the counter and the send queue. Never destroyed: threads
-// keep calling in while the process exits, and locking a mutex that static
-// destruction has already taken down is undefined (on libc++ it throws, from
-// places that cannot).
-std::mutex& g_mu = *new std::mutex();
+// Every global below that a CUDA call can reach is allocated and never
+// destroyed. Threads keep calling in while the process exits - a thread's
+// late thread-local destructors free device memory, say - and a mutex or
+// container that static destruction has already taken down is undefined
+// behaviour (on libc++ a destroyed mutex throws, from places that cannot).
+
+auto& g_mu = *new std::mutex();  // the socket, the counter and the send queue
 int g_fd = -1;
 uint32_t g_next_req = 1;
 bool g_connect_failed = false;
@@ -40,7 +42,7 @@ bool g_had_session = false;  // we have talked to this server before
 // Frames queued by call_async and not yet written. Holding them lets a run of
 // launches leave the client in one write instead of one per call, and lets
 // none of them wait for a reply.
-std::vector<uint8_t> g_queued;
+auto& g_queued = *new std::vector<uint8_t>();
 
 // What the remoting layer actually cost, printed at exit when RGPU_STATS is
 // set. Round trips are the number that matters: on a real network each one
@@ -135,13 +137,12 @@ thread_local uint32_t t_thread_id = 0;  // 0 until this thread first calls
 // see queue_frame_locked.
 thread_local bool t_retired = false;
 
-// Ids of threads that have exited, for the server to forget. Never destroyed,
-// for the same reason as the stats: threads keep exiting while the process
-// does. Its own lock, so a thread can exit without waiting behind a call that
-// is blocked on the network, and a flag so that the common case - nothing to
-// report - costs a load rather than a lock.
-std::mutex& g_retired_mu = *new std::mutex();
-std::vector<uint32_t>& g_retired = *new std::vector<uint32_t>();
+// Ids of threads that have exited, for the server to forget. Its own lock, so
+// a thread can exit without waiting behind a call that is blocked on the
+// network, and a flag so that the common case - nothing to report - costs a
+// load rather than a lock.
+auto& g_retired_mu = *new std::mutex();
+auto& g_retired = *new std::vector<uint32_t>();
 std::atomic<bool> g_have_retired{false};
 
 // Gives the thread's id back when the thread exits. Only records it: no I/O
@@ -188,7 +189,7 @@ struct SentFrame {
   uint32_t req_id;
   std::vector<uint8_t> bytes;
 };
-std::deque<SentFrame> g_unacked;
+auto& g_unacked = *new std::deque<SentFrame>();
 size_t g_unacked_bytes = 0;
 
 // A module image is megabytes, and holding several of them to replay would
@@ -532,8 +533,8 @@ CUresult call(uint32_t api_id, const Buffer& req, Buffer* rsp) {
 }
 
 CUresult unimplemented(const char* name, const char* why) {
-  static std::mutex mu;
-  static std::set<std::string> seen;
+  static auto& mu = *new std::mutex();
+  static auto& seen = *new std::set<std::string>();
   {
     std::lock_guard<std::mutex> lk(mu);
     if (!seen.insert(name).second) return CUDA_ERROR_NOT_SUPPORTED;
@@ -543,8 +544,8 @@ CUresult unimplemented(const char* name, const char* why) {
 }
 
 void unimplemented_rt(const char* name) {
-  static std::mutex mu;
-  static std::set<std::string> seen;
+  static auto& mu = *new std::mutex();
+  static auto& seen = *new std::set<std::string>();
   {
     std::lock_guard<std::mutex> lk(mu);
     if (!seen.insert(name).second) return;

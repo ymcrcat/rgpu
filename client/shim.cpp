@@ -21,6 +21,12 @@
 
 namespace {
 
+// Every global below that a CUDA call can reach is allocated and never
+// destroyed. Threads keep calling in while the process exits - a thread's
+// late thread-local destructors free device memory, say - and a mutex or
+// container that static destruction has already taken down is undefined
+// behaviour (on libc++ a destroyed mutex throws, from places that cannot).
+
 // ---------------------------------------------------------------------------
 // Kernel argument marshalling
 // ---------------------------------------------------------------------------
@@ -35,8 +41,8 @@ struct ParamSlot {
   uint64_t size;
 };
 
-std::mutex g_layout_mu;
-std::map<CUfunction, std::vector<ParamSlot>> g_layouts;
+auto& g_layout_mu = *new std::mutex();
+auto& g_layouts = *new std::map<CUfunction, std::vector<ParamSlot>>();
 
 bool fetch_layout(CUfunction f, std::vector<ParamSlot>* out) {
   {
@@ -145,8 +151,8 @@ CUresult launch_common(CUfunction f, unsigned gx, unsigned gy, unsigned gz,
 // local driver. We hand back ordinary aligned host memory: correct, just
 // without the DMA benefit, which a network transfer has already erased.
 
-std::mutex g_host_mu;
-std::set<void*> g_host_allocs;
+auto& g_host_mu = *new std::mutex();
+auto& g_host_allocs = *new std::set<void*>();
 
 CUresult host_alloc(void** pp, size_t size) {
   if (!pp) return CUDA_ERROR_INVALID_VALUE;
@@ -196,8 +202,8 @@ void* find_entry(const char* symbol) {
 // Names we were asked for and could not supply. Logged once each; this is the
 // discovery mechanism for what still needs implementing.
 void note_missing(const char* symbol, int version) {
-  static std::mutex mu;
-  static std::set<std::string> seen;
+  static auto& mu = *new std::mutex();
+  static auto& seen = *new std::set<std::string>();
   std::lock_guard<std::mutex> lk(mu);
   if (seen.insert(symbol).second) {
     rgpu::log("MISSING entry point %s (requested version %d)", symbol, version);
@@ -258,8 +264,8 @@ CUresult cuGetProcAddress(const char* symbol, void** pfn, int cudaVersion,
 
 namespace {
 
-std::mutex g_alloc_mu;
-std::map<CUdeviceptr, size_t> g_allocs;  // base -> size
+auto& g_alloc_mu = *new std::mutex();
+auto& g_allocs = *new std::map<CUdeviceptr, size_t>();  // base -> size
 
 bool is_ours(CUdeviceptr p) {
   std::lock_guard<std::mutex> lk(g_alloc_mu);
@@ -436,8 +442,8 @@ struct PrimaryCtx {
   bool flags_known = false;
 };
 
-std::mutex g_primary_mu;
-std::map<CUdevice, PrimaryCtx> g_primary;
+auto& g_primary_mu = *new std::mutex();
+auto& g_primary = *new std::map<CUdevice, PrimaryCtx>();
 
 }  // namespace
 
@@ -482,6 +488,9 @@ CUresult cuDevicePrimaryCtxReset_v2(CUdevice dev) {
   // had no reply to the next call that succeeds, and a connection that died
   // before the answer says nothing about whether the call ran. Keeping the
   // record then would answer state queries from before the reset.
+  // Known gap: NOT_SUPPORTED is not proof of a refusal. A held no-reply
+  // failure with that code, folded into a reset that ran, looks the same and
+  // keeps the stale record.
   if (r != CUDA_ERROR_NOT_SUPPORTED) {
     std::lock_guard<std::mutex> lk(g_primary_mu);
     g_primary[dev] = PrimaryCtx{};

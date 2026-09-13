@@ -27,6 +27,12 @@
 
 namespace {
 
+// Every global below that a CUDA call can reach is allocated and never
+// destroyed. Threads keep calling in while the process exits - a thread's
+// late thread-local destructors free device memory, say - and a mutex or
+// container that static destruction has already taken down is undefined
+// behaviour (on libc++ a destroyed mutex throws, from places that cannot).
+
 // ---------------------------------------------------------------------------
 // Error state
 // ---------------------------------------------------------------------------
@@ -75,8 +81,9 @@ cudaError_t record_cu(CUresult r) { return record(from_cu(r)); }
 // The runtime binds a primary context to each device lazily on first use and
 // keeps a current device per thread. We reproduce that here.
 
-std::mutex g_ctx_mu;
-std::map<int, CUcontext> g_primary;  // device ordinal -> retained context
+auto& g_ctx_mu = *new std::mutex();
+// device ordinal -> retained context
+auto& g_primary = *new std::map<int, CUcontext>();
 bool g_inited = false;
 
 thread_local int t_device = 0;
@@ -141,8 +148,8 @@ CUresult ensure_context() {
 // host or device. With remoting we cannot probe a device pointer, since it is
 // an address in the server's process, so we remember what we handed out.
 
-std::mutex g_alloc_mu;
-std::map<CUdeviceptr, size_t> g_device_allocs;
+auto& g_alloc_mu = *new std::mutex();
+auto& g_device_allocs = *new std::map<CUdeviceptr, size_t>();
 
 void note_alloc(CUdeviceptr p, size_t n) {
   std::lock_guard<std::mutex> lk(g_alloc_mu);
@@ -230,10 +237,12 @@ struct Kernel {
   CUfunction fn = nullptr;
 };
 
-std::mutex g_reg_mu;
-std::vector<Module*> g_modules;
-std::map<const void*, Kernel> g_kernels;   // host function pointer -> kernel
-std::map<const void*, std::string> g_vars;  // host variable -> device symbol
+auto& g_reg_mu = *new std::mutex();
+auto& g_modules = *new std::vector<Module*>();
+// host function pointer -> kernel
+auto& g_kernels = *new std::map<const void*, Kernel>();
+// host variable -> device symbol
+auto& g_vars = *new std::map<const void*, std::string>();
 
 // Loads a module the first time one of its kernels is launched.
 CUresult ensure_module(Module* m) {
