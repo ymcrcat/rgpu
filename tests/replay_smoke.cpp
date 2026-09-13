@@ -171,6 +171,34 @@ Frame device_count(uint32_t req_id) {
   return f;
 }
 
+// cuThreadExchangeStreamCaptureMode: the payload is the mode wanted, the reply
+// carries the mode that was in force. The server applies the swap, so its reply
+// is a side effect the client tracks - which is why a held deferred error must
+// not be folded into it (see #9.5).
+Frame capture_mode(uint32_t req_id, uint32_t thread, int32_t wanted) {
+  Frame f;
+  f.payload.put<int32_t>(wanted);
+  f.h.magic = rgpu::kMagicReq;
+  f.h.api_id = rgpu::API_rgpu_capture_mode;
+  f.h.req_id = req_id;
+  f.h.thread_id = thread;
+  f.h.payload_len = static_cast<uint32_t>(f.payload.size());
+  return f;
+}
+
+Frame device_get(uint32_t req_id, uint32_t thread, int ordinal, bool no_reply) {
+  Frame f;
+  f.payload.put<uint8_t>(1);
+  f.payload.put<int>(ordinal);
+  f.h.magic = rgpu::kMagicReq;
+  f.h.api_id = rgpu::API_cuDeviceGet;
+  f.h.req_id = req_id;
+  f.h.flags = no_reply ? static_cast<uint32_t>(rgpu::kFlagNoReply) : 0u;
+  f.h.thread_id = thread;
+  f.h.payload_len = static_cast<uint32_t>(f.payload.size());
+  return f;
+}
+
 bool send(int fd, const Frame& f) { return rgpu::send_frame(fd, f.h, f.payload); }
 
 struct Reply {
@@ -627,6 +655,66 @@ void resuming_into_an_unknown_session() {
   if (fd >= 0) ::close(fd);
 }
 
+// A held deferred error must not be folded into a cuThreadExchangeStreamCapture-
+// Mode reply. That call returns the previous capture mode, which the client
+// tracks to bracket a stream capture; if the reply carried the held error the
+// server would have swapped the mode while the client believed the call failed
+// and kept the old one, and the two would disagree. The error is not lost: it
+// waits for the thread's next call whose reply is only success or failure.
+void deferred_error_not_folded_into_capture_mode() {
+  std::printf("-- a held deferred error is not folded into a capture-mode "
+              "exchange, and surfaces on the next plain call instead\n");
+  const uint64_t session = 11;
+  rgpu::HandshakeReply hs{};
+  int fd = connect_session(session, 0, &hs);
+  EXPECT(fd >= 0 && hs.resumed == 0, "could not start a session");
+  if (fd < 0) return;
+
+  uint32_t id = 1;
+  // Thread 1 makes a call without a reply that fails: the server holds its
+  // error for the thread's next call that replies.
+  EXPECT(send(fd, device_get(id++, 1, 99, true)),
+         "could not send the failing call without a reply");
+
+  // The exchange applies the swap (GLOBAL -> RELAXED) and must report success
+  // with the previous mode, not the held error.
+  const Frame ex = capture_mode(id++, 1, CU_STREAM_CAPTURE_MODE_RELAXED);
+  EXPECT(send(fd, ex), "could not send the capture-mode exchange");
+  Reply r = receive(fd);
+  int32_t previous = -1;
+  EXPECT(r.received && r.h.req_id == ex.h.req_id, "no reply to the exchange");
+  EXPECT(r.h.result == CUDA_SUCCESS,
+         "the held deferred error was folded into the capture-mode exchange, "
+         "so the client would think it failed while the server swapped the "
+         "mode");
+  EXPECT(r.body.get(&previous) && previous == CU_STREAM_CAPTURE_MODE_GLOBAL,
+         "the exchange did not report the mode that was in force before it");
+
+  // The next plain call carries the held error, once.
+  const Frame plain = device_count(id++);
+  EXPECT(send(fd, plain), "could not send the call after the exchange");
+  expect_answer(fd, plain, CUDA_ERROR_INVALID_DEVICE,
+                "the plain call after the exchange, which carries the held "
+                "error");
+
+  // The swap really took: a second exchange sees RELAXED as the mode in force,
+  // and it carries no error (the held one already surfaced).
+  const Frame ex2 = capture_mode(id++, 1, CU_STREAM_CAPTURE_MODE_GLOBAL);
+  EXPECT(send(fd, ex2), "could not send the second exchange");
+  r = receive(fd);
+  previous = -1;
+  EXPECT(r.received && r.h.req_id == ex2.h.req_id && r.h.result == CUDA_SUCCESS,
+         "the second exchange did not succeed");
+  EXPECT(r.body.get(&previous) && previous == CU_STREAM_CAPTURE_MODE_RELAXED,
+         "the first exchange's swap was lost: the second did not see RELAXED");
+
+  const Frame after = device_count(id++);
+  EXPECT(send(fd, after), "could not send the call after the second exchange");
+  expect_answer(fd, after, CUDA_SUCCESS,
+                "the call after the error surfaced (it must not surface twice)");
+  ::close(fd);
+}
+
 // --- replay_smoke sessions ----------------------------------------------------
 //
 // How many sessions a server keeps, and sessions it made but could never
@@ -1070,18 +1158,7 @@ int expiry_during_handoff() {
 // What is held and what is evicted does not change: a thread's failure still
 // reaches its next call that replies, and a refused thread let in later still
 // gets its own failure back. The server runs with RGPU_MAX_CLIENT_THREADS=2.
-Frame device_get(uint32_t req_id, uint32_t thread, int ordinal, bool no_reply) {
-  Frame f;
-  f.payload.put<uint8_t>(1);
-  f.payload.put<int>(ordinal);
-  f.h.magic = rgpu::kMagicReq;
-  f.h.api_id = rgpu::API_cuDeviceGet;
-  f.h.req_id = req_id;
-  f.h.flags = no_reply ? static_cast<uint32_t>(rgpu::kFlagNoReply) : 0u;
-  f.h.thread_id = thread;
-  f.h.payload_len = static_cast<uint32_t>(f.payload.size());
-  return f;
-}
+// (device_get is defined with the other frame builders above.)
 
 constexpr int kRefused = 200;
 
@@ -1164,6 +1241,7 @@ int main(int argc, char** argv) {
   frames_without_a_request_id();
   claimed_progress_in_an_unknown_session();
   resuming_into_an_unknown_session();
+  deferred_error_not_folded_into_capture_mode();
 
   if (g_failures) {
     std::printf("\nFAILED: %d check(s)\n", g_failures);

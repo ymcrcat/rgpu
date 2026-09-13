@@ -215,6 +215,19 @@ bool dispatch_internal(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
   }
 }
 
+// Whether a held deferred error must not be folded into this call's reply.
+// A call that succeeds can carry an earlier held error as its result (the
+// deferred-error contract), which is right when the client reads the reply
+// only as success or failure. But cuThreadExchangeStreamCaptureMode returns
+// the previous capture mode, which the client tracks to bracket a stream
+// capture: fold an error into it and the server has swapped the mode while the
+// client believes the call failed and keeps the old one, so the two disagree.
+// The held error is not lost - it stays for the thread's next call whose reply
+// is only success or failure - so it still surfaces exactly once.
+bool reply_carries_observed_state(uint32_t api_id) {
+  return api_id == API_rgpu_capture_mode;
+}
+
 // --- client threads ---------------------------------------------------------
 //
 // CUDA's current context, and the stack it tops, belong to the calling thread,
@@ -788,9 +801,13 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
       // Handing the older one to a call that just failed would report the
       // wrong failure and lose the real one, which is the opposite of the
       // point: the deferred error stays held for the thread's next call that
-      // succeeds.
+      // succeeds. Nor is it folded into a call whose reply the client reads as
+      // state rather than as success or failure (reply_carries_observed_state):
+      // that would make the server and client disagree about a side effect the
+      // call applied.
       if (result == CUDA_SUCCESS && home &&
-          home->pending_async != CUDA_SUCCESS) {
+          home->pending_async != CUDA_SUCCESS &&
+          !reply_carries_observed_state(h.api_id)) {
         result = home->pending_async;
         home->pending_async = CUDA_SUCCESS;
       }
