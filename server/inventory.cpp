@@ -107,11 +107,7 @@ void bump_generation(int dev) {
 // wrong way round, an entry made in a context that was then destroyed would
 // carry the new generation and be freed at expiry; this way the worst case is
 // that something made in the new generation is skipped and leaks.
-struct Stamp {
-  CUcontext ctx = nullptr;
-  int dev = -1;
-  uint64_t gen = 0;
-};
+using Stamp = InventoryStamp;  // see inventory.h
 
 Stamp stamp() {
   Stamp st;
@@ -755,16 +751,15 @@ void inventory_bind(Inventory* inv) {
   t_inv = inv;
 }
 
-void inventory_note_handle(uint64_t handle, const char* what,
-                           CUresult (*destroy)(uint64_t)) {
+InventoryStamp inventory_stamp() { return stamp(); }
+
+void inventory_note_handle(uint64_t handle, const InventoryStamp& made,
+                           const char* what, CUresult (*destroy)(uint64_t)) {
   Inventory* inv = t_inv;
   if (!inv || !handle) return;
-  // Stamped after the library made the handle, not before, since the
-  // libraries only call in once they have one.
-  const Stamp st = stamp();
   std::lock_guard<std::mutex> lk(inv->mu);
   inv->handles[handle] =
-      Inventory::LibHandle{st.ctx, st.dev, st.gen, what, destroy};
+      Inventory::LibHandle{made.ctx, made.dev, made.gen, what, destroy};
 }
 
 void inventory_forget_handle(uint64_t handle) {

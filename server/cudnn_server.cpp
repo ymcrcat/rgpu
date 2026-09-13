@@ -145,11 +145,12 @@ bool dispatch_cudnn(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       auto fn = cudnn_sym<cudnnStatus_t (*)(cudnnHandle_t*)>("cudnnCreate");
       if (!fn) { put_status(rsp, out, CUDNN_STATUS_NOT_INITIALIZED); return true; }
       cudnnHandle_t h = nullptr;
+      const InventoryStamp made = inventory_stamp();
       cudnnStatus_t s = fn(&h);
       put_status(rsp, out, s);
       if (s == CUDNN_STATUS_SUCCESS) {
         rsp->put<uint64_t>(reinterpret_cast<uint64_t>(h));
-        inventory_note_handle(reinterpret_cast<uint64_t>(h), "cuDNN",
+        inventory_note_handle(reinterpret_cast<uint64_t>(h), made, "cuDNN",
                               &destroy_handle);
       }
       return true;

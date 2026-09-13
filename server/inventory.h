@@ -71,11 +71,24 @@ struct Inventory {
 // what makes it possible to refuse a call that would reach into all of them.
 void inventory_bind(Inventory* inv);
 
-// Records a maths-library handle against the session being served here, and
-// forgets one the client destroyed itself. `what` is used in the log and must
-// outlive the session, so a string literal.
-void inventory_note_handle(uint64_t handle, const char* what,
-                           CUresult (*destroy)(uint64_t));
+// Where a resource is about to be made: the current context and, if that is a
+// primary context, its device and generation. Take one immediately before the
+// call that makes the resource, not after it: creating a library handle can
+// take hundreds of milliseconds on hardware, and a primary context destroyed
+// in that time must be charged to the handle, so that expiry skips it rather
+// than destroying it again.
+struct InventoryStamp {
+  CUcontext ctx = nullptr;
+  int dev = -1;
+  uint64_t gen = 0;
+};
+InventoryStamp inventory_stamp();
+
+// Records a maths-library handle against the session being served here, where
+// `made` says it was made, and forgets one the client destroyed itself. `what`
+// is used in the log and must outlive the session, so a string literal.
+void inventory_note_handle(uint64_t handle, const InventoryStamp& made,
+                           const char* what, CUresult (*destroy)(uint64_t));
 void inventory_forget_handle(uint64_t handle);
 
 // The entry point the server should call for `name`: a wrapper that records

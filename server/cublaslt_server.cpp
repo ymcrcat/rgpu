@@ -151,11 +151,12 @@ bool dispatch_cublaslt(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
       auto fn = lt_sym<cublasStatus_t (*)(cublasLtHandle_t*)>("cublasLtCreate");
       if (!fn) { put_status(rsp, CUBLAS_STATUS_NOT_INITIALIZED); return true; }
       cublasLtHandle_t h = nullptr;
+      const InventoryStamp made = inventory_stamp();
       cublasStatus_t s = fn(&h);
       put_status(rsp, s);
       if (s == CUBLAS_STATUS_SUCCESS) {
         rsp->put<uint64_t>(reinterpret_cast<uint64_t>(h));
-        inventory_note_handle(reinterpret_cast<uint64_t>(h), "cuBLASLt",
+        inventory_note_handle(reinterpret_cast<uint64_t>(h), made, "cuBLASLt",
                               &destroy_handle);
       }
       return true;

@@ -123,11 +123,12 @@ bool dispatch_cublas(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
           "cublasCreate_v2");
       if (!fn) { put_status(rsp, CUBLAS_STATUS_NOT_INITIALIZED); return true; }
       cublasHandle_t h = nullptr;
+      const InventoryStamp made = inventory_stamp();
       cublasStatus_t s = fn(&h);
       put_status(rsp, s);
       if (s == CUBLAS_STATUS_SUCCESS) {
         rsp->put<uint64_t>(reinterpret_cast<uint64_t>(h));
-        inventory_note_handle(reinterpret_cast<uint64_t>(h), "cuBLAS",
+        inventory_note_handle(reinterpret_cast<uint64_t>(h), made, "cuBLAS",
                               &destroy_handle);
       }
       return true;
