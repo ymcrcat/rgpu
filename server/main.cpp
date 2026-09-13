@@ -664,11 +664,12 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
     // The slot a failure of this request is held in, or a held one taken
     // from: the issuing thread's. Found before the lock, because finding it
     // for a request that was given no slot can make one; used only under it.
+    // Not looked for at all for a call without a reply that succeeded, which
+    // has nothing to hold and nothing to take.
     const bool no_reply = (h.flags & kFlagNoReply) != 0;
     ClientThread* home = thread;
-    if (!home) {
-      home = deferred_home(threads, h.thread_id,
-                           no_reply && result != CUDA_SUCCESS, key);
+    if (!home && (!no_reply || result != CUDA_SUCCESS)) {
+      home = deferred_home(threads, h.thread_id, no_reply, key);
     }
 
     if (no_reply) {
