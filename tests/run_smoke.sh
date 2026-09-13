@@ -336,16 +336,28 @@ if [[ -x "$BUILD/threadctx_smoke" ]]; then
   RESET_PORT=$((PORT + 12))
   RGPU_FAKE_DEVICES=2 "$BUILD/rgpu-server-fake" "$RESET_PORT" &
   RESET_SRV=$!
+  reset_up=0
   for _ in $(seq 1 50); do
     if (exec 3<>/dev/tcp/127.0.0.1/"$RESET_PORT") 2>/dev/null; then
       exec 3<&- 3>&-
+      reset_up=1
       break
     fi
     sleep 0.1
   done
-  LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$RESET_PORT" \
-    "$BUILD/threadctx_smoke" reset || rc=1
+  # Said, rather than left to the client's connection error: a server that
+  # never listened is a different failure from a reset that went wrong.
+  if [[ $reset_up -ne 1 ]]; then
+    echo "FAIL: the reset case's server never came up on port $RESET_PORT"
+    rc=1
+  else
+    LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$RESET_PORT" \
+      "$BUILD/threadctx_smoke" reset || rc=1
+  fi
   kill $RESET_SRV 2>/dev/null
+  # Reaped before going on, so it is gone - port and all - before anything
+  # after it starts.
+  wait $RESET_SRV 2>/dev/null
 fi
 
 # The runtime API path, if it was built. Our libcudart must come first so the
