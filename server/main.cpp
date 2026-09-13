@@ -215,6 +215,32 @@ bool dispatch_internal(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
   }
 }
 
+// Whether a held deferred error must not be folded into this call's reply.
+// A call that succeeds can carry an earlier held error as its result (the
+// deferred-error contract), which is right when the client reads the reply
+// only as success or failure. It is wrong for a call whose success the client
+// reads as thread state it must mirror: fold an error in and the server has
+// applied the change while the client believes the call failed and does not,
+// so the two disagree from then on. Those calls:
+//   - cuThreadExchangeStreamCaptureMode returns the previous capture mode,
+//     which the client tracks to bracket a stream capture;
+//   - cuCtxSetCurrent, cuCtxPushCurrent and cuCtxPopCurrent each apply to the
+//     thread's server-side context stack before replying, and the client keeps
+//     its own idea of that stack in step from the success it reads back.
+// The held error is not lost - it stays for the thread's next call whose reply
+// is only success or failure - so it still surfaces exactly once.
+bool reply_carries_observed_state(uint32_t api_id) {
+  switch (api_id) {
+    case API_rgpu_capture_mode:
+    case API_cuCtxSetCurrent:
+    case API_cuCtxPushCurrent_v2:
+    case API_cuCtxPopCurrent_v2:
+      return true;
+    default:
+      return false;
+  }
+}
+
 // --- client threads ---------------------------------------------------------
 //
 // CUDA's current context, and the stack it tops, belong to the calling thread,
@@ -484,6 +510,27 @@ int handshake_timeout_seconds() {
   int n = v ? std::atoi(v) : 10;
   return n > 0 ? n : 10;
 }
+
+// The most connections that may sit in the pre-handshake read at once.
+// RGPU_MAX_SESSIONS counts only sessions made after the handshake, so without
+// this a peer could open connections - each an accept thread and an fd - faster
+// than the handshake deadline retires them, whether by never sending a
+// handshake or by dribbling one. A connection counts from when its accept
+// thread starts until it has handed the connection off or promoted it to a
+// session, or closed it (accept_connection). A reconnect to a session the
+// server already has is bounded by this only while its handshake is in flight,
+// like any other; it is never refused for it.
+size_t max_pending_handshakes() {
+  static const size_t n = [] {
+    const char* v = std::getenv("RGPU_MAX_PENDING_HANDSHAKES");
+    const long parsed = v ? std::atol(v) : 0;
+    return parsed > 0 ? static_cast<size_t>(parsed) : size_t{256};
+  }();
+  return n;
+}
+
+// Connections in the pre-handshake read right now; see max_pending_handshakes.
+std::atomic<size_t> g_pending_handshakes{0};
 
 // Sets, or with 0 clears, a receive timeout on `fd`. A recv that waits longer
 // than this returns as if the peer had gone quiet, which is what breaks a
@@ -767,9 +814,13 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
       // Handing the older one to a call that just failed would report the
       // wrong failure and lose the real one, which is the opposite of the
       // point: the deferred error stays held for the thread's next call that
-      // succeeds.
+      // succeeds. Nor is it folded into a call whose reply the client reads as
+      // state rather than as success or failure (reply_carries_observed_state):
+      // that would make the server and client disagree about a side effect the
+      // call applied.
       if (result == CUDA_SUCCESS && home &&
-          home->pending_async != CUDA_SUCCESS) {
+          home->pending_async != CUDA_SUCCESS &&
+          !reply_carries_observed_state(h.api_id)) {
         result = home->pending_async;
         home->pending_async = CUDA_SUCCESS;
       }
@@ -947,12 +998,39 @@ void forget_unserved(const std::shared_ptr<Session>& session,
 // Reads the handshake and either starts a session or hands the connection to
 // the thread already serving one.
 void accept_connection(int fd) {
+  // Cap the connections sitting in the pre-handshake read. Counted from here,
+  // and given back on every way out of this function - a bad handshake, a
+  // refusal, a hand-over, a promotion to a session - by the guard below, so a
+  // connection stops counting the moment its handshake is done with. Refused
+  // past the cap before a byte is read, so a flood cannot get that far.
+  if (g_pending_handshakes.fetch_add(1, std::memory_order_relaxed) + 1 >
+      max_pending_handshakes()) {
+    g_pending_handshakes.fetch_sub(1, std::memory_order_relaxed);
+    logf("refusing a connection: already %zu waiting to hand shake, the most "
+         "allowed (RGPU_MAX_PENDING_HANDSHAKES); closing it",
+         max_pending_handshakes());
+    ::close(fd);
+    return;
+  }
+  struct PendingGuard {
+    ~PendingGuard() {
+      g_pending_handshakes.fetch_sub(1, std::memory_order_relaxed);
+    }
+  } pending_guard;
+
   // Bound the untrusted first bytes: a peer that sends nothing, or dribbles,
   // gets the connection closed at the deadline rather than holding this thread
-  // and this fd forever. Nothing is registered on the way out.
+  // and this fd forever. The deadline bounds the whole read (one elapsed-time
+  // check, computed once here); the per-recv timeout only wakes a recv that is
+  // already blocked, and on its own resets each recv, so a dribble would tie up
+  // the connection for sizeof(Handshake) times the timeout without the
+  // deadline. Nothing is registered on the way out.
   set_recv_timeout(fd, handshake_timeout_seconds());
+  const auto deadline = std::chrono::steady_clock::now() +
+                        std::chrono::seconds(handshake_timeout_seconds());
   Handshake hello{};
-  if (!read_exact(fd, &hello, sizeof(hello)) || hello.magic != kMagicHello) {
+  if (!read_exact(fd, &hello, sizeof(hello), deadline) ||
+      hello.magic != kMagicHello) {
     logf("connection did not begin with a handshake within the deadline, or "
          "with the wrong bytes; closing");
     ::close(fd);

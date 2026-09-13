@@ -130,6 +130,92 @@ bool still_current(int dev, uint64_t gen) {
   return dev < 0 || generation(dev) == gen;
 }
 
+// The primary-context handles the process has learned for a device. An entry
+// made in device D's primary context is stamped with that context's handle,
+// which g_primary_dev maps back to D; the driver hands out one stable handle
+// per device, so this is normally a single handle, but every one learned for D
+// is returned so a lookup in the reverse index matches exactly what a scan of
+// every entry with dev == D would once have found.
+std::vector<CUcontext> primary_handles(int dev) {
+  std::vector<CUcontext> hs;
+  std::lock_guard<std::mutex> lk(g_gen_mu);
+  for (const auto& kv : g_primary_dev) {
+    if (kv.second == dev) hs.push_back(kv.first);
+  }
+  return hs;
+}
+
+// --- the reverse index ------------------------------------------------------
+//
+// A context to the entries recorded against it, so a teardown touches only its
+// own entries. Every helper is called with the inventory's mutex held, next to
+// the map change it mirrors, so the two never drift.
+
+// The reverse-index slot for a resource map, or -1 for a map no context
+// teardown sweeps: contexts, which are erased by handle, and libraries, which
+// belong to no context.
+int ctx_slot(Inventory::Items Inventory::*which) {
+  if (which == &Inventory::allocs) return Inventory::kAllocs;
+  if (which == &Inventory::modules) return Inventory::kModules;
+  if (which == &Inventory::streams) return Inventory::kStreams;
+  if (which == &Inventory::events) return Inventory::kEvents;
+  if (which == &Inventory::graphs) return Inventory::kGraphs;
+  if (which == &Inventory::graph_execs) return Inventory::kGraphExecs;
+  return -1;
+}
+
+// The map a reverse-index slot points into.
+Inventory::Items* ctx_map(Inventory* inv, int slot) {
+  switch (slot) {
+    case Inventory::kAllocs: return &inv->allocs;
+    case Inventory::kModules: return &inv->modules;
+    case Inventory::kStreams: return &inv->streams;
+    case Inventory::kEvents: return &inv->events;
+    case Inventory::kGraphs: return &inv->graphs;
+    case Inventory::kGraphExecs: return &inv->graph_execs;
+  }
+  return nullptr;
+}
+
+// Drops a context's bucket once nothing is left in it, so a session that churns
+// contexts does not accumulate empty buckets.
+void index_drop_if_empty(
+    Inventory* inv,
+    std::unordered_map<CUcontext, Inventory::CtxEntries>::iterator it) {
+  if (it == inv->by_ctx.end()) return;
+  if (!it->second.handles.empty()) return;
+  for (const auto& s : it->second.in) {
+    if (!s.empty()) return;
+  }
+  inv->by_ctx.erase(it);
+}
+
+void index_add(Inventory* inv, CUcontext ctx, int slot, uint64_t handle) {
+  if (!ctx || slot < 0) return;
+  inv->by_ctx[ctx].in[slot].insert(handle);
+}
+
+void index_remove(Inventory* inv, CUcontext ctx, int slot, uint64_t handle) {
+  if (!ctx || slot < 0) return;
+  auto it = inv->by_ctx.find(ctx);
+  if (it == inv->by_ctx.end()) return;
+  it->second.in[slot].erase(handle);
+  index_drop_if_empty(inv, it);
+}
+
+void index_add_handle(Inventory* inv, CUcontext ctx, uint64_t handle) {
+  if (!ctx) return;
+  inv->by_ctx[ctx].handles.insert(handle);
+}
+
+void index_remove_handle(Inventory* inv, CUcontext ctx, uint64_t handle) {
+  if (!ctx) return;
+  auto it = inv->by_ctx.find(ctx);
+  if (it == inv->by_ctx.end()) return;
+  it->second.handles.erase(handle);
+  index_drop_if_empty(inv, it);
+}
+
 // --- recording ------------------------------------------------------------
 
 // Where something made from another object is about to be made: where that
@@ -174,13 +260,31 @@ void note(Inventory::Items Inventory::*which, uint64_t handle,
   Inventory* inv = t_inv;
   if (!inv || !handle) return;
   std::lock_guard<std::mutex> lk(inv->mu);
+  const int slot = ctx_slot(which);
+  if (slot >= 0) {
+    // A re-note of the same handle under a different context - which a free
+    // and a reuse would not reach, since the free forgets it first - must not
+    // leave it indexed under the old one.
+    auto it = (inv->*which).find(handle);
+    if (it != (inv->*which).end() && it->second.ctx != st.ctx) {
+      index_remove(inv, it->second.ctx, slot, handle);
+    }
+  }
   (inv->*which)[handle] = st;
+  index_add(inv, st.ctx, slot, handle);
 }
 
 void forget(Inventory::Items Inventory::*which, uint64_t handle) {
   Inventory* inv = t_inv;
   if (!inv) return;
   std::lock_guard<std::mutex> lk(inv->mu);
+  const int slot = ctx_slot(which);
+  if (slot >= 0) {
+    auto it = (inv->*which).find(handle);
+    if (it != (inv->*which).end()) {
+      index_remove(inv, it->second.ctx, slot, handle);
+    }
+  }
   (inv->*which).erase(handle);
 }
 
@@ -197,17 +301,18 @@ void note_primary_retain(CUdevice dev, int delta) {
 }
 
 // Everything recorded under a context that no longer holds it. Called with
-// the inventory locked.
+// the inventory locked. The reverse index names exactly this context's
+// entries, so the six maps and the handles are not scanned; the few open
+// captures are.
 void forget_under(Inventory* inv, CUcontext ctx) {
-  Inventory::Items* maps[] = {&inv->allocs,  &inv->modules, &inv->streams,
-                              &inv->events,  &inv->graphs,  &inv->graph_execs};
-  for (Inventory::Items* m : maps) {
-    for (auto it = m->begin(); it != m->end();) {
-      it = it->second.ctx == ctx ? m->erase(it) : std::next(it);
+  auto b = inv->by_ctx.find(ctx);
+  if (b != inv->by_ctx.end()) {
+    for (int slot = 0; slot < Inventory::kCtxMapCount; slot++) {
+      Inventory::Items* m = ctx_map(inv, slot);
+      for (uint64_t h : b->second.in[slot]) m->erase(h);
     }
-  }
-  for (auto it = inv->handles.begin(); it != inv->handles.end();) {
-    it = it->second.made.ctx == ctx ? inv->handles.erase(it) : std::next(it);
+    for (uint64_t h : b->second.handles) inv->handles.erase(h);
+    inv->by_ctx.erase(b);
   }
   for (auto it = inv->captures.begin(); it != inv->captures.end();) {
     it = it->where.ctx == ctx ? inv->captures.erase(it) : std::next(it);
@@ -246,18 +351,41 @@ void forget_primary(CUdevice dev) {
   Inventory* inv = t_inv;
   if (!inv) return;
   const uint64_t now = generation(dev);
+  // Every entry made in device D's primary context is indexed under that
+  // context's handle, so only those buckets are visited, not every map. The
+  // dev/gen test is exactly the old one, so the entries forgotten are the same:
+  // an entry an older generation made goes, and one the current generation made
+  // stays.
+  const std::vector<CUcontext> primaries = primary_handles(dev);
   std::lock_guard<std::mutex> lk(inv->mu);
-  Inventory::Items* maps[] = {&inv->allocs,  &inv->modules, &inv->streams,
-                              &inv->events,  &inv->graphs,  &inv->graph_execs};
-  for (Inventory::Items* m : maps) {
-    for (auto it = m->begin(); it != m->end();) {
-      const bool gone = it->second.dev == dev && it->second.gen != now;
-      it = gone ? m->erase(it) : std::next(it);
+  for (CUcontext ctx : primaries) {
+    auto b = inv->by_ctx.find(ctx);
+    if (b == inv->by_ctx.end()) continue;
+    for (int slot = 0; slot < Inventory::kCtxMapCount; slot++) {
+      Inventory::Items* m = ctx_map(inv, slot);
+      auto& set = b->second.in[slot];
+      for (auto sit = set.begin(); sit != set.end();) {
+        auto e = m->find(*sit);
+        if (e == m->end() || (e->second.dev == dev && e->second.gen != now)) {
+          if (e != m->end()) m->erase(e);
+          sit = set.erase(sit);
+        } else {
+          ++sit;
+        }
+      }
     }
-  }
-  for (auto it = inv->handles.begin(); it != inv->handles.end();) {
-    const bool gone = it->second.made.dev == dev && it->second.made.gen != now;
-    it = gone ? inv->handles.erase(it) : std::next(it);
+    for (auto hit = b->second.handles.begin();
+         hit != b->second.handles.end();) {
+      auto e = inv->handles.find(*hit);
+      if (e == inv->handles.end() ||
+          (e->second.made.dev == dev && e->second.made.gen != now)) {
+        if (e != inv->handles.end()) inv->handles.erase(e);
+        hit = b->second.handles.erase(hit);
+      } else {
+        ++hit;
+      }
+    }
+    index_drop_if_empty(inv, b);
   }
   for (auto it = inv->captures.begin(); it != inv->captures.end();) {
     const bool gone = it->where.dev == dev && it->where.gen != now;
@@ -737,6 +865,11 @@ CUresult w_cuGraphClone(CUgraph* clone, CUgraph original) {
 // Everything whose result a client can still be holding when it dies. Calls
 // that are not here are not recorded, which is only safe because they create
 // nothing that outlives the call: a memcpy, a query, a launch.
+//
+// A few creators are left off deliberately, as untracked limits listed in the
+// README: among them cuTexRefCreate (deprecated, and needing a current context,
+// so its cuTexRefDestroy would too), whose texture references stay until the
+// server exits rather than being reclaimed at expiry.
 const NamedFn kWrappedCalls[] = {
     {"cuMemAlloc_v2", reinterpret_cast<void*>(&w_cuMemAlloc_v2)},
     {"cuMemAllocPitch_v2", reinterpret_cast<void*>(&w_cuMemAllocPitch_v2)},
@@ -964,13 +1097,22 @@ void inventory_note_handle(uint64_t handle, const InventoryStamp& made,
   Inventory* inv = t_inv;
   if (!inv || !handle) return;
   std::lock_guard<std::mutex> lk(inv->mu);
+  auto it = inv->handles.find(handle);
+  if (it != inv->handles.end() && it->second.made.ctx != made.ctx) {
+    index_remove_handle(inv, it->second.made.ctx, handle);
+  }
   inv->handles[handle] = Inventory::LibHandle{made, what, destroy};
+  index_add_handle(inv, made.ctx, handle);
 }
 
 void inventory_forget_handle(uint64_t handle) {
   Inventory* inv = t_inv;
   if (!inv) return;
   std::lock_guard<std::mutex> lk(inv->mu);
+  auto it = inv->handles.find(handle);
+  if (it != inv->handles.end()) {
+    index_remove_handle(inv, it->second.made.ctx, handle);
+  }
   inv->handles.erase(handle);
 }
 
@@ -1003,6 +1145,9 @@ std::string release_inventory(Inventory& inv) {
     libraries.swap(inv.libraries);
     handles.swap(inv.handles);
     retains.swap(inv.primary_retains);
+    // The maps are gone; the reverse index into them goes too. Release works
+    // off the copies above, which it never indexes.
+    inv.by_ctx.clear();
   }
 
   unsigned failed = 0;

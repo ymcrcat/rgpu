@@ -23,6 +23,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -166,6 +167,34 @@ Frame device_count(uint32_t req_id) {
   f.h.api_id = rgpu::API_cuDeviceGetCount;
   f.h.req_id = req_id;
   f.h.thread_id = kThread;
+  f.h.payload_len = static_cast<uint32_t>(f.payload.size());
+  return f;
+}
+
+// cuThreadExchangeStreamCaptureMode: the payload is the mode wanted, the reply
+// carries the mode that was in force. The server applies the swap, so its reply
+// is a side effect the client tracks - which is why a held deferred error must
+// not be folded into it (see #9.5).
+Frame capture_mode(uint32_t req_id, uint32_t thread, int32_t wanted) {
+  Frame f;
+  f.payload.put<int32_t>(wanted);
+  f.h.magic = rgpu::kMagicReq;
+  f.h.api_id = rgpu::API_rgpu_capture_mode;
+  f.h.req_id = req_id;
+  f.h.thread_id = thread;
+  f.h.payload_len = static_cast<uint32_t>(f.payload.size());
+  return f;
+}
+
+Frame device_get(uint32_t req_id, uint32_t thread, int ordinal, bool no_reply) {
+  Frame f;
+  f.payload.put<uint8_t>(1);
+  f.payload.put<int>(ordinal);
+  f.h.magic = rgpu::kMagicReq;
+  f.h.api_id = rgpu::API_cuDeviceGet;
+  f.h.req_id = req_id;
+  f.h.flags = no_reply ? static_cast<uint32_t>(rgpu::kFlagNoReply) : 0u;
+  f.h.thread_id = thread;
   f.h.payload_len = static_cast<uint32_t>(f.payload.size());
   return f;
 }
@@ -626,6 +655,66 @@ void resuming_into_an_unknown_session() {
   if (fd >= 0) ::close(fd);
 }
 
+// A held deferred error must not be folded into a cuThreadExchangeStreamCapture-
+// Mode reply. That call returns the previous capture mode, which the client
+// tracks to bracket a stream capture; if the reply carried the held error the
+// server would have swapped the mode while the client believed the call failed
+// and kept the old one, and the two would disagree. The error is not lost: it
+// waits for the thread's next call whose reply is only success or failure.
+void deferred_error_not_folded_into_capture_mode() {
+  std::printf("-- a held deferred error is not folded into a capture-mode "
+              "exchange, and surfaces on the next plain call instead\n");
+  const uint64_t session = 11;
+  rgpu::HandshakeReply hs{};
+  int fd = connect_session(session, 0, &hs);
+  EXPECT(fd >= 0 && hs.resumed == 0, "could not start a session");
+  if (fd < 0) return;
+
+  uint32_t id = 1;
+  // Thread 1 makes a call without a reply that fails: the server holds its
+  // error for the thread's next call that replies.
+  EXPECT(send(fd, device_get(id++, 1, 99, true)),
+         "could not send the failing call without a reply");
+
+  // The exchange applies the swap (GLOBAL -> RELAXED) and must report success
+  // with the previous mode, not the held error.
+  const Frame ex = capture_mode(id++, 1, CU_STREAM_CAPTURE_MODE_RELAXED);
+  EXPECT(send(fd, ex), "could not send the capture-mode exchange");
+  Reply r = receive(fd);
+  int32_t previous = -1;
+  EXPECT(r.received && r.h.req_id == ex.h.req_id, "no reply to the exchange");
+  EXPECT(r.h.result == CUDA_SUCCESS,
+         "the held deferred error was folded into the capture-mode exchange, "
+         "so the client would think it failed while the server swapped the "
+         "mode");
+  EXPECT(r.body.get(&previous) && previous == CU_STREAM_CAPTURE_MODE_GLOBAL,
+         "the exchange did not report the mode that was in force before it");
+
+  // The next plain call carries the held error, once.
+  const Frame plain = device_count(id++);
+  EXPECT(send(fd, plain), "could not send the call after the exchange");
+  expect_answer(fd, plain, CUDA_ERROR_INVALID_DEVICE,
+                "the plain call after the exchange, which carries the held "
+                "error");
+
+  // The swap really took: a second exchange sees RELAXED as the mode in force,
+  // and it carries no error (the held one already surfaced).
+  const Frame ex2 = capture_mode(id++, 1, CU_STREAM_CAPTURE_MODE_GLOBAL);
+  EXPECT(send(fd, ex2), "could not send the second exchange");
+  r = receive(fd);
+  previous = -1;
+  EXPECT(r.received && r.h.req_id == ex2.h.req_id && r.h.result == CUDA_SUCCESS,
+         "the second exchange did not succeed");
+  EXPECT(r.body.get(&previous) && previous == CU_STREAM_CAPTURE_MODE_RELAXED,
+         "the first exchange's swap was lost: the second did not see RELAXED");
+
+  const Frame after = device_count(id++);
+  EXPECT(send(fd, after), "could not send the call after the second exchange");
+  expect_answer(fd, after, CUDA_SUCCESS,
+                "the call after the error surfaced (it must not surface twice)");
+  ::close(fd);
+}
+
 // --- replay_smoke sessions ----------------------------------------------------
 //
 // How many sessions a server keeps, and sessions it made but could never
@@ -872,6 +961,129 @@ int gap() {
   return 0;
 }
 
+// --- replay_smoke handshake ---------------------------------------------------
+//
+// The whole handshake read is bounded by an elapsed-time deadline
+// (RGPU_HANDSHAKE_TIMEOUT_SECONDS), not by a per-recv timeout, so a peer that
+// dribbles the handshake one byte at a time is closed at the deadline rather
+// than after sizeof(Handshake) times the timeout. And the connections sitting
+// in the pre-handshake read are capped (RGPU_MAX_PENDING_HANDSHAKES), so a
+// flood of silent or dribbling peers cannot tie up every accept thread and fd.
+// The server runs alone with a short deadline and a small cap.
+
+// Dribbles the handshake one byte at a time, each byte well inside the per-recv
+// timeout, and returns how long until the server closes the connection
+// (negative if it did not close within dial()'s receive timeout).
+double dribble_until_closed() {
+  int fd = dial();
+  if (fd < 0) return -1;
+  const rgpu::Handshake hello = make_hello(100, 0, 0);
+  const uint8_t* p = reinterpret_cast<const uint8_t*>(&hello);
+  std::atomic<bool> stop{false};
+  const auto start = std::chrono::steady_clock::now();
+  std::thread dribbler([&] {
+    for (size_t i = 0; i < sizeof(hello) && !stop.load(); i++) {
+#ifdef MSG_NOSIGNAL
+      if (::send(fd, p + i, 1, MSG_NOSIGNAL) != 1) break;
+#else
+      if (::send(fd, p + i, 1, 0) != 1) break;
+#endif
+      std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    }
+  });
+  // The server sends nothing during the handshake read, so this recv returns
+  // only when the server closes the connection (0) or dial()'s timeout fires.
+  char byte = 0;
+  const bool closed = ::recv(fd, &byte, 1, 0) == 0;
+  const double waited = std::chrono::duration<double>(
+                            std::chrono::steady_clock::now() - start)
+                            .count();
+  stop.store(true);
+  dribbler.join();
+  ::close(fd);
+  return closed ? waited : -waited;
+}
+
+int handshake_bounds() {
+  const int timeout = std::getenv("RGPU_HANDSHAKE_TIMEOUT_SECONDS")
+                          ? std::atoi(std::getenv("RGPU_HANDSHAKE_TIMEOUT_SECONDS"))
+                          : 0;
+  const int cap = std::getenv("RGPU_MAX_PENDING_HANDSHAKES")
+                      ? std::atoi(std::getenv("RGPU_MAX_PENDING_HANDSHAKES"))
+                      : 0;
+  if (timeout <= 0 || timeout > 5 || cap <= 0) {
+    std::fprintf(stderr,
+                 "FAIL: handshake needs a server and this process run with a "
+                 "short RGPU_HANDSHAKE_TIMEOUT_SECONDS and a small "
+                 "RGPU_MAX_PENDING_HANDSHAKES; run it from run_smoke.sh\n");
+    return 1;
+  }
+
+  std::printf("-- a peer that dribbles the handshake is closed at the "
+              "deadline, not after a byte-times-timeout wait\n");
+  {
+    const double waited = dribble_until_closed();
+    std::printf("   the dribbling peer was %s after %.1fs\n",
+                waited >= 0 ? "closed" : "still open",
+                waited < 0 ? -waited : waited);
+    // With the deadline the server closes at ~timeout; without it the close
+    // would come only after sizeof(Handshake) times the timeout, past dial()'s
+    // receive timeout, so the connection would read as still open here.
+    EXPECT(waited >= 0 && waited < timeout + 3.0,
+           "a dribbling handshake was not bounded by the deadline");
+  }
+
+  std::printf("-- past the pre-handshake cap a connection is refused, and a "
+              "normal client is still served\n");
+  {
+    // Fill the cap with silent connections, each holding a pre-handshake slot
+    // until the deadline.
+    std::vector<int> fillers;
+    for (int i = 0; i < cap; i++) fillers.push_back(dial());
+    for (int fd : fillers) EXPECT(fd >= 0, "could not open a filler connection");
+    // Let the server accept and count each before the one past the cap.
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    int extra = dial();
+    EXPECT(extra >= 0, "could not open the connection past the cap");
+    if (extra >= 0) {
+      const double waited = seconds_until_closed(extra);
+      std::printf("   the connection past the cap was %s after %.1fs\n",
+                  waited >= 0 ? "closed" : "still open",
+                  waited < 0 ? -waited : waited);
+      // Refused before a byte is read, so it closes at once - well inside the
+      // deadline, which is when a silent connection under the cap would close.
+      EXPECT(waited >= 0 && waited < timeout / 2.0,
+             "a connection past the pre-handshake cap was not refused promptly");
+      ::close(extra);
+    }
+
+    // Free the slots; the server gives each back as its connection closes.
+    for (int fd : fillers)
+      if (fd >= 0) ::close(fd);
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    rgpu::HandshakeReply hs{};
+    int fd = connect_session(200, 0, &hs);
+    EXPECT(fd >= 0 && hs.resumed == 0,
+           "a normal client was not served once the pre-handshake cap freed");
+    if (fd >= 0) {
+      const Frame f = device_count(1);
+      EXPECT(send(fd, f), "could not send the normal client's request");
+      expect_answer(fd, f, CUDA_SUCCESS, "the normal client's request");
+      ::close(fd);
+    }
+  }
+
+  if (g_failures) {
+    std::printf("\nFAILED: %d check(s)\n", g_failures);
+    return 1;
+  }
+  std::printf("\nPASS: the handshake read is bounded and pre-handshake "
+              "connections are capped\n");
+  return 0;
+}
+
 // --- replay_smoke handoff -----------------------------------------------------
 //
 // The grace period running out while a reconnect is being handed over. The
@@ -946,18 +1158,7 @@ int expiry_during_handoff() {
 // What is held and what is evicted does not change: a thread's failure still
 // reaches its next call that replies, and a refused thread let in later still
 // gets its own failure back. The server runs with RGPU_MAX_CLIENT_THREADS=2.
-Frame device_get(uint32_t req_id, uint32_t thread, int ordinal, bool no_reply) {
-  Frame f;
-  f.payload.put<uint8_t>(1);
-  f.payload.put<int>(ordinal);
-  f.h.magic = rgpu::kMagicReq;
-  f.h.api_id = rgpu::API_cuDeviceGet;
-  f.h.req_id = req_id;
-  f.h.flags = no_reply ? static_cast<uint32_t>(rgpu::kFlagNoReply) : 0u;
-  f.h.thread_id = thread;
-  f.h.payload_len = static_cast<uint32_t>(f.payload.size());
-  return f;
-}
+// (device_get is defined with the other frame builders above.)
 
 constexpr int kRefused = 200;
 
@@ -1028,6 +1229,7 @@ int main(int argc, char** argv) {
   if (mode == "flood") return deferred_error_flood();
   if (mode == "sessions") return sessions();
   if (mode == "gap") return gap();
+  if (mode == "handshake") return handshake_bounds();
 
   reply_expected_request_in_flight();
   no_reply_request_in_flight();
@@ -1039,6 +1241,7 @@ int main(int argc, char** argv) {
   frames_without_a_request_id();
   claimed_progress_in_an_unknown_session();
   resuming_into_an_unknown_session();
+  deferred_error_not_folded_into_capture_mode();
 
   if (g_failures) {
     std::printf("\nFAILED: %d check(s)\n", g_failures);

@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <deque>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -64,6 +65,13 @@ struct SavedContext {
 
 struct ClientThread {
   std::vector<SavedContext> stack;  // bottom first; back() is current
+  // The distinct contexts named anywhere in this thread's stack, destroyed or
+  // not, rebuilt whenever the stack changes. A context destroy sweeps every
+  // thread's stack to mark the destroyed handle gone; this lets that sweep skip
+  // the threads that never named it, instead of walking every entry of every
+  // thread. It moves and is dropped with the slot, so the tables can shuffle
+  // slots between live and retired without it drifting.
+  std::unordered_set<CUcontext> stack_ctxs;
   // A call sent without expecting a reply has nowhere to report a failure, so
   // the first one is held and handed to the next call from this same thread
   // that does reply. In CUDA the failing call would have returned its error to

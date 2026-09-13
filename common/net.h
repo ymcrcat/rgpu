@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include <cerrno>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 
@@ -16,9 +17,22 @@ namespace rgpu {
 
 // Loops over partial transfers and retries EINTR. Returns false on error or a
 // peer that closed early.
-inline bool read_exact(int fd, void* buf, size_t n) {
+//
+// `deadline`, when set (not the default-constructed epoch), bounds the whole
+// read by one elapsed-time check across the recv loop, not per recv: a peer
+// that dribbles one byte just under a per-recv SO_RCVTIMEO would otherwise
+// reset that clock on every recv, so the whole read is bounded only by the
+// number of bytes times the timeout. Checked before each recv, so it needs a
+// per-recv timeout (SO_RCVTIMEO) alongside it to break a recv already blocked;
+// the two together bound the total. The serving loop passes no deadline: it
+// reads a live client with no time limit.
+inline bool read_exact(int fd, void* buf, size_t n,
+                       std::chrono::steady_clock::time_point deadline =
+                           std::chrono::steady_clock::time_point{}) {
   auto* p = static_cast<uint8_t*>(buf);
+  const bool bounded = deadline != std::chrono::steady_clock::time_point{};
   while (n > 0) {
+    if (bounded && std::chrono::steady_clock::now() >= deadline) return false;
     ssize_t r = ::recv(fd, p, n, 0);
     if (r > 0) {
       p += r;
