@@ -174,6 +174,7 @@ report itself where it happened rather than at the next synchronization.
 | `RGPU_BATCH` | `0` to make every call a round trip, for debugging |
 | `RGPU_CUBLAS`, `RGPU_CUBLASLT` | paths the server opens for the real maths libraries |
 | `RGPU_SESSION_GRACE` | seconds the server keeps a session whose connection dropped, default `120` |
+| `RGPU_MAX_SESSIONS` | server: most sessions kept at once, those waiting out their grace included, default `64` |
 | `RGPU_RECONNECT_SECONDS` | seconds the client keeps trying to reach the server again, default `60` |
 | `RGPU_MAX_CLIENT_THREADS` | server: most client threads a session may have live at once, default `4096` |
 | `RGPU_MAX_CONTEXT_STACK` | server: deepest context stack a client thread may push, default `64` |
@@ -239,6 +240,11 @@ track `cuMemAddressReserve` ranges, `cuGraphConditionalHandleCreate` handles,
 user-object retains, cuDNN descriptors minted on the client,
 `cuLibraryLoadData` libraries or texture references. Those stay until the
 server exits.
+
+A server keeps at most `RGPU_MAX_SESSIONS` sessions, counting those waiting
+out their grace period. Past that a new client is refused at the handshake: it
+says the server has no room, and every call fails. A client coming back to a
+session the server still has is never refused.
 
 `cuDevicePrimaryCtxReset` destroys what every session on the server holds in
 that context, so the server refuses it with `CUDA_ERROR_NOT_SUPPORTED` while

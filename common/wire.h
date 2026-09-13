@@ -15,6 +15,12 @@ namespace rgpu {
 constexpr uint32_t kMagicReq = 0x52475155;  // "RGQU"
 constexpr uint32_t kMagicRsp = 0x52475250;  // "RGRP"
 constexpr uint32_t kMagicHello = 0x52474845;  // "RGHE"
+// In place of kMagicHello in a handshake reply: the server will not start a
+// session for this client, because it already has as many as it allows
+// (RGPU_MAX_SESSIONS). The rest of the reply is as for any other. A client
+// that predates it reads a reply that is not from an rgpu-server, and stops
+// without sending anything, which is the right outcome for it too.
+constexpr uint32_t kMagicBusy = 0x52474255;  // "RGBU"
 
 // --- request ids -------------------------------------------------------------
 //
@@ -78,7 +84,18 @@ struct Handshake {
   // The last reply the client received, or gave up waiting for when a call
   // failed without one (client/rpc.cpp, abandon_call_locked); 0 if neither.
   uint32_t last_req_id;
-  uint32_t reserved;
+  uint32_t flags;  // kHello* below; was reserved, and zero, before them
+};
+
+// Flags on a handshake. A server that predates one ignores it.
+enum : uint32_t {
+  // The client has had a session under this id before, whether or not it has
+  // received a reply in it. A server that does not have the session says it is
+  // gone rather than starting a new one, as it does for a client that names a
+  // reply it received. Without this a client that lost its connection before
+  // its first reply looked like one starting afresh, and was given an empty
+  // session that waited out its grace period for nothing.
+  kHelloResuming = 1u << 0,
 };
 
 struct HandshakeReply {

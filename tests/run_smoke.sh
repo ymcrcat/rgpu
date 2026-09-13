@@ -248,6 +248,44 @@ if [[ -x "$BUILD/replay_smoke" ]]; then
   rm -f "$LOST_LOG"
 fi
 
+# How many sessions a server keeps, and sessions it made but could never serve.
+# Its own server: a cap of two sessions, a grace period short enough to wait
+# out, every new session's handshake reply held back long enough for a client
+# to be gone before it is written (RGPU_TEST_HANDSHAKE_DELAY_MS, a test hook),
+# and a log to count lines in. replay_smoke.cpp says more.
+if [[ -x "$BUILD/replay_smoke" ]]; then
+  echo
+  SESSIONS_PORT=$((PORT + 22))
+  SESSIONS_LOG=$(mktemp "${TMPDIR:-/tmp}/rgpu-sessions-log.XXXXXX")
+  RGPU_MAX_SESSIONS=2 RGPU_SESSION_GRACE=5 RGPU_TEST_HANDSHAKE_DELAY_MS=1000 \
+    "$BUILD/rgpu-server-fake" "$SESSIONS_PORT" >"$SESSIONS_LOG" 2>&1 &
+  SESSIONS_SRV=$!
+  for _ in $(seq 1 50); do
+    if (exec 3<>/dev/tcp/127.0.0.1/"$SESSIONS_PORT") 2>/dev/null; then
+      exec 3<&- 3>&-
+      break
+    fi
+    sleep 0.1
+  done
+  RGPU_SERVER="127.0.0.1:$SESSIONS_PORT" RGPU_TEST_HANDSHAKE_DELAY_MS=1000 \
+    "$BUILD/replay_smoke" sessions || rc=1
+  kill $SESSIONS_SRV 2>/dev/null
+  # The lost handshake replies have to have been lost at the write, or the
+  # case proved nothing: a server that never read the hello makes no session
+  # either.
+  lost=$(grep -c "could not answer its handshake" "$SESSIONS_LOG")
+  if [[ "$lost" != 2 ]]; then
+    echo "FAIL: the server failed to write $lost handshake replies, not 2, so"
+    echo "      replay_smoke sessions did not test a lost handshake reply"
+    rc=1
+  fi
+  if ! grep -q "refusing a new session" "$SESSIONS_LOG"; then
+    echo "FAIL: the server never said it refused a session past its cap"
+    rc=1
+  fi
+  rm -f "$SESSIONS_LOG"
+fi
+
 # Request ids wrapping past 0xFFFFFFFF, with the connection broken in a batch
 # that spans the wrap. Its own server: a break by frame count, which only means
 # something with one client on the server, and a stats file counting the calls

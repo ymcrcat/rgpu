@@ -661,6 +661,78 @@ void wire_cases() {
              });
   }
 
+  // A client that has had a session says so whenever it comes back, even if
+  // it lost the connection before its first reply and so still names no reply
+  // received. A server that no longer has the session can then tell it the
+  // session is gone, instead of starting an empty one that waits out its
+  // grace period for nothing. Its first handshake says no such thing.
+  run_case("a client that has had a session says it is resuming, replies or "
+           "not",
+           [] {
+             EXPECT(sync_call(kApiA) == CUDA_SUCCESS,
+                    "the call replayed after the reconnect failed");
+           },
+           [](int& lfd) {
+             Handshake first{};
+             int fd = accept_session(lfd, &first);
+             if (fd < 0) return;
+             EXPECT((first.flags & rgpu::kHelloResuming) == 0,
+                    "a client's first handshake said it was resuming");
+             Frame a;
+             const bool got = read_frame(fd, &a);
+             EXPECT(got, "the client did not send its call");
+             ::close(fd);  // before any reply
+
+             fd = accept_within(lfd, 10000);
+             EXPECT(fd >= 0, "the client did not come back after the break");
+             if (fd < 0) return;
+             Handshake again{};
+             EXPECT(read_hello(fd, &again), "no handshake on reconnect");
+             EXPECT(again.last_req_id == 0,
+                    "a client that never had a reply named one");
+             EXPECT(again.flags & rgpu::kHelloResuming,
+                    "a client coming back to its session before any reply did "
+                    "not say it was resuming");
+             send_hello(fd, rgpu::kProtocolVersion, true, 0);
+             read_until_closed(fd);
+             ::close(fd);
+           });
+
+  // A server that already has as many sessions as it allows refuses a new
+  // one with a reply of its own. The client says why, and stops.
+  run_case("a server with no room for another session is refused cleanly",
+           [] {
+             CUresult first = CUDA_SUCCESS, second = CUDA_SUCCESS;
+             const std::string log = capture_stderr([&] {
+               first = sync_call(kApiA);
+               second = sync_call(kApiA);
+             });
+             EXPECT(first == CUDA_ERROR_NOT_INITIALIZED &&
+                        second == CUDA_ERROR_NOT_INITIALIZED,
+                    "calls against a server with no room did not fail as not "
+                    "initialized");
+             EXPECT(log.find("RGPU_MAX_SESSIONS") != std::string::npos,
+                    "the client did not say the server has no room for "
+                    "another session");
+             EXPECT(log.find("not an rgpu-server") == std::string::npos,
+                    "the client took a refusal for something other than an "
+                    "rgpu-server");
+           },
+           [](int& lfd) {
+             int fd = accept_within(lfd, 10000);
+             EXPECT(fd >= 0, "the client never connected");
+             if (fd < 0) return;
+             Handshake hello{};
+             read_hello(fd, &hello);
+             HandshakeReply busy{};
+             busy.magic = rgpu::kMagicBusy;
+             busy.version = rgpu::kProtocolVersion;
+             rgpu::write_exact(fd, &busy, sizeof(busy));
+             ::close(fd);
+             EXPECT(accept_within(lfd, 1000) < 0,
+                    "the client tried again after being refused");
+           });
+
   // What a client of this version sees from a server that speaks another.
   // A server from before protocol 3 closes on a mismatch without a word.
   run_case("a server that closes on the handshake is refused cleanly",

@@ -447,6 +447,20 @@ using SessionKey = std::pair<uint64_t, uint64_t>;
 std::mutex g_sessions_mu;
 std::map<SessionKey, std::shared_ptr<Session>> g_sessions;
 
+// The most sessions the server keeps at once: served, waiting out a grace
+// period, or starting. The protocol has no authentication, so without a cap
+// any peer could make sessions - each a thread, and whatever it takes from the
+// driver - as fast as it can connect. A reconnect to a session the server
+// already has is never refused; only a new one is.
+size_t max_sessions() {
+  static const size_t n = [] {
+    const char* v = std::getenv("RGPU_MAX_SESSIONS");
+    const long parsed = v ? std::atol(v) : 0;
+    return parsed > 0 ? static_cast<size_t>(parsed) : size_t{64};
+  }();
+  return n;
+}
+
 // How long a session waits for its client to come back. Long enough to outlast
 // a lost route or a tunnel restarting, short enough that a client that is
 // genuinely gone does not hold a GPU forever.
@@ -834,15 +848,59 @@ void serve_session(std::shared_ptr<Session> session, SessionKey key) {
 // talked to a session under this id before, takes that to mean the session is
 // gone and stops. No session is made.
 void session_gone(int fd, uint64_t session, uint32_t last_req) {
-  logf("session %llx is not here: its client has had replies up to request "
-       "%u, so it is coming back to a session that expired or belonged to a "
-       "server that restarted. Telling it the session is gone",
-       (unsigned long long)session, last_req);
+  if (last_req != 0) {
+    logf("session %llx is not here: its client has had replies up to request "
+         "%u, so it is coming back to a session that expired or belonged to a "
+         "server that restarted. Telling it the session is gone",
+         (unsigned long long)session, last_req);
+  } else {
+    logf("session %llx is not here: its client says it has had a session "
+         "under this id, so it is coming back to one that expired or belonged "
+         "to a server that restarted. Telling it the session is gone",
+         (unsigned long long)session);
+  }
   HandshakeReply gone{};
   gone.magic = kMagicHello;
   gone.version = kProtocolVersion;
   write_exact(fd, &gone, sizeof(gone));
   ::close(fd);
+}
+
+// Tells a client that the server will not start a session for it, because it
+// already has as many as it allows, and closes the connection. No session is
+// made.
+void session_refused(int fd, uint64_t session, size_t live) {
+  logf("session %llx: refusing a new session: the server already has %zu, the "
+       "most allowed (RGPU_MAX_SESSIONS)",
+       (unsigned long long)session, live);
+  HandshakeReply busy{};
+  busy.magic = kMagicBusy;
+  busy.version = kProtocolVersion;
+  write_exact(fd, &busy, sizeof(busy));
+  ::close(fd);
+}
+
+// A new session that was registered but will never be served: its handshake
+// reply could not be written, so no thread was started for it. Left in the
+// table it would never expire, and a client coming back under its id would be
+// told it resumed and then wait forever on a connection nobody reads. So it is
+// taken out, and marked finished for a reconnect that found it in the
+// meantime, whose hand-over then closes that connection.
+void forget_unserved(const std::shared_ptr<Session>& session,
+                     const SessionKey& key) {
+  logf("session %llx: could not answer its handshake; forgetting the session, "
+       "which was never served",
+       (unsigned long long)key.first);
+  std::lock_guard<std::mutex> lk(g_sessions_mu);
+  auto it = g_sessions.find(key);
+  if (it != g_sessions.end() && it->second == session) g_sessions.erase(it);
+  std::lock_guard<std::mutex> slk(session->mu);
+  session->finished = true;
+  // A reconnect already handed over, which nothing will read.
+  if (session->fd >= 0) {
+    ::close(session->fd);
+    session->fd = -1;
+  }
 }
 
 // Reads the handshake and either starts a session or hands the connection to
@@ -874,6 +932,7 @@ void accept_connection(int fd) {
   const SessionKey key{hello.session_hi, hello.session_lo};
   std::shared_ptr<Session> session;
   bool resumed = false;
+  size_t refused_at = 0;  // the session count a new session was refused at
   {
     std::lock_guard<std::mutex> lk(g_sessions_mu);
     auto it = g_sessions.find(key);
@@ -884,16 +943,30 @@ void accept_connection(int fd) {
         resumed = true;
       }
     }
-    // A client that has already had replies is not starting: it is coming
-    // back to a session this server no longer has - it expired, or the server
-    // restarted - and every handle it holds names nothing here. An empty
-    // session made for it would be found by its next attempt and reported as
-    // resumed, and the client would send its unacknowledged calls into it.
-    // A client starting afresh always says 0.
-    if (!session && hello.last_req_id == 0) {
-      session = std::make_shared<Session>();
-      g_sessions[key] = session;
+    // A client that has already had replies, or says it has had a session
+    // at all, is not starting: it is coming back to a session this server no
+    // longer has - it expired, or the server restarted - and every handle it
+    // holds names nothing here. An empty session made for it would be found
+    // by its next attempt and reported as resumed, and the client would send
+    // its unacknowledged calls into it; one that never had a reply would
+    // leave the empty session waiting out its grace period for nothing. A
+    // client starting afresh always says 0 and does not say it is resuming.
+    const bool starting =
+        hello.last_req_id == 0 && !(hello.flags & kHelloResuming);
+    if (!session && starting) {
+      // A finished session still under this key is on its way out, and the
+      // new one takes its place rather than adding to the count.
+      if (it == g_sessions.end() && g_sessions.size() >= max_sessions()) {
+        refused_at = g_sessions.size();
+      } else {
+        session = std::make_shared<Session>();
+        g_sessions[key] = session;
+      }
     }
+  }
+  if (refused_at > 0) {
+    session_refused(fd, key.first, refused_at);
+    return;
   }
   if (!session) {
     session_gone(fd, key.first, hello.last_req_id);
@@ -926,7 +999,19 @@ void accept_connection(int fd) {
       unanswered_id = session->last_reply_id;
     }
   }
+  if (!resumed) {
+    // A test hook, off by default: holds a new session's handshake reply
+    // back, so that a test can be gone before it is written.
+    static const int reply_delay_ms = [] {
+      const char* v = std::getenv("RGPU_TEST_HANDSHAKE_DELAY_MS");
+      return v ? std::atoi(v) : 0;
+    }();
+    if (reply_delay_ms > 0) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(reply_delay_ms));
+    }
+  }
   if (!write_exact(fd, &reply, sizeof(reply))) {
+    if (!resumed) forget_unserved(session, key);
     ::close(fd);
     return;
   }

@@ -37,7 +37,9 @@ int g_fd = -1;
 uint32_t g_next_req = 0;       // the next request id; see mint_req_id_locked
 bool g_req_ids_started = false;
 bool g_connect_failed = false;
-uint32_t g_last_reply = 0;   // last request id we have seen a reply for; 0: none
+// The last request id we have seen a reply for, or given up waiting for
+// (abandon_call_locked); 0: neither.
+uint32_t g_last_reply = 0;
 bool g_had_session = false;  // we have talked to this server before
 // The server has said it no longer has our session: it expired while we were
 // away, or the server restarted. Final. Every pointer and handle the
@@ -315,9 +317,23 @@ bool ensure_connected_locked() {
   hello.session_hi = g_session.hi;
   hello.session_lo = g_session.lo;
   hello.last_req_id = g_last_reply;
+  // Said even when no reply has come yet: a server that no longer has the
+  // session then says it is gone, rather than starting an empty one for a
+  // client whose first call never got its answer.
+  hello.flags = g_had_session ? kHelloResuming : 0u;
   HandshakeReply reply{};
   const bool answered = write_exact(fd, &hello, sizeof(hello)) &&
                         read_exact(fd, &reply, sizeof(reply));
+  if (answered && reply.magic == kMagicBusy) {
+    log("the server at %s refused to start a session: it already has as many "
+        "as it allows (RGPU_MAX_SESSIONS on the server). Sessions whose "
+        "clients have gone are kept for the server's grace period "
+        "(RGPU_SESSION_GRACE) before they make room",
+        spec.c_str());
+    ::close(fd);
+    g_connect_failed = true;
+    return false;
+  }
   if (!answered || reply.magic != kMagicHello) {
     if (!answered) {
       // A server from before protocol 3 closes on a version it does not

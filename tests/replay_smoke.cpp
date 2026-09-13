@@ -111,18 +111,24 @@ int dial() {
   return fd;
 }
 
-// Connects as session `lo`, saying the last reply received was `last_reply`.
-// Returns the fd, or -1; fills in the server's answer.
-int connect_session(uint64_t lo, uint32_t last_reply,
-                    rgpu::HandshakeReply* reply) {
-  int fd = dial();
-  if (fd < 0) return -1;
+rgpu::Handshake make_hello(uint64_t lo, uint32_t last_reply, uint32_t flags) {
   rgpu::Handshake hello{};
   hello.magic = rgpu::kMagicHello;
   hello.version = rgpu::kProtocolVersion;
   hello.session_hi = kSessionHi ^ static_cast<uint64_t>(::getpid());
   hello.session_lo = lo;
   hello.last_req_id = last_reply;
+  hello.flags = flags;
+  return hello;
+}
+
+// Connects as session `lo`, saying the last reply received was `last_reply`.
+// Returns the fd, or -1; fills in the server's answer.
+int connect_session(uint64_t lo, uint32_t last_reply,
+                    rgpu::HandshakeReply* reply, uint32_t flags = 0) {
+  int fd = dial();
+  if (fd < 0) return -1;
+  const rgpu::Handshake hello = make_hello(lo, last_reply, flags);
   if (!rgpu::write_exact(fd, &hello, sizeof(hello)) ||
       !rgpu::read_exact(fd, reply, sizeof(*reply)) ||
       reply->magic != rgpu::kMagicHello ||
@@ -590,6 +596,165 @@ void claimed_progress_in_an_unknown_session() {
   ::close(fd);
 }
 
+// The same for a client that has had a session but never a reply in it: it
+// lost its connection before its first call was answered. It says 0 for the
+// last reply, as a client starting afresh does, and carries kHelloResuming to
+// say it is not one. Starting an empty session for it would leave that
+// session waiting out its grace period for nothing - holding up
+// primary-context resets meanwhile - and a second attempt would be told it
+// resumed.
+void resuming_into_an_unknown_session() {
+  std::printf("-- a handshake saying it is resuming a session the server does "
+              "not have is refused\n");
+  const uint64_t session = 10;
+
+  rgpu::HandshakeReply hs{};
+  int fd = connect_session(session, 0, &hs, rgpu::kHelloResuming);
+  EXPECT(fd >= 0, "no answer to a resuming handshake for an unknown session");
+  if (fd >= 0) {
+    EXPECT(hs.resumed == 0, "the server resumed a session it never had");
+    EXPECT(closed_by_server(fd),
+           "the server kept a connection open for a client resuming a "
+           "session it does not have");
+    ::close(fd);
+  }
+
+  fd = connect_session(session, 0, &hs, rgpu::kHelloResuming);
+  EXPECT(fd >= 0 && hs.resumed == 0,
+         "a second resuming attempt resumed an empty session made for the "
+         "first");
+  if (fd >= 0) ::close(fd);
+}
+
+// --- replay_smoke sessions ----------------------------------------------------
+//
+// How many sessions a server keeps, and sessions it made but could never
+// serve. The server runs with RGPU_MAX_SESSIONS=2, RGPU_SESSION_GRACE=1 and
+// RGPU_TEST_HANDSHAKE_DELAY_MS holding every new session's handshake reply
+// back long enough for a client to be gone before it is written.
+
+// A handshake that is never read: the hello is sent, and the connection is
+// reset while the server is still holding its reply back, so writing the reply
+// fails.
+void lose_handshake_reply(uint64_t lo) {
+  int fd = dial();
+  EXPECT(fd >= 0, "could not connect");
+  if (fd < 0) return;
+  const rgpu::Handshake hello = make_hello(lo, 0, 0);
+  EXPECT(rgpu::write_exact(fd, &hello, sizeof(hello)), "could not say hello");
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
+  linger reset{1, 0};  // closed with a reset, not an orderly close
+  ::setsockopt(fd, SOL_SOCKET, SO_LINGER, &reset, sizeof(reset));
+  ::close(fd);
+}
+
+int sessions() {
+  const int delay_ms = std::getenv("RGPU_TEST_HANDSHAKE_DELAY_MS")
+                           ? std::atoi(std::getenv("RGPU_TEST_HANDSHAKE_DELAY_MS"))
+                           : 0;
+  if (delay_ms < 1000) {
+    std::fprintf(stderr, "FAIL: sessions needs a server and this process run "
+                         "with RGPU_TEST_HANDSHAKE_DELAY_MS of at least 1000; "
+                         "run it from run_smoke.sh\n");
+    return 1;
+  }
+  const auto past_the_delay = std::chrono::milliseconds(delay_ms + 700);
+
+  std::printf("-- a new session whose handshake reply could not be written is "
+              "forgotten\n");
+  lose_handshake_reply(1);
+  lose_handshake_reply(2);
+  std::this_thread::sleep_for(past_the_delay);
+  // Coming back under the same id, as a client starting afresh: a new
+  // session, which serves its calls. One left registered would say it
+  // resumed, and nothing would ever read the connection.
+  rgpu::HandshakeReply hs{};
+  int fd = connect_session(1, 0, &hs);
+  EXPECT(fd >= 0 && hs.resumed == 0,
+         "a session whose handshake reply was never written was resumed");
+  if (fd >= 0) {
+    const Frame first = device_count(1);
+    EXPECT(send(fd, first), "could not send the first request");
+    expect_answer(fd, first, CUDA_SUCCESS,
+                  "the first request after a lost handshake reply");
+    ::close(fd);
+  }
+  // Coming back saying it is resuming: the session is gone.
+  fd = connect_session(2, 0, &hs, rgpu::kHelloResuming);
+  EXPECT(fd >= 0 && hs.resumed == 0,
+         "a session whose handshake reply was never written was resumed");
+  if (fd >= 0) {
+    EXPECT(closed_by_server(fd),
+           "a session whose handshake reply was never written took a "
+           "connection");
+    ::close(fd);
+  }
+
+  std::printf("-- past RGPU_MAX_SESSIONS a new session is refused, and a "
+              "reconnect is not\n");
+  // Session 1 is still live, waiting out its grace. One more fits.
+  int second = connect_session(3, 0, &hs);
+  EXPECT(second >= 0 && hs.resumed == 0, "the second session was not started");
+  if (second >= 0) {
+    const Frame first = device_count(1);
+    EXPECT(send(second, first), "could not send the first request");
+    expect_answer(second, first, CUDA_SUCCESS, "the second session's request");
+  }
+
+  // The third: refused, said so, and closed.
+  fd = dial();
+  EXPECT(fd >= 0, "could not connect");
+  if (fd >= 0) {
+    const rgpu::Handshake hello = make_hello(4, 0, 0);
+    rgpu::HandshakeReply refused{};
+    EXPECT(rgpu::write_exact(fd, &hello, sizeof(hello)) &&
+               rgpu::read_exact(fd, &refused, sizeof(refused)),
+           "no answer to a handshake past the cap");
+    EXPECT(refused.magic == rgpu::kMagicBusy &&
+               refused.version == rgpu::kProtocolVersion,
+           "a new session past RGPU_MAX_SESSIONS was not refused as busy");
+    EXPECT(closed_by_server(fd),
+           "the server kept a connection open after refusing its session");
+    ::close(fd);
+  }
+
+  // A reconnect to a session the server already has is never refused.
+  if (second >= 0) {
+    ::close(second);
+    second = connect_session(3, 1, &hs);
+    EXPECT(second >= 0 && hs.resumed == 1,
+           "a reconnect at RGPU_MAX_SESSIONS was not resumed");
+    if (second >= 0) {
+      const Frame next = device_count(2);
+      EXPECT(send(second, next), "could not send a request after resuming");
+      expect_answer(second, next, CUDA_SUCCESS, "the resumed session's request");
+      ::close(second);
+    }
+  }
+
+  // Once the sessions expire there is room again.
+  bool started = false;
+  for (int i = 0; i < 40 && !started; i++) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    fd = dial();
+    if (fd < 0) continue;
+    const rgpu::Handshake hello = make_hello(4, 0, 0);
+    rgpu::HandshakeReply reply{};
+    started = rgpu::write_exact(fd, &hello, sizeof(hello)) &&
+              rgpu::read_exact(fd, &reply, sizeof(reply)) &&
+              reply.magic == rgpu::kMagicHello && reply.resumed == 0;
+    ::close(fd);
+  }
+  EXPECT(started, "no new session was started after the others expired");
+
+  if (g_failures) {
+    std::printf("\nFAILED: %d check(s)\n", g_failures);
+    return 1;
+  }
+  std::printf("\nPASS: sessions are capped, and none is left unserved\n");
+  return 0;
+}
+
 // --- replay_smoke handoff -----------------------------------------------------
 //
 // The grace period running out while a reconnect is being handed over. The
@@ -744,6 +909,7 @@ int main(int argc, char** argv) {
   const std::string mode = argc > 1 ? argv[1] : "";
   if (mode == "handoff") return expiry_during_handoff();
   if (mode == "flood") return deferred_error_flood();
+  if (mode == "sessions") return sessions();
 
   reply_expected_request_in_flight();
   no_reply_request_in_flight();
@@ -754,6 +920,7 @@ int main(int argc, char** argv) {
   malformed_request_without_reply_is_recorded();
   frames_without_a_request_id();
   claimed_progress_in_an_unknown_session();
+  resuming_into_an_unknown_session();
 
   if (g_failures) {
     std::printf("\nFAILED: %d check(s)\n", g_failures);
