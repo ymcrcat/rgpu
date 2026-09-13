@@ -6,7 +6,6 @@
 #include <cstring>
 
 #include "common/generated/api_ids.h"
-#include "server/inventory.h"
 
 namespace rgpu {
 namespace {
@@ -28,11 +27,8 @@ void logf(const char* fmt, ...) {
 }
 
 SavedContext saved(CUcontext ctx) {
-  const InventoryStamp st = inventory_stamp_context(ctx);
   SavedContext s;
   s.ctx = ctx;
-  s.dev = st.dev;
-  s.gen = st.gen;
   return s;
 }
 
@@ -72,22 +68,6 @@ CUresult clear(ClientThreads& threads) {
   return r != CUDA_SUCCESS ? r : CUDA_ERROR_INVALID_CONTEXT;
 }
 
-// Whether a saved entry may be made current: not known destroyed, and - for a
-// primary context - not destroyed since it was saved, by a last release or a
-// reset in any session. One found destroyed is marked so for good.
-bool usable(SavedContext& s) {
-  if (s.gone) return false;
-  if (s.dev >= 0 && !inventory_generation_is(s.dev, s.gen)) {
-    s.gone = true;
-    if (verbose()) {
-      logf("device %d's primary context %p was destroyed since a client "
-           "thread made it current; that thread now has no context",
-           s.dev, (void*)s.ctx);
-    }
-  }
-  return !s.gone;
-}
-
 // Every entry naming a context that is gone, in every thread this session
 // knows, live or recently retired.
 template <typename Match>
@@ -122,8 +102,6 @@ CUresult w_cuCtxSetCurrent(CUcontext ctx) {
     t->stack.pop_back();
     return client_thread_show(*threads, *t);
   }
-  // Stamped before the call: a primary context destroyed while it runs is
-  // then charged to this entry, which fails safe.
   const SavedContext s = saved(ctx);
   // The driver's top is this thread's, so replacing it is right whether the
   // thread's stack is deeper or empty.
@@ -199,8 +177,8 @@ void client_threads_bind(ClientThreads* threads) { t_threads = threads; }
 
 CUresult client_thread_show(ClientThreads& threads, ClientThread& t) {
   SavedContext* top = t.stack.empty() ? nullptr : &t.stack.back();
-  if (top && usable(*top)) {
-    if (top->ctx == threads.applied.ctx && top->gen == threads.applied.gen) {
+  if (top && !top->gone) {
+    if (top->ctx == threads.applied.ctx) {
       return CUDA_SUCCESS;
     }
     if (cuCtxSetCurrent(top->ctx) == CUDA_SUCCESS) {
@@ -314,30 +292,6 @@ void client_threads_destroyed(CUcontext ctx) {
     if (threads->applied.ctx == ctx) clear(*threads);
   }
   if (t) client_thread_show(*threads, *t);
-}
-
-// A reset destroys everything in the device's primary context, and the
-// server's generation for it has already moved on. Every saved entry for the
-// device is marked destroyed, as the design has it - except the issuing
-// thread's own current one, which the serving thread has had current
-// throughout and still has, and which CUDA leaves usable after a reset: it is
-// saved again under the new generation.
-void client_threads_reset(int dev) {
-  ClientThreads* threads = t_threads;
-  if (!threads) return;
-  ClientThread* t = threads->caller;
-  SavedContext* keep = nullptr;
-  if (t && !t->stack.empty() && !t->stack.back().gone &&
-      t->stack.back().dev == dev && t->stack.back().ctx == threads->applied.ctx) {
-    keep = &t->stack.back();
-  }
-  sweep(*threads, [&](const SavedContext& s) {
-    return s.dev == dev && &s != keep;
-  });
-  if (keep) {
-    *keep = saved(keep->ctx);
-    threads->applied = *keep;
-  }
 }
 
 }  // namespace rgpu

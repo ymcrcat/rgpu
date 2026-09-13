@@ -716,26 +716,24 @@ void stacks_are_per_thread() {
   CHECK(cuDevicePrimaryCtxRelease(1));
 }
 
-// A device reset destroys everything in the primary context, and the server
-// counts it as the end of that context's generation, so every other thread's
-// saved selection of it is treated as destroyed: that thread's next call that
-// needs a context fails with CUDA_ERROR_CONTEXT_IS_DESTROYED, and selecting
-// again recovers it. The thread that reset the device had the context current
-// throughout and still has it, as CUDA leaves it: it goes on allocating
+// A device reset destroys everything in the primary context but not the
+// context: "Resetting the primary context does not release it", and its handle
+// survives. So every thread that had it current still has it, the one that
+// reset the device and the others alike, and each goes on allocating in it
 // without selecting again.
 //
 // Its own server and nothing else connected to it, because a reset is refused
 // while another session is live.
 void reset_by_another_thread() {
-  std::printf("-- a device reset by one thread leaves it its context, and "
-              "other threads select again\n");
+  std::printf("-- a device reset by one thread leaves every thread its "
+              "context\n");
   CUcontext p0 = nullptr;
   CHECK(cuDevicePrimaryCtxRetain(&p0, 0));
 
   Turns turns;
   CUresult b_reset = CUDA_ERROR_UNKNOWN, b_alloc = CUDA_ERROR_UNKNOWN;
-  CUresult a_alloc = CUDA_SUCCESS;
-  int b_on = -1, a_reselected_on = -1;
+  CUresult a_alloc = CUDA_ERROR_UNKNOWN;
+  int b_on = -1, a_on = -1;
   std::thread a([&] {
     CHECK(cuCtxSetCurrent(p0));
     CUdeviceptr before = 0;
@@ -744,13 +742,9 @@ void reset_by_another_thread() {
     turns.await(2);
     CUdeviceptr d = 0;
     a_alloc = cuMemAlloc(&d, 64);
-    if (a_alloc == CUDA_SUCCESS) cuMemFree(d);
-    CHECK(cuCtxSetCurrent(p0));
-    CUdeviceptr e = 0;
-    CHECK(cuMemAlloc(&e, 64));
-    if (e) {
-      a_reselected_on = ordinal_of(e);
-      CHECK(cuMemFree(e));
+    if (a_alloc == CUDA_SUCCESS) {
+      a_on = ordinal_of(d);
+      CHECK(cuMemFree(d));
     }
     CHECK(cuCtxSetCurrent(nullptr));
     turns.advance(3);
@@ -781,16 +775,14 @@ void reset_by_another_thread() {
   }
   EXPECT(b_alloc == CUDA_SUCCESS && b_on == 0,
          "the thread that reset the device lost its context");
-  if (a_alloc != CUDA_ERROR_CONTEXT_IS_DESTROYED) {
+  if (a_alloc != CUDA_SUCCESS || a_on != 0) {
     char msg[200];
     std::snprintf(msg, sizeof(msg),
-                  "another thread's call after the reset returned %d, not "
-                  "CUDA_ERROR_CONTEXT_IS_DESTROYED",
-                  (int)a_alloc);
+                  "another thread's allocation after the reset returned %d "
+                  "(on device %d), not success on device 0",
+                  (int)a_alloc, a_on);
     fail_at(__FILE__, __LINE__, msg);
   }
-  EXPECT(a_reselected_on == 0,
-         "a thread could not select the reset device's context again");
   CHECK(cuDevicePrimaryCtxRelease(0));
 }
 
@@ -949,27 +941,26 @@ class RawSession {
   uint32_t next_ = 1;
 };
 
-// A primary context one session's thread had current, destroyed by another
-// session's last release, and brought back by a third session that then also
-// creates a context of its own. The first thread never learns of any of it:
-// its session saw neither the release nor the retain. Its next call must not
-// run under whatever now answers to the handle it saved - on hardware that
-// could be a new context at the old address, on the fake it is the revived
-// primary context the third session holds - but fail the way a call on a
-// destroyed context fails.
+// A primary context one session's thread has current, ended by another
+// session's last release in the process and retained again by the first. The
+// header says the last release "automatically reset[s]" the primary context:
+// the context is emptied, not replaced, and its handle survives. So the thread
+// keeps it current, as it would in CUDA, and goes on allocating without
+// selecting again - even with another thread's call in between, so that the
+// server has to put it back.
 //
 // Runs before anything in this process retains device 0, so that the second
 // session's release really is the last one.
-void primary_destroyed_by_another_session() {
-  std::printf("-- a primary context destroyed by another session is not "
-              "rebound by its old handle\n");
+void primary_survives_another_sessions_release() {
+  std::printf("-- a thread keeps its primary context current across another "
+              "session's last release\n");
   constexpr uint32_t kHolder = 1, kOther = 2;
-  RawSession s1, s2, s3;
-  if (!s1.open() || !s2.open() || !s3.open()) {
+  RawSession s1, s2;
+  if (!s1.open() || !s2.open()) {
     fail_at(__FILE__, __LINE__, "could not open sessions of our own");
     return;
   }
-  CUcontext p0 = nullptr, s2_p0 = nullptr, s3_p0 = nullptr, s3_made = nullptr;
+  CUcontext p0 = nullptr, s2_p0 = nullptr, again = nullptr;
   CHECK(s1.retain(kHolder, 0, &p0));
   CHECK(s1.set_current(kHolder, p0));
   CHECK(s2.retain(kHolder, 0, &s2_p0));
@@ -980,30 +971,30 @@ void primary_destroyed_by_another_session() {
   CUresult r = CUDA_ERROR_UNKNOWN;
   s1.get_current(kOther, &r);
   CHECK(r);
-  // The last release in the process: device 0's primary context is destroyed.
+  // The last release in the process: device 0's primary context is reset.
   CHECK(s2.release(kHolder, 0));
-  CHECK(s3.retain(kHolder, 0, &s3_p0));
-  CHECK(s3.create(kHolder, 0, &s3_made));
+  CHECK(s1.retain(kHolder, 0, &again));
+  EXPECT(again == p0, "retaining again gave a different primary context");
+  s1.get_current(kOther, &r);
+  CHECK(r);
 
   CUdeviceptr d = 0;
   const CUresult alloc = s1.alloc(kHolder, 64, &d);
-  if (alloc == CUDA_SUCCESS) s1.free(kHolder, d);
-  if (alloc != CUDA_ERROR_CONTEXT_IS_DESTROYED) {
+  if (alloc == CUDA_SUCCESS) {
+    CHECK(s1.free(kHolder, d));
+  } else {
     char msg[200];
     std::snprintf(msg, sizeof(msg),
-                  "a call from a thread whose primary context another session "
-                  "destroyed returned %d, not CUDA_ERROR_CONTEXT_IS_DESTROYED",
+                  "a thread's allocation in its primary context, after another "
+                  "session's last release, returned %d",
                   (int)alloc);
     fail_at(__FILE__, __LINE__, msg);
   }
-  const CUcontext sees = s1.get_current(kHolder, &r);
+  EXPECT(s1.get_current(kHolder, &r) == p0,
+         "a thread lost its primary context to another session's release");
   CHECK(r);
-  EXPECT(sees != p0 && sees != s3_made,
-         "a thread whose primary context another session destroyed was bound "
-         "to a context by its old handle");
-
-  CHECK(s3.destroy(kHolder, s3_made));
-  CHECK(s3.release(kHolder, 0));
+  CHECK(s1.set_current(kHolder, nullptr));
+  CHECK(s1.release(kHolder, 0));
 }
 
 // Late thread-local destructors on a client thread can call after the client
@@ -1109,7 +1100,7 @@ int main(int argc, char** argv) {
       std::printf("\nFAILED: %d check(s)\n", g_failures);
       return 1;
     }
-    std::printf("\nPASS: a reset leaves its own thread its context\n");
+    std::printf("\nPASS: a reset leaves every thread its context\n");
     return 0;
   }
   int count = 0;
@@ -1120,7 +1111,7 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  primary_destroyed_by_another_session();
+  primary_survives_another_sessions_release();
   currency_is_read_back();
   issue_scenario_by_placement();
   batch_flushed_by_another_thread();

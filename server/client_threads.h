@@ -31,21 +31,30 @@
 
 namespace rgpu {
 
-// One entry of a client thread's context stack: a context, and - if it is a
-// primary context - the device and generation it was saved under (see
-// inventory.h). A CUcontext is an address in driver memory that may be handed
-// out again once the context is destroyed, so a saved handle is only ever
-// made current again if nothing has destroyed the context since it was saved.
+// One entry of a client thread's context stack.
+//
+// A CUcontext is an address in driver memory, and a created context's address
+// may be handed out again once it is destroyed - to a cuCtxCreate anywhere in
+// the process, another tenant's included. So a saved created context is only
+// ever made current again if nothing has destroyed it since it was saved:
+// every destroy is swept through every stack (client_threads_destroyed).
+//
+// A primary context is different. Its last release "automatically reset[s]"
+// it and a reset "does not release it": either way it is emptied, not
+// replaced, and its handle survives. So a thread that had it current keeps it
+// current through another session's last release or a reset, as in CUDA, and
+// nothing is swept for them. If a real driver ever handed out a different
+// handle for a device's primary context after that, making the old one current
+// again would fail, and the entry would take the same fail-clean path as a
+// created context destroyed where no sweep saw it.
 struct SavedContext {
   CUcontext ctx = nullptr;
-  int dev = -1;
-  uint64_t gen = 0;
-  // Destroyed since it was saved, by this session or - for a primary context
-  // - by any. Never made current again. It stays in the stack, as a destroyed
-  // context stays current to the threads it was current to in CUDA, so that
-  // popping what was pushed on top of it finds it again. While it is the top,
-  // the thread has no context and its calls that need one fail with
-  // CUDA_ERROR_CONTEXT_IS_DESTROYED.
+  // Destroyed since it was saved. Never made current again. It stays in the
+  // stack, as a destroyed context stays current to the threads it was current
+  // to in CUDA, so that popping what was pushed on top of it finds it again.
+  // While it is the top, the thread has no context on the serving thread, its
+  // calls that need one fail with CUDA_ERROR_CONTEXT_IS_DESTROYED, and
+  // cuCtxGetCurrent still names it.
   bool gone = false;
 };
 
@@ -97,7 +106,7 @@ inline bool client_thread_shown(const ClientThread& t,
                                 const SavedContext& applied) {
   if (t.stack.empty() || t.stack.back().gone) return applied.ctx == nullptr;
   const SavedContext& top = t.stack.back();
-  return top.ctx == applied.ctx && top.gen == applied.gen;
+  return top.ctx == applied.ctx;
 }
 
 // Makes `t`'s current context current on the serving thread, or none if its
@@ -119,9 +128,8 @@ void* client_threads_wrapper(const char* name);
 
 // Told by the inventory's wrappers, after the driver call succeeded: a context
 // was created, and pushed on the calling thread as CUDA does; a context was
-// destroyed; a device's primary context was reset.
+// destroyed, by cuCtxDestroy or cuCtxDetach.
 void client_threads_created(CUcontext ctx);
 void client_threads_destroyed(CUcontext ctx);
-void client_threads_reset(int dev);
 
 }  // namespace rgpu

@@ -400,7 +400,6 @@ CUresult w_cuDevicePrimaryCtxReset_v2(CUdevice dev) {
   if (r == CUDA_SUCCESS) {
     bump_generation(dev);
     forget_primary(dev);
-    client_threads_reset(dev);
   }
   return r;
 }
@@ -878,15 +877,6 @@ void inventory_bind(Inventory* inv) {
 }
 
 InventoryStamp inventory_stamp() { return stamp(); }
-
-InventoryStamp inventory_stamp_context(CUcontext ctx) {
-  if (!ctx) return Stamp{};
-  return stamp_context(ctx);
-}
-
-bool inventory_generation_is(int dev, uint64_t gen) {
-  return generation(dev) == gen;
-}
 
 void inventory_note_handle(uint64_t handle, const InventoryStamp& made,
                            const char* what, CUresult (*destroy)(uint64_t)) {
