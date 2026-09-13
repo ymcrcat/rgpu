@@ -216,10 +216,29 @@ int mode_hold(const std::string& dir) {
       if (g != CUDA_SUCCESS || cur != primary) {
         reply << "bad: cuCtxGetCurrent -> " << g
               << (cur == primary ? "" : ", not the primary context");
-      } else if (!fresh_allocation_works(primary, &why)) {
-        reply << "bad: " << why;
       } else {
-        reply << "ok";
+        // A reset leaves the primary context's handle valid but *inactive*
+        // (driver_probe check 7 measured this on hardware: an allocation under
+        // it returns CUDA_ERROR_CONTEXT_IS_DESTROYED until it is retained
+        // again). So a driver-API client recovers the way cudart does on its
+        // next runtime call - by retaining the primary context once more - and
+        // that is what this checks: the same handle comes back and the session
+        // can allocate in it again. The extra retain is balanced by a release
+        // so the exit accounting is unchanged.
+        CUcontext again = nullptr;
+        const CUresult re = cuDevicePrimaryCtxRetain(&again, dev);
+        if (re != CUDA_SUCCESS || again != primary) {
+          reply << "bad: re-retain after reset -> " << re
+                << (again == primary ? "" : ", a different handle");
+        } else {
+          cuCtxSetCurrent(primary);
+          if (!fresh_allocation_works(primary, &why)) {
+            reply << "bad: " << why;
+          } else {
+            reply << "ok";
+          }
+          cuDevicePrimaryCtxRelease(dev);
+        }
       }
     } else if (cmd == "exit") {
       CUresult f = CUDA_SUCCESS;

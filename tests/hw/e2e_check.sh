@@ -377,7 +377,7 @@ scenario_reset() {
     pass "E2: alone on the server, cuDevicePrimaryCtxReset succeeded"
     v=$(keeper "$dir" after-reset)
     if [[ "$v" == ok* ]]; then
-      pass "E2: after its reset the session still has the primary context current, allocates in it, and reads back"
+      pass "E2: after its reset the session recovers by re-retaining the primary context, allocates in it, and reads back (driver_probe check 7)"
     else
       fail "E2: after its reset the session does not work: $v"
     fi
