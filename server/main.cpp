@@ -485,6 +485,27 @@ int handshake_timeout_seconds() {
   return n > 0 ? n : 10;
 }
 
+// The most connections that may sit in the pre-handshake read at once.
+// RGPU_MAX_SESSIONS counts only sessions made after the handshake, so without
+// this a peer could open connections - each an accept thread and an fd - faster
+// than the handshake deadline retires them, whether by never sending a
+// handshake or by dribbling one. A connection counts from when its accept
+// thread starts until it has handed the connection off or promoted it to a
+// session, or closed it (accept_connection). A reconnect to a session the
+// server already has is bounded by this only while its handshake is in flight,
+// like any other; it is never refused for it.
+size_t max_pending_handshakes() {
+  static const size_t n = [] {
+    const char* v = std::getenv("RGPU_MAX_PENDING_HANDSHAKES");
+    const long parsed = v ? std::atol(v) : 0;
+    return parsed > 0 ? static_cast<size_t>(parsed) : size_t{256};
+  }();
+  return n;
+}
+
+// Connections in the pre-handshake read right now; see max_pending_handshakes.
+std::atomic<size_t> g_pending_handshakes{0};
+
 // Sets, or with 0 clears, a receive timeout on `fd`. A recv that waits longer
 // than this returns as if the peer had gone quiet, which is what breaks a
 // stalled handshake read out of its wait.
@@ -947,12 +968,39 @@ void forget_unserved(const std::shared_ptr<Session>& session,
 // Reads the handshake and either starts a session or hands the connection to
 // the thread already serving one.
 void accept_connection(int fd) {
+  // Cap the connections sitting in the pre-handshake read. Counted from here,
+  // and given back on every way out of this function - a bad handshake, a
+  // refusal, a hand-over, a promotion to a session - by the guard below, so a
+  // connection stops counting the moment its handshake is done with. Refused
+  // past the cap before a byte is read, so a flood cannot get that far.
+  if (g_pending_handshakes.fetch_add(1, std::memory_order_relaxed) + 1 >
+      max_pending_handshakes()) {
+    g_pending_handshakes.fetch_sub(1, std::memory_order_relaxed);
+    logf("refusing a connection: already %zu waiting to hand shake, the most "
+         "allowed (RGPU_MAX_PENDING_HANDSHAKES); closing it",
+         max_pending_handshakes());
+    ::close(fd);
+    return;
+  }
+  struct PendingGuard {
+    ~PendingGuard() {
+      g_pending_handshakes.fetch_sub(1, std::memory_order_relaxed);
+    }
+  } pending_guard;
+
   // Bound the untrusted first bytes: a peer that sends nothing, or dribbles,
   // gets the connection closed at the deadline rather than holding this thread
-  // and this fd forever. Nothing is registered on the way out.
+  // and this fd forever. The deadline bounds the whole read (one elapsed-time
+  // check, computed once here); the per-recv timeout only wakes a recv that is
+  // already blocked, and on its own resets each recv, so a dribble would tie up
+  // the connection for sizeof(Handshake) times the timeout without the
+  // deadline. Nothing is registered on the way out.
   set_recv_timeout(fd, handshake_timeout_seconds());
+  const auto deadline = std::chrono::steady_clock::now() +
+                        std::chrono::seconds(handshake_timeout_seconds());
   Handshake hello{};
-  if (!read_exact(fd, &hello, sizeof(hello)) || hello.magic != kMagicHello) {
+  if (!read_exact(fd, &hello, sizeof(hello), deadline) ||
+      hello.magic != kMagicHello) {
     logf("connection did not begin with a handshake within the deadline, or "
          "with the wrong bytes; closing");
     ::close(fd);

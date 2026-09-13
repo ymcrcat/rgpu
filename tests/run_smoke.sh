@@ -367,6 +367,40 @@ if [[ -x "$BUILD/replay_smoke" ]]; then
   rm -f "$GAP_LOG"
 fi
 
+# The handshake read is bounded by an elapsed-time deadline, and the
+# connections in the pre-handshake read are capped. Its own server, with a
+# short deadline (RGPU_HANDSHAKE_TIMEOUT_SECONDS) and a small cap
+# (RGPU_MAX_PENDING_HANDSHAKES) so a dribbling peer is closed quickly and the
+# cap can be reached; a log to check the refusal really was the server's.
+# replay_smoke.cpp explains the cases.
+if [[ -x "$BUILD/replay_smoke" ]]; then
+  echo
+  HSCAP_PORT=$((PORT + 24))
+  HSCAP_LOG=$(mktemp "${TMPDIR:-/tmp}/rgpu-hscap-log.XXXXXX")
+  RGPU_HANDSHAKE_TIMEOUT_SECONDS=2 RGPU_MAX_PENDING_HANDSHAKES=4 \
+    "$BUILD/rgpu-server-fake" "$HSCAP_PORT" >"$HSCAP_LOG" 2>&1 &
+  HSCAP_SRV=$!
+  for _ in $(seq 1 50); do
+    if (exec 3<>/dev/tcp/127.0.0.1/"$HSCAP_PORT") 2>/dev/null; then
+      exec 3<&- 3>&-
+      break
+    fi
+    sleep 0.1
+  done
+  RGPU_SERVER="127.0.0.1:$HSCAP_PORT" RGPU_HANDSHAKE_TIMEOUT_SECONDS=2 \
+    RGPU_MAX_PENDING_HANDSHAKES=4 "$BUILD/replay_smoke" handshake || rc=1
+  kill $HSCAP_SRV 2>/dev/null
+  # The connection past the cap has to have been refused by the server, or the
+  # case proved nothing: a healthy server that simply closed it at the deadline
+  # would look the same to a client that did not measure the wait.
+  if ! grep -q "the most allowed (RGPU_MAX_PENDING_HANDSHAKES)" "$HSCAP_LOG"; then
+    echo "FAIL: the server never refused a connection past the pre-handshake"
+    echo "      cap, so replay_smoke handshake did not test the cap"
+    rc=1
+  fi
+  rm -f "$HSCAP_LOG"
+fi
+
 # Request ids wrapping past 0xFFFFFFFF, with the connection broken in a batch
 # that spans the wrap. Its own server: a break by frame count, which only means
 # something with one client on the server, and a stats file counting the calls
