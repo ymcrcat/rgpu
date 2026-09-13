@@ -281,11 +281,16 @@ __attribute__((noinline)) ClientThread* admit_thread(ClientThreads& threads,
   } else if (id != threads.first_id && !threads.said_many) {
     threads.said_many = true;
     logf("session %llx has more than one client thread. Each keeps its own "
-         "current context and context stack, so a multithreaded client is "
-         "served correctly - but still one call at a time, not concurrently. "
-         "CUDA state a thread keeps beyond its contexts is not kept per "
-         "client thread: the stream capture mode and anything else the "
-         "driver holds per thread is shared by all of them",
+         "current context, context stack and stream capture mode, and the "
+         "failure of a call it sent without a reply is reported to it alone, "
+         "so a multithreaded client is served correctly - but still one call "
+         "at a time, not concurrently. Not kept per client thread: which "
+         "thread began a stream capture - to the driver every client "
+         "thread's capture is this one server thread's own, so a capture not "
+         "begun RELAXED may be ended from another client thread, and it "
+         "restricts every client thread not in RELAXED mode as its own "
+         "capture would, THREAD_LOCAL included - and anything else the "
+         "driver holds per thread",
          (unsigned long long)session);
   }
   return &threads.live.emplace(id, slot).first->second;

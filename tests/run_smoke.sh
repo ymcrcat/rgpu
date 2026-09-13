@@ -377,6 +377,13 @@ if [[ -x "$BUILD/threadctx_smoke" ]]; then
   if ! grep -q "has more than one client thread" "$CTX_LOG"; then
     echo "FAIL: the server never said a session had more than one client thread"
     rc=1
+  elif ! grep "has more than one client thread" "$CTX_LOG" |
+    grep -q "own current context, context stack and stream capture mode"; then
+    # And says what it keeps per thread now, rather than what it used to.
+    echo "FAIL: the server's word on more than one client thread does not name"
+    echo "      the thread state it keeps: the context, stack and capture mode"
+    grep "has more than one client thread" "$CTX_LOG" | head -1 | sed 's/^/  /'
+    rc=1
   fi
   # The fake has no cuCtxAttach and no green contexts either, so the result
   # alone cannot show whose refusal it was. The server says it, once each.
