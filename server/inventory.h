@@ -20,10 +20,12 @@
 // on a path that only runs when something has already gone wrong.
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <cuda.h>
@@ -60,6 +62,15 @@ struct Inventory {
   };
   using Items = std::unordered_map<uint64_t, Item>;
 
+  // The context-bound resource maps, in a fixed order. A context teardown
+  // (forget_under / forget_primary) once walked all of these plus the handles
+  // on every cuCtxDestroy / cuCtxDetach / primary reset, which is O(everything
+  // the session owns). The reverse index below turns that into O(what the torn
+  // down context owns): CtxMap names each swept map so the index can point at
+  // an entry's map without a member pointer.
+  enum CtxMap { kAllocs, kModules, kStreams, kEvents, kGraphs, kGraphExecs,
+                kCtxMapCount };
+
   // A stream capture this session began and has not ended: the stream - 0
   // for the default stream of the context in `where` - and where the capture
   // is, which is where the stream is. Not a handle, but a capture left open is
@@ -82,6 +93,22 @@ struct Inventory {
   Items libraries;
   std::vector<OpenCapture> captures;
   std::unordered_map<uint64_t, LibHandle> handles;
+
+  // Reverse index from a context to the entries recorded against it, so tearing
+  // a context down touches only its own entries instead of scanning every map.
+  // For one context it holds, per swept map (indexed by CtxMap), the handles in
+  // that map whose stamp names this context, plus the maths-library handles the
+  // same. It is kept in step with the six maps and `handles` by note()/forget()
+  // and the note/forget-handle entry points; an entry with a null context - a
+  // context-independent one such as a loaded library, or one made with nothing
+  // current - is never indexed and never swept, exactly as before. The captures
+  // vector is left out: it holds only the handful a session leaves open, so a
+  // teardown scans it directly.
+  struct CtxEntries {
+    std::array<std::unordered_set<uint64_t>, kCtxMapCount> in;
+    std::unordered_set<uint64_t> handles;
+  };
+  std::unordered_map<CUcontext, CtxEntries> by_ctx;
   // Per device, how many retains this session holds and has not released.
   // A primary context is shared, so this count, and not the handle, is what
   // the session owns: exactly this many releases are owed at the end and not

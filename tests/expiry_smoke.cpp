@@ -375,6 +375,68 @@ int detach_alone() {
   return 0;
 }
 
+// Tearing one context down must not disturb another's entries. Two created
+// contexts, A and B, each holding resources of its own; A is destroyed while B
+// is still current. The server has to forget exactly A's entries: if its
+// context teardown reached B's as well, expiry would leak them (the counters
+// would not come back to zero); if it kept A's, expiry would free them again
+// under a destroyed context, which the fake counts as stale. This is the
+// regression guard for the reverse index that replaced the full-map scan.
+//
+// Alone on a server. run_smoke.sh checks that once the session has expired the
+// server holds nothing and freed nothing it did not own.
+int two_contexts() {
+  CHECK(cuInit(0));
+  // A, with one allocation and one stream.
+  CUcontext a = nullptr;
+  CHECK(cuCtxCreate(&a, 0, 0));
+  CUdeviceptr a_mem = 0;
+  CHECK(cuMemAlloc(&a_mem, kBytes));
+  CUstream a_stream = nullptr;
+  CHECK(cuStreamCreate(&a_stream, 0));
+
+  // B on top, with more: it must be untouched when A goes.
+  CUcontext b = nullptr;
+  CHECK(cuCtxCreate(&b, 0, 0));
+  CUdeviceptr b_mem1 = 0, b_mem2 = 0;
+  CHECK(cuMemAlloc(&b_mem1, kBytes));
+  CHECK(cuMemAlloc(&b_mem2, kBytes));
+  CUstream b_stream = nullptr;
+  CHECK(cuStreamCreate(&b_stream, 0));
+  CUevent b_event = nullptr;
+  CHECK(cuEventCreate(&b_event, 0));
+
+  // A is not the current context - B is - so destroying it exercises a teardown
+  // of a context other than the one in use.
+  CHECK(cuCtxDestroy(a));
+
+  // The driver freed A's contents with it; B's are all still there. That the
+  // server forgot only A's entries is what its expiry then proves.
+  const std::string after = read_stats();
+  if (!after.empty()) {
+    struct {
+      const char* kind;
+      long want;
+    } expect[] = {{"contexts", 1}, {"allocs", 2}, {"streams", 1},
+                  {"events", 1},   {"stale", 0}};
+    for (const auto& e : expect) {
+      if (field(after, e.kind) != e.want) {
+        std::fprintf(stderr,
+                     "FAIL: after destroying context A, %s should be %ld: %s\n",
+                     e.kind, e.want, after.c_str());
+        g_failures++;
+      }
+    }
+  }
+  if (g_failures) {
+    std::printf("\nFAILED: %d check(s)\n", g_failures);
+    return 1;
+  }
+  // Exits holding B, for expiry to give back.
+  std::printf("PASS: destroying one context left the other's resources intact\n");
+  return 0;
+}
+
 // A graph captured on a stream, a clone of a graph and an executable made
 // from one belong to no context at all (real-GPU probe, check 6): they outlive
 // the capture context and every other. Made here on device 0's objects while
@@ -1005,6 +1067,7 @@ int main(int argc, char** argv) {
   if (argc > 1 && std::strcmp(argv[1], "reset") == 0) return reset_alone();
   if (argc > 1 && std::strcmp(argv[1], "release") == 0) return release_alone();
   if (argc > 1 && std::strcmp(argv[1], "detach") == 0) return detach_alone();
+  if (argc > 1 && std::strcmp(argv[1], "twoctx") == 0) return two_contexts();
   if (argc > 1 && std::strcmp(argv[1], "derived") == 0) return derived_alone();
   if (argc > 1 && std::strcmp(argv[1], "threads") == 0) return threads_alone();
   if (argc > 3 && std::strcmp(argv[1], "tenant-b") == 0) {

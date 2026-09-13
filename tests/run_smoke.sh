@@ -454,6 +454,10 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
   #   foreign: a graph captured on another session's stream is of unknown
   #            placement, so the capturing session's expiry leaves it alone.
   #            The other session cleans it up. Two sessions to wait for.
+  #   twoctx:  two created contexts, one destroyed while the other is current;
+  #            the teardown must forget exactly the destroyed context's entries,
+  #            so expiry leaks none of the other's and frees none of the gone
+  #            one's again. The regression guard for the by-context index.
   #   detach:  cuCtxDetach destroys a created context and what is in it, so
   #            expiry must not destroy or free any of it again, which would
   #            be stale.
@@ -521,6 +525,7 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
   then_expire derived $((PORT + 8)) 1 2
   then_expire foreign $((PORT + 11)) 2
   then_expire detach $((PORT + 15)) 1
+  then_expire twoctx $((PORT + 16)) 1
   then_expire threads $((PORT + 17)) 1 2
   then_expire "capture strict" $((PORT + 20)) 2
   then_expire "capture relaxed" $((PORT + 21)) 2

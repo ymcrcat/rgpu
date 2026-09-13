@@ -19,6 +19,17 @@ SavedContext saved(CUcontext ctx) {
   return s;
 }
 
+// Rebuilds a thread's set of the contexts named in its stack, from the stack.
+// Called after any change to which contexts the stack holds - a push, a pop, a
+// replaced top - so the set is always exactly the stack's contexts, however the
+// change was made. Marking an entry gone leaves the context in the stack, and
+// so in the set, so it needs no rebuild. The stack is bounded (a client thread
+// may push at most RGPU_MAX_CONTEXT_STACK), so this is cheap.
+void note_stack_ctxs(ClientThread& t) {
+  t.stack_ctxs.clear();
+  for (const SavedContext& s : t.stack) t.stack_ctxs.insert(s.ctx);
+}
+
 // What the serving thread has current, as the driver says. After anything
 // that did not go as asked, so `applied` is never a belief the driver
 // contradicts.
@@ -85,20 +96,19 @@ bool may_push(ClientThreads& threads, const ClientThread& t) {
   return false;
 }
 
-// Every entry naming a context that is gone, in every thread this session
-// knows, live or recently retired.
-template <typename Match>
-void sweep(ClientThreads& threads, Match match) {
-  for (auto& entry : threads.live) {
-    for (SavedContext& s : entry.second.stack) {
-      if (!s.gone && match(s)) s.gone = true;
+// Marks gone every entry naming `ctx`, in every thread this session knows,
+// live or recently retired. A thread whose stack never named `ctx` is skipped
+// on the strength of its stack_ctxs set, so a destroy touches the entries of
+// the destroyed context rather than walking every entry of every thread.
+void sweep(ClientThreads& threads, CUcontext ctx) {
+  auto sweep_one = [&](ClientThread& t) {
+    if (!t.stack_ctxs.count(ctx)) return;
+    for (SavedContext& s : t.stack) {
+      if (!s.gone && s.ctx == ctx) s.gone = true;
     }
-  }
-  for (auto& entry : threads.retired) {
-    for (SavedContext& s : entry.second.stack) {
-      if (!s.gone && match(s)) s.gone = true;
-    }
-  }
+  };
+  for (auto& entry : threads.live) sweep_one(entry.second);
+  for (auto& entry : threads.retired) sweep_one(entry.second);
 }
 
 // --- the intercepted calls ----------------------------------------------------
@@ -117,6 +127,7 @@ CUresult w_cuCtxSetCurrent(CUcontext ctx) {
   if (!ctx) {
     if (t->stack.empty()) return CUDA_SUCCESS;  // documented as a no-op
     t->stack.pop_back();
+    note_stack_ctxs(*t);
     return client_thread_show(*threads, *t);
   }
   const SavedContext s = saved(ctx);
@@ -132,6 +143,7 @@ CUresult w_cuCtxSetCurrent(CUcontext ctx) {
   } else {
     t->stack.back() = s;
   }
+  note_stack_ctxs(*t);
   threads->applied = s;
   return CUDA_SUCCESS;
 }
@@ -154,6 +166,7 @@ CUresult w_cuCtxPushCurrent_v2(CUcontext ctx) {
     return r;
   }
   t->stack.push_back(s);
+  note_stack_ctxs(*t);
   threads->applied = s;
   return CUDA_SUCCESS;
 }
@@ -174,6 +187,7 @@ CUresult w_cuCtxPopCurrent_v2(CUcontext* pctx) {
   }
   const CUcontext popped = t->stack.back().ctx;
   t->stack.pop_back();
+  note_stack_ctxs(*t);
   CUresult r = client_thread_show(*threads, *t);
   if (pctx) *pctx = popped;
   return r;
@@ -326,6 +340,7 @@ void client_thread_after(ClientThreads& threads, ClientThread& t,
       }
       threads.applied = s;
     }
+    note_stack_ctxs(t);
   }
 
   // CUDA fails a call on a thread whose current context was destroyed with
@@ -401,6 +416,7 @@ void client_threads_created(CUcontext ctx) {
   }
   const SavedContext s = saved(ctx);
   t->stack.push_back(s);
+  note_stack_ctxs(*t);
   threads->applied = s;
   read_back(*threads);
 }
@@ -419,8 +435,9 @@ void client_threads_destroyed(CUcontext ctx) {
   if (t && !t->stack.empty() && !t->stack.back().gone &&
       t->stack.back().ctx == ctx) {
     t->stack.pop_back();
+    note_stack_ctxs(*t);
   }
-  sweep(*threads, [&](const SavedContext& s) { return s.ctx == ctx; });
+  sweep(*threads, ctx);
   if (threads->applied.ctx == ctx) {
     read_back(*threads);
     // The header says it was popped; if the driver kept it current anyway,
