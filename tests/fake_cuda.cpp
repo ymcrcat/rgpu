@@ -238,6 +238,12 @@ std::map<CUdeviceptr, Alloc> g_allocs;
 using Objects = std::map<unsigned long long, CUcontext>;
 Objects g_modules, g_streams, g_events, g_graphs, g_graph_execs;
 
+// Loaded libraries. A CUlibrary is context-independent in CUDA 12, so it is
+// recorded under no context (nullptr): a context destroy, a primary-context
+// reset or a last release never takes it, exactly as with the context-less
+// graph objects. Only cuLibraryUnload gives it back.
+Objects g_libraries;
+
 // Hands out a distinct token per creation, tagged so a value that turns up in
 // the wrong place is recognisable in a log, and records it in `ctx`. Called
 // with g_mu held.
@@ -1070,6 +1076,62 @@ CUresult cuModuleGetFunction(CUfunction* hfunc, CUmodule hmod,
   if (r != CUDA_SUCCESS) return r;
   if (std::strcmp(name, kCheckedKernel) != 0) return CUDA_ERROR_NOT_FOUND;
   *hfunc = reinterpret_cast<CUfunction>(h | kFunctionMark);
+  return CUDA_SUCCESS;
+}
+
+// Libraries. A CUlibrary is context-independent - "cuLibraryLoadData ... The
+// returned library ... is not associated with any context" - so no current
+// context is required, and the handle is recorded under none: it survives every
+// context teardown and is given back only by cuLibraryUnload. The image is
+// sized and validated the same way a module's is.
+CUresult cuLibraryLoadData(CUlibrary* library, const void* code,
+                           CUjit_option*, void**, unsigned int,
+                           CUlibraryOption*, void**, unsigned int) {
+  if (!library || !code) return CUDA_ERROR_INVALID_VALUE;
+  unsigned int magic = 0;
+  std::memcpy(&magic, code, sizeof(magic));
+  if (magic != 0xBA55ED50u) return CUDA_ERROR_INVALID_IMAGE;
+  unsigned long long h = 0;
+  {
+    std::lock_guard<std::mutex> lk(g_mu);
+    h = mint_in_locked(&g_libraries, 0x0D0110u, nullptr);  // no context
+  }
+  *library = reinterpret_cast<CUlibrary>(h);
+  rgpu_fake::count(rgpu_fake::kLibrary, 1);
+  return CUDA_SUCCESS;
+}
+
+CUresult cuLibraryLoadFromFile(CUlibrary* library, const char* fileName,
+                               CUjit_option*, void**, unsigned int,
+                               CUlibraryOption*, void**, unsigned int) {
+  if (!library || !fileName) return CUDA_ERROR_INVALID_VALUE;
+  unsigned long long h = 0;
+  {
+    std::lock_guard<std::mutex> lk(g_mu);
+    h = mint_in_locked(&g_libraries, 0x0D0110u, nullptr);  // no context
+  }
+  *library = reinterpret_cast<CUlibrary>(h);
+  rgpu_fake::count(rgpu_fake::kLibrary, 1);
+  return CUDA_SUCCESS;
+}
+
+// Unloaded wherever it lives, without a current context, because it belongs to
+// none. Unloading one that was never handed out, or already unloaded, is the
+// same stale mistake a bad free is, and counted the same way.
+CUresult cuLibraryUnload(CUlibrary library) {
+  const auto h = reinterpret_cast<unsigned long long>(library);
+  bool known;
+  {
+    std::lock_guard<std::mutex> lk(g_mu);
+    auto it = g_libraries.find(h);
+    known = it != g_libraries.end();
+    if (known) g_libraries.erase(it);
+  }
+  if (!known) {
+    rgpu_fake::count(rgpu_fake::kStale, 1);
+    return CUDA_ERROR_INVALID_VALUE;
+  }
+  rgpu_fake::count(rgpu_fake::kLibrary, -1);
   return CUDA_SUCCESS;
 }
 

@@ -239,12 +239,12 @@ in time, the session expires and the server releases what it held. The same
 happens if the server restarts. The client is then told its session is gone:
 it says so, sends nothing more, and every later call fails. It never carries on
 against an empty GPU. Expiry ends any stream capture the session left open, releasing the graph it
-yields, and releases the allocations, contexts, modules, streams, events,
-graphs and maths-library handles a session made. It does not
-track `cuMemAddressReserve` ranges, `cuGraphConditionalHandleCreate` handles,
-user-object retains, cuDNN descriptors minted on the client,
-`cuLibraryLoadData` libraries or texture references. Those stay until the
-server exits.
+yields, and releases the allocations, contexts, modules, loaded libraries
+(`cuLibraryLoadData`, `cuLibraryLoadFromFile`), streams, events, graphs and
+maths-library handles a session made. It does not track `cuMemAddressReserve`
+ranges, `cuGraphConditionalHandleCreate` handles, user-object retains, cuDNN
+descriptors minted on the client, or texture references (`cuTexRefCreate`,
+deprecated and needing a current context). Those stay until the server exits.
 
 A server keeps at most `RGPU_MAX_SESSIONS` sessions, counting those waiting
 out their grace period. Past that a new client is refused at the handshake: it

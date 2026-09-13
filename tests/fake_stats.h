@@ -30,6 +30,11 @@ enum Kind {
   // one left open is a leak all the same: it holds its stream in capture and
   // restricts the thread that began it.
   kCapture,
+  // Loaded libraries (cuLibraryLoadData / cuLibraryLoadFromFile) not yet
+  // unloaded. A CUlibrary is context-independent in CUDA 12 - it belongs to no
+  // context and outlives any context's destruction - so, unlike a module, it is
+  // never taken by a context teardown and only cuLibraryUnload gives it back.
+  kLibrary,
   // Releases of a primary context that nobody had retained. Not a resource:
   // a mistake, and the one a test cannot otherwise see, because the fake
   // refuses the call and the count it would have corrupted stays right.

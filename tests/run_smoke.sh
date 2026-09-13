@@ -450,7 +450,7 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
     done
     local want="allocs=0 retains=0 contexts=0 modules=0 streams=0 events=0"
     want="$want graphs=0 execs=0 cublas=0 cublaslt=0 cudnn=0 captures=0"
-    want="$want overreleases=0 stale=0"
+    want="$want libraries=0 overreleases=0 stale=0"
     local got
     # The call counters at the end of the line count calls, not resources, so
     # they are not part of what has to come back to zero.

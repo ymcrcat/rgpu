@@ -15,6 +15,7 @@ std::atomic<long> g_counts[kKindCount];
 const char* const kNames[kKindCount] = {
     "allocs",  "retains", "contexts", "modules",  "streams", "events",
     "graphs",  "execs",   "cublas",   "cublaslt", "cudnn",   "captures",
+    "libraries",
     "overreleases", "stale", "ctxsets", "crossctx", "totalmem", "modeswaps", "memsets",
 };
 

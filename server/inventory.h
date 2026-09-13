@@ -70,6 +70,12 @@ struct Inventory {
 
   std::mutex mu;
   Items allocs, contexts, modules, streams, events, graphs, graph_execs;
+  // Loaded libraries (cuLibraryLoadData / cuLibraryLoadFromFile). Unlike a
+  // module, a CUlibrary in CUDA 12 is context-independent - bound to no context
+  // and outliving any context's destruction - so its entries carry no context,
+  // device or generation (Item's defaults), a context teardown never forgets
+  // them, and expiry unloads each unconditionally with cuLibraryUnload.
+  Items libraries;
   std::vector<OpenCapture> captures;
   std::unordered_map<uint64_t, LibHandle> handles;
   // Per device, how many retains this session holds and has not released.

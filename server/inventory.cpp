@@ -556,6 +556,50 @@ CUresult w_cuModuleUnload(CUmodule mod) {
   return r;
 }
 
+// A CUlibrary is context-independent in CUDA 12: "the returned library ... is
+// not associated with any context", and it outlives the destruction of every
+// context. So it is recorded with no context, device or generation - Stamp's
+// defaults - which means a context teardown never forgets it (forget_under and
+// forget_primary match on ctx/dev, and a library has neither) and expiry
+// unloads it unconditionally, unlike the context-bound resources. That is safe
+// precisely because it has no context and no generation to have gone stale.
+CUresult w_cuLibraryLoadData(CUlibrary* library, const void* code,
+                             CUjit_option* jitOptions, void** jitValues,
+                             unsigned int numJit, CUlibraryOption* libOptions,
+                             void** libValues, unsigned int numLib) {
+  REAL("cuLibraryLoadData", CUlibrary*, const void*, CUjit_option*, void**,
+       unsigned int, CUlibraryOption*, void**, unsigned int);
+  CUresult r = fn(library, code, jitOptions, jitValues, numJit, libOptions,
+                  libValues, numLib);
+  if (r == CUDA_SUCCESS && library) {
+    note(&Inventory::libraries, reinterpret_cast<uint64_t>(*library), Stamp{});
+  }
+  return r;
+}
+
+CUresult w_cuLibraryLoadFromFile(CUlibrary* library, const char* fileName,
+                                 CUjit_option* jitOptions, void** jitValues,
+                                 unsigned int numJit, CUlibraryOption* libOptions,
+                                 void** libValues, unsigned int numLib) {
+  REAL("cuLibraryLoadFromFile", CUlibrary*, const char*, CUjit_option*, void**,
+       unsigned int, CUlibraryOption*, void**, unsigned int);
+  CUresult r = fn(library, fileName, jitOptions, jitValues, numJit, libOptions,
+                  libValues, numLib);
+  if (r == CUDA_SUCCESS && library) {
+    note(&Inventory::libraries, reinterpret_cast<uint64_t>(*library), Stamp{});
+  }
+  return r;
+}
+
+CUresult w_cuLibraryUnload(CUlibrary library) {
+  REAL("cuLibraryUnload", CUlibrary);
+  CUresult r = fn(library);
+  if (r == CUDA_SUCCESS) {
+    forget(&Inventory::libraries, reinterpret_cast<uint64_t>(library));
+  }
+  return r;
+}
+
 CUresult w_cuStreamCreate(CUstream* stream, unsigned int flags) {
   REAL("cuStreamCreate", CUstream*, unsigned int);
   const Stamp st = stamp();
@@ -747,6 +791,10 @@ const Tracked kTracked[] = {
     {"cuModuleLoadFatBinary",
      reinterpret_cast<void*>(&w_cuModuleLoadFatBinary)},
     {"cuModuleUnload", reinterpret_cast<void*>(&w_cuModuleUnload)},
+    {"cuLibraryLoadData", reinterpret_cast<void*>(&w_cuLibraryLoadData)},
+    {"cuLibraryLoadFromFile",
+     reinterpret_cast<void*>(&w_cuLibraryLoadFromFile)},
+    {"cuLibraryUnload", reinterpret_cast<void*>(&w_cuLibraryUnload)},
     {"cuStreamCreate", reinterpret_cast<void*>(&w_cuStreamCreate)},
     {"cuStreamCreateWithPriority",
      reinterpret_cast<void*>(&w_cuStreamCreateWithPriority)},
@@ -773,6 +821,10 @@ CUresult destroy_alloc(uint64_t h) {
 CUresult destroy_module(uint64_t h) {
   REAL("cuModuleUnload", CUmodule);
   return fn(reinterpret_cast<CUmodule>(h));
+}
+CUresult destroy_library(uint64_t h) {
+  REAL("cuLibraryUnload", CUlibrary);
+  return fn(reinterpret_cast<CUlibrary>(h));
 }
 CUresult destroy_stream(uint64_t h) {
   REAL("cuStreamDestroy_v2", CUstream);
@@ -962,6 +1014,7 @@ std::string release_inventory(Inventory& inv) {
   // that somehow arrives afterwards is recorded against an empty list rather
   // than freed twice.
   Inventory::Items allocs, contexts, modules, streams, events, graphs, execs;
+  Inventory::Items libraries;
   std::unordered_map<uint64_t, Inventory::LibHandle> handles;
   std::unordered_map<int, int> retains;
   std::vector<Inventory::OpenCapture> captures;
@@ -975,6 +1028,7 @@ std::string release_inventory(Inventory& inv) {
     events.swap(inv.events);
     graphs.swap(inv.graphs);
     execs.swap(inv.graph_execs);
+    libraries.swap(inv.libraries);
     handles.swap(inv.handles);
     retains.swap(inv.primary_retains);
   }
@@ -1070,6 +1124,15 @@ std::string release_inventory(Inventory& inv) {
     }
   }
 
+  // Loaded libraries. Like a maths-library handle they own modules and
+  // workspaces of their own, so they go before the memory; unlike everything
+  // else here they belong to no context, so each is unloaded with none current
+  // (release_items follows the entry's ctx, which is null) and no generation
+  // check ever skips one.
+  const unsigned libraries_released =
+      release_items(libraries, "loaded library", destroy_library, &current,
+                    &failed, &skipped);
+
   const unsigned execs_released =
       release_items(execs, "graph exec", destroy_graph_exec, &current, &failed,
                     &skipped);
@@ -1136,6 +1199,13 @@ std::string release_inventory(Inventory& inv) {
   if (contexts_released) parts.push_back(plural(contexts_released, "context"));
   if (handles_released) {
     parts.push_back(plural(handles_released, "library handle"));
+  }
+  // "library"/"libraries" is the one irregular plural here, so it is not routed
+  // through plural(), which only ever appends an "s".
+  if (libraries_released) {
+    parts.push_back(std::to_string(libraries_released) +
+                    (libraries_released == 1 ? " loaded library"
+                                             : " loaded libraries"));
   }
   if (modules_released) parts.push_back(plural(modules_released, "module"));
   if (streams_released) parts.push_back(plural(streams_released, "stream"));

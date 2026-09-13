@@ -153,6 +153,11 @@ struct Held {
   CUgraph graph = nullptr;
   CUgraphExec exec = nullptr;
   CUgraph clone = nullptr;
+  // A loaded library. It belongs to no context (CUDA 12: a CUlibrary is
+  // context-independent), so no context teardown takes it and only
+  // cuLibraryUnload gives it back - which a client that dies never sends, so
+  // its session's expiry has to.
+  CUlibrary library = nullptr;
 };
 
 // What the driver hands out, in whatever context is current.
@@ -192,6 +197,14 @@ void take_resources(CUdevice dev, Held* held, bool own_context) {
     CHECK(cuCtxCreate(&ctx, 0, dev));
   }
   take_driver_resources(held);
+  // A loaded library, which belongs to no context and so is not one of the
+  // driver resources a context teardown would take. Only expiry (or the client
+  // itself) can unload it, which is exactly what the leak this exercises is
+  // about: cuLibraryLoadData creates something the session owns and must give
+  // back.
+  const std::vector<unsigned char> lib_image = fake_fatbin();
+  CHECK(cuLibraryLoadData(&held->library, lib_image.data(), nullptr, nullptr, 0,
+                          nullptr, nullptr, 0));
 #ifdef RGPU_EXPIRY_CUBLAS
   cublasHandle_t blas = nullptr;
   if (cublasCreate(&blas) != CUBLAS_STATUS_SUCCESS) {
