@@ -293,9 +293,9 @@ CUresult launch(CUfunction f, CUstream s) {
 
 // Streams, events, modules and graphs carry their context the same way: the
 // header says nothing that confines them to the current context, so they are
-// used, and destroyed, wherever they live. Two calls are stricter:
-//   - cuModuleUnload "Unloads a module hmod from the current context", and
-//     reports it with the CUDA_ERROR_INVALID_VALUE its return list names;
+// used, and destroyed, wherever they live - cuModuleUnload included, which on
+// hardware unloads a module loaded under one context while another is current
+// (real-GPU probe, check 4). One call is stricter:
 //   - a launch with a stream from another context than the function's
 //     ("The CUDA context associated with this stream must match that
 //     associated with function f", on cuLaunchKernelEx), and - inferred, not
@@ -337,9 +337,12 @@ void handles_carry_their_context() {
   CHECK(launch(f, s));
   EXPECT_RC(launch(f, nullptr), CUDA_ERROR_INVALID_HANDLE);
   EXPECT_RC(launch(f, s1), CUDA_ERROR_INVALID_HANDLE);
-  EXPECT_RC(cuModuleUnload(m), CUDA_ERROR_INVALID_VALUE);
-  EXPECT(stat(rgpu_fake::kModule) == base[0] + 1,
-         "an unload refused under another context must not unload");
+  // A module unloads regardless of the current context: identified by its
+  // handle, not the current one, as on hardware. The handle is then dead, and
+  // a second unload is the stale case the fake still catches (below).
+  CHECK(cuModuleUnload(m));
+  EXPECT(stat(rgpu_fake::kModule) == base[0],
+         "a module unloads regardless of the current context");
   CUgraph clone = nullptr;
   CUgraphExec exec = nullptr;
   CHECK(cuGraphClone(&clone, g));
@@ -352,13 +355,14 @@ void handles_carry_their_context() {
 
   // The clone and its executable were made from device 0's graph, so they
   // live in device 0's primary context however they were reached: resetting
-  // device 0 takes them, the module, the graph and the stream with it.
+  // device 0 takes them, the graph and the stream with it. The module was
+  // already unloaded above.
   CHECK(cuDevicePrimaryCtxReset(0));
-  // A module that no longer exists is the same code, and stale.
+  // The module unloaded above no longer exists, so unloading it again is stale.
   CHECK(cuCtxSetCurrent(p0));
   EXPECT_RC(cuModuleUnload(m), CUDA_ERROR_INVALID_VALUE);
   EXPECT(stat(rgpu_fake::kStale) == stale + 1,
-         "unloading a module the reset destroyed should count as stale");
+         "unloading an already-unloaded module should count as stale");
   EXPECT(stat(rgpu_fake::kModule) == base[0] &&
              stat(rgpu_fake::kGraph) == base[1] &&
              stat(rgpu_fake::kGraphExec) == base[2] &&

@@ -184,11 +184,14 @@ CUresult need_context() {
 // A fake stricter than the hardware would let a test pass for a reason the
 // hardware does not share.
 //
-// Two calls are stricter:
-//   - cuModuleUnload "Unloads a module hmod from the current context", so a
-//     module from another context is refused. The code is
-//     CUDA_ERROR_INVALID_VALUE, the one its return list names, for a module
-//     from another context and for one that does not exist alike.
+// cuModuleUnload reads "Unloads a module hmod from the current context", but
+// on hardware it unloads a module loaded under another context while a
+// different one is current (real-GPU probe, check 4), so the fake identifies a
+// module by its handle the way it does an allocation, not by the current
+// context. Its return list names CUDA_ERROR_INVALID_VALUE, which the fake
+// gives for a handle that names no module.
+//
+// One call is stricter:
 //   - cuLaunchKernel with a stream whose context is not the function's is
 //     CUDA_ERROR_INVALID_HANDLE. The header says it for cuLaunchKernelEx:
 //     "The CUDA context associated with this stream must match that
@@ -1043,12 +1046,15 @@ CUresult cuModuleLoadData(CUmodule* module, const void* image) {
   return CUDA_SUCCESS;
 }
 
-// "Unloads a module hmod from the current context": the one destroy the
-// header confines to the current context. Its return list names
-// CUDA_ERROR_INVALID_VALUE and not CUDA_ERROR_INVALID_HANDLE.
+// The header says "Unloads a module hmod from the current context", but on
+// hardware a module loaded under one context unloads while another is current
+// (real-GPU probe, check 4): like a free, it is identified by its handle, not
+// the current context. So the module is unloaded wherever it lives, as long as
+// some context is current. Its return list names CUDA_ERROR_INVALID_VALUE and
+// not CUDA_ERROR_INVALID_HANDLE for a handle that names no module.
 CUresult cuModuleUnload(CUmodule m) {
   CUresult r = retire(&g_modules, reinterpret_cast<unsigned long long>(m),
-                      CUDA_ERROR_INVALID_VALUE, /*current_only=*/true);
+                      CUDA_ERROR_INVALID_VALUE);
   if (r != CUDA_SUCCESS) return r;
   rgpu_fake::count(rgpu_fake::kModule, -1);
   return CUDA_SUCCESS;
