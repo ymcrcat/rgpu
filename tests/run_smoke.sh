@@ -164,6 +164,50 @@ if [[ -x "$BUILD/reconnect_smoke" ]]; then
   rm -f "$EXPIRED_STATS" "$EXPIRED_STATS.tmp" "$EXPIRED_LOG"
 fi
 
+# A peer that connects and never sends its handshake must not tie up an accept
+# thread and an fd forever: the handshake read has a bounded deadline
+# (RGPU_HANDSHAKE_TIMEOUT_SECONDS), after which the server closes the
+# connection. Its own server, with a short deadline, so the wait is quick and
+# does not depend on any client binary. A silent connection has to be closed
+# from the server side within the deadline, and a real client has to be served
+# after it, proving the accept path stayed healthy.
+echo
+HS_PORT=$((PORT + 22))
+HS_LOG=$(mktemp "${TMPDIR:-/tmp}/rgpu-handshake-log.XXXXXX")
+RGPU_HANDSHAKE_TIMEOUT_SECONDS=1 "$BUILD/rgpu-server-fake" "$HS_PORT" \
+  >"$HS_LOG" 2>&1 &
+HS_SRV=$!
+for _ in $(seq 1 50); do
+  if (exec 3<>/dev/tcp/127.0.0.1/"$HS_PORT") 2>/dev/null; then
+    exec 3<&- 3>&-
+    break
+  fi
+  sleep 0.1
+done
+# Open a connection, send nothing, and read: the server's close arrives as EOF,
+# so `cat` returns. With no deadline it would block until `timeout` kills it,
+# which is the failure. The deadline is 1s; 8s is generous slack for a loaded CI
+# box while still catching a hang.
+hs_start=$(date +%s)
+if timeout 8 bash -c "exec 3<>/dev/tcp/127.0.0.1/$HS_PORT; cat <&3 >/dev/null"; then
+  hs_closed=1
+else
+  hs_closed=0
+fi
+hs_elapsed=$(( $(date +%s) - hs_start ))
+if [[ $hs_closed -ne 1 ]]; then
+  echo "FAIL: the server did not close a silent connection within the handshake"
+  echo "      deadline; a peer that sends nothing ties up an accept thread forever"
+  rc=1
+else
+  echo "a silent connection was closed by the server after ${hs_elapsed}s"
+fi
+# The server is still healthy: a real client is served after the silent peer.
+LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$HS_PORT" "$BUILD/rpc_smoke" \
+  || { echo "FAIL: the server did not serve a client after a silent connection"; rc=1; }
+kill $HS_SRV 2>/dev/null
+rm -f "$HS_LOG"
+
 # A request still running when its client reconnects, sent again by the client
 # and never run again by the server. Its own server: one fake call made slow
 # enough to reconnect in the middle of, and a stats file counting how often it

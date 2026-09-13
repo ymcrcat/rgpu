@@ -5,6 +5,8 @@
 
 #include <netinet/in.h>
 #include <signal.h>
+#include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include <cstdarg>
@@ -477,6 +479,29 @@ int session_grace_seconds() {
   return n > 0 ? n : 120;
 }
 
+// How long the whole handshake read may take. The protocol has no
+// authentication, so a peer that connects and then sends nothing - or dribbles
+// bytes one at a time - must not be able to tie up an accept thread and an fd
+// for good. RGPU_MAX_SESSIONS does not bound this, because no session exists
+// until the handshake is in; and tune_socket, which the serving loop relies on,
+// sets no receive timeout. So this deadline on the untrusted first bytes is the
+// only thing that bounds them.
+int handshake_timeout_seconds() {
+  const char* v = std::getenv("RGPU_HANDSHAKE_TIMEOUT_SECONDS");
+  int n = v ? std::atoi(v) : 10;
+  return n > 0 ? n : 10;
+}
+
+// Sets, or with 0 clears, a receive timeout on `fd`. A recv that waits longer
+// than this returns as if the peer had gone quiet, which is what breaks a
+// stalled handshake read out of its wait.
+void set_recv_timeout(int fd, int seconds) {
+  struct timeval tv{};
+  tv.tv_sec = seconds;
+  tv.tv_usec = 0;
+  ::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+}
+
 // --- connection handling --------------------------------------------------
 
 void serve_session(std::shared_ptr<Session> session, SessionKey key);
@@ -927,12 +952,22 @@ void forget_unserved(const std::shared_ptr<Session>& session,
 // Reads the handshake and either starts a session or hands the connection to
 // the thread already serving one.
 void accept_connection(int fd) {
+  // Bound the untrusted first bytes: a peer that sends nothing, or dribbles,
+  // gets the connection closed at the deadline rather than holding this thread
+  // and this fd forever. Nothing is registered on the way out.
+  set_recv_timeout(fd, handshake_timeout_seconds());
   Handshake hello{};
   if (!read_exact(fd, &hello, sizeof(hello)) || hello.magic != kMagicHello) {
-    logf("connection did not begin with a handshake; closing");
+    logf("connection did not begin with a handshake within the deadline, or "
+         "with the wrong bytes; closing");
     ::close(fd);
     return;
   }
+  // The handshake is in. Restore the normal blocking socket: the serving loop's
+  // reads wait on a live client with no deadline, and tune_socket does not
+  // touch the receive timeout, so clearing it here is what keeps a long idle
+  // session from being cut off at the handshake deadline.
+  set_recv_timeout(fd, 0);
   if (hello.version != kProtocolVersion) {
     logf("client speaks protocol %u, this server speaks %u; closing",
          hello.version, kProtocolVersion);
