@@ -6,8 +6,8 @@ GPU host; your code runs locally and looks ordinary.
 ## Product documentation
 
 The Fumadocs site lives in [`website/`](website/README.md). It includes setup,
-training, deployment, configuration, troubleshooting, performance, and the JAX
-roadmap. To preview it locally:
+training, deployment, configuration, troubleshooting, and performance.
+To preview it locally:
 
 ```sh
 cd website
