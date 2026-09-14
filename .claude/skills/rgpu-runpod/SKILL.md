@@ -1,5 +1,5 @@
 ---
-name: rcuda-runpod
+name: rgpu-runpod
 description: Rent, use and release a RunPod GPU for rgpu work without wasting money. Use whenever a task needs a real NVIDIA GPU - running the PyTorch ladder, testing a kernel launch, checking a driver behaviour - or when asked to start, stop, check or delete the test pod. Covers the cost rules, the disk-is-wiped-on-stop trap, and the deploy and verify loop.
 ---
 
@@ -51,10 +51,32 @@ The API key comes from 1Password at `op://YOUR_VAULT/Runpod/api-key`. If a
 command fails with an authorization timeout the vault has locked; the user has
 to unlock it, and `! op signin` in the session is the quickest way to ask.
 
+**Name the pod `rgpu-dev`, which is what `NAME` already defaults to.**
+Every subcommand in `scripts/runpod.sh` - `status`, `start`, `stop`, `delete` -
+finds the pod by matching `NAME`. A pod created under any other name is
+invisible to all of them. Creating one as `rgpu-yangpt` has already cost real
+money here: `status` printed "no pods: nothing is billing" for five minutes
+while an A40 at $0.49/hr was up, because the filter did not match. If you do
+create a pod under another name, you must put `NAME=that-name` in front of
+every later command, including the delete.
+
 **Always run `status` first.** It is one call, it costs nothing, and it stops
-you renting a second pod while one is already running. It lists every pod on
-the account, not just the one this project expects, because the failure worth
-catching is the pod you did not know you had.
+you renting a second pod while one is already running.
+
+**`status` does NOT list every pod on the account** - it lists pods matching
+`NAME`. So "nothing is billing" means "nothing *called `rgpu-dev`* is
+billing", which is not the same thing and is exactly the reassurance you do
+not want to be wrong about. To see the whole account, ask the API directly and
+filter nothing:
+
+```sh
+curl -s https://rest.runpod.io/v1/pods \
+  -H "Authorization: Bearer $(op read 'op://YOUR_VAULT/Runpod/api-key')" |
+  python3 -c "import json,sys
+for p in json.load(sys.stdin): print(p['id'], p['name'], p.get('desiredStatus'), p.get('costPerHr'))"
+```
+
+Finish every session with that call, not with `status`.
 
 ## The loop
 
@@ -100,6 +122,55 @@ RGPU_SERVER=127.0.0.1:9713 \
 
 Then delete the pod, and confirm the pod list is empty.
 
+## The op-level backend needs torch ON THE POD
+
+There are two backends and they put PyTorch in opposite places. Getting this
+wrong wastes a pod's worth of time.
+
+| Backend | Port | Where torch runs | What the pod needs |
+|---|---|---|---|
+| Driver-API shim (`device="cuda"`) | 9713 | the client | `rgpu-server`, no torch |
+| Op-level device (`device="rgpu"`) | 9720 | **the server** | a matching torch |
+
+The op-level path ships ATen operations, not driver calls, so `rgpu-opserver`
+is a PyTorch process and the client version-checks it on handshake. Note the
+client cannot be macOS for the driver-API path: it needs a CUDA-linked torch,
+which is why that client is a linux container.
+
+**The version bind.** `pyproject.toml` declares `torch>=2.14`, which the
+*client* really does need for PrivateUse1 device registration. But there is no
+`2.14+cu128` wheel, and the stock pod image's driver is 12.8 (`570.x`), so
+`2.14+cu130` installs happily and then reports `cuda False` with "driver is too
+old". What works today: `torch==2.11.0+cu128` on the pod from the cu128 index,
+and `RGPU_ALLOW_VERSION_MISMATCH=1` on the client. The server only executes
+ops, so the older torch is fine there.
+
+**Never pip-install one CUDA flavour over another.** Installing cu128 on top of
+cu130 leaves a half-replaced tree that imports as
+`libtorch_nvshmem.so: undefined symbol`. Delete the venv and build it again
+rather than trying to correct it in place.
+
+**The image name lies about torch.** `runpod/pytorch:...-torch291-...` shipped
+with no torch module at all, and no conda - only system `python3.9` through
+`python3.13`. Budget for installing torch every time; it is several minutes.
+
+**Getting it running**, heeding the multi-line-ssh warning below:
+
+```sh
+tar czf rgpu_pkg.tgz -C python rgpu && scp -P PORT rgpu_pkg.tgz root@HOST:/workspace/
+# then a scp'd script, not an inline heredoc:
+#   PYTHONPATH=/workspace nohup venv/bin/python -m rgpu.server \
+#     --device cuda --bind 127.0.0.1 --port 9720 > opserver.log 2>&1 &
+ssh -N -L 9721:127.0.0.1:9720 root@HOST -p PORT      # never expose 9720
+RGPU_OPSERVER=127.0.0.1:9721 RGPU_ALLOW_VERSION_MISMATCH=1 python train.py
+```
+
+Measured this way from a Mac to an A40 in EU-SE-1, RTT 116 ms: nanoGPT
+(10.8M params, batch 64, block 256) trained at 1.04 s/iter, against 3.04 s/iter
+on local MPS. 139,931 messages but only **5 waits** for 20 iterations - the
+queue is what makes a transatlantic GPU beat a local one, so if a workload ever
+looks latency-bound, count waits first.
+
 ## Things that will bite you
 
 **A create that looks like it failed may have worked.** The API can return an
@@ -131,6 +202,12 @@ module image the fake server accepts, so pass a real fatbin.
 NVCC=/usr/local/cuda/bin/nvcc ./scripts/build_fatbin.sh
 ./build/bench 2000 build/vecadd.fatbin      # launch numbers need this argument
 ```
+
+**`create` asks for COMMUNITY cloud, which has repeatedly had no capacity.**
+`scripts/runpod.sh create` hardcodes `"cloudType": "COMMUNITY"` and fails with
+"creation did not return an id". Secure cloud works: post the same body with
+`"cloudType": "SECURE"` and an A40 in `gpuTypeIds`, keeping
+`"name": "rgpu-dev"` so the script's other subcommands can still find it.
 
 **A pod that stays RUNNING but never gets a machine means the account is out
 of money.** It does not say so. `status` shows RUNNING, and the API shows no
