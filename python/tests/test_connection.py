@@ -34,7 +34,7 @@ def put(conn, tid, t):
     conn.post(wire.RUN, "aten::empty_strided", "default",
               [list(t.shape), list(t.stride())],
               {"dtype": t.dtype, "device": wire.Dev("rgpu")}, [tid])
-    conn.post(wire.UPLOAD, tid, wire.Host.of(t), size=t.numel() * t.element_size())
+    conn.post(wire.UPLOAD, tid, wire.Host.of(t))
 
 
 def test_posts_do_not_wait_and_a_request_does(conn):
@@ -105,10 +105,10 @@ def test_a_refused_free_puts_its_ids_back(conn, monkeypatch):
     name leak on the server for the rest of the session."""
     real = session.Connection._append
 
-    def refuse_the_free(self, kind, fields, size):
+    def refuse_the_free(self, kind, fields):
         if kind == wire.FREE:
             raise wire.EncodeError("pretend the free could not be encoded")
-        return real(self, kind, fields, size)
+        return real(self, kind, fields)
     monkeypatch.setattr(session.Connection, "_append", refuse_the_free)
 
     session.pending_frees.extend([7, 8, 9])
@@ -228,13 +228,43 @@ def test_a_first_connection_that_is_refused_fails_at_once(monkeypatch):
 
 
 def test_unacked_bytes_drains_on_ack(conn):
-    conn.post(wire.SEED, 1, size=1000)
-    assert conn.unacked_bytes >= 1000
+    conn.post(wire.SEED, 1)
+    assert conn.unacked_bytes == sum(len(b) for _, b in conn.unacked)
     assert len(conn.unacked) == 1
     conn.request(wire.SYNC)
     assert conn.unacked_bytes == 0
     assert len(conn.unacked) == 0
     assert conn.replay_possible is True
+
+
+# The queues hold the encoded message, so what they cost is len(blob) - not an
+# estimate. A RUN carrying an inline host tensor is the case that matters: it
+# can be megabytes, and counting it as a fixed overhead lets it slip past both
+# the byte-triggered flush and the replay limit that is supposed to bound how
+# much is held for a reconnect.
+def test_queue_bytes_count_the_encoded_size_of_an_inline_tensor(conn):
+    conn.flush_ops, conn.flush_bytes = 1 << 30, 1 << 30   # nothing leaves the queue
+    big = torch.zeros(1 << 20, dtype=torch.uint8)         # a megabyte, inline
+    conn.post(wire.RUN, "aten::add", "default", [wire.Host.of(big)], {}, [1])
+    blob = conn.pending[-1][1]
+    assert len(blob) > (1 << 20), "the message really does carry the tensor"
+    assert conn.pending_bytes == sum(len(b) for _, b in conn.pending)
+    assert conn.unacked_bytes == sum(len(b) for _, b in conn.unacked)
+
+
+# Acknowledging part of the queue must subtract what it removed, rather than
+# only resetting once the queue happens to empty: a long-lived connection that
+# is never fully caught up would otherwise keep an estimate that only grows,
+# and trip the replay limit on messages the server acknowledged long ago.
+def test_acking_one_message_subtracts_only_its_bytes(conn):
+    conn.flush_ops, conn.flush_bytes = 1 << 30, 1 << 30
+    conn.post(wire.SEED, 1)
+    conn.post(wire.SEED, 2)
+    assert len(conn.unacked) >= 2
+    assert conn.unacked_bytes == sum(len(b) for _, b in conn.unacked)
+    conn._ack(conn.unacked[0][0])
+    assert conn.unacked, "only the first message was acknowledged"
+    assert conn.unacked_bytes == sum(len(b) for _, b in conn.unacked)
 
 
 # --- _reconnect, against a stubbed socket: no real server involved ---------
