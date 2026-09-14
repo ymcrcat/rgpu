@@ -63,6 +63,25 @@ y = (x @ x).relu().sum().item()      # one round trip, at .item()
 `RGPU_OPSERVER=host:port` points the client somewhere other than
 `127.0.0.1:9720`.
 
+### One command instead of the tunnel
+
+`rgpu-run` opens the tunnel, points the client at it, runs your command and
+closes the tunnel afterwards:
+
+```sh
+rgpu-run --host user@gpuhost python train.py
+rgpu-run --host user@gpuhost -i ~/.ssh/key --ssh-port 22050 python train.py
+rgpu-run --server 127.0.0.1:9720 python train.py   # a tunnel you already have
+```
+
+It moves the plumbing, not the device: the script still has to `import rgpu`
+and ask for `device="rgpu"`. It exits with the command's own status, and both
+ends of the forward are bound to 127.0.0.1, so an unauthenticated GPU is never
+reachable from the rest of your network.
+
+On a fresh GPU box, `scripts/opserver_pod.sh 2.14` (the major.minor your client
+runs) makes a venv, installs a matching torch, and starts the server detached.
+
 ## What it costs
 
 Operations are queued and sent in one batch ahead of the next call that needs

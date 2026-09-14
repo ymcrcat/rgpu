@@ -14,6 +14,13 @@ test = ["pytest>=8", "torchvision"]
 
 [project.scripts]
 rgpu-opserver = "rgpu.server.__main__:main"
+rgpu-run = "rgpu_run:main"
+
+[tool.setuptools]
+# A top-level module on purpose: the launcher only opens an ssh tunnel and
+# spawns a child, so importing the rgpu package - which registers the device
+# and pulls in torch, about three seconds - would be pure startup cost.
+py-modules = ["rgpu_run"]
 
 [tool.setuptools.packages.find]
 include = ["rgpu*"]
