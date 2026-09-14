@@ -272,7 +272,6 @@ def handle(func, args, kwargs):
         if not isinstance(dst, RemoteTensor):
             return dst.copy_(_download(src))
         if not isinstance(src, RemoteTensor):
-            session.get().post(wire.UPLOAD, id_of(dst._rgpu_meta), wire.Host.of(src),
-                               size=src.numel() * src.element_size())
+            session.get().post(wire.UPLOAD, id_of(dst._rgpu_meta), wire.Host.of(src))
             return dst
     return _run(func, args, kwargs)

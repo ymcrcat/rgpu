@@ -124,13 +124,13 @@ class Connection:
 
     # --- queueing ------------------------------------------------------------
 
-    def _queue(self, kind, fields, size):
+    def _queue(self, kind, fields):
         if pending_frees:
             ids = []
             while pending_frees:
                 ids.append(pending_frees.popleft())
             try:
-                self._append(wire.FREE, (ids,), 8 * len(ids))
+                self._append(wire.FREE, (ids,))
             except wire.EncodeError:
                 # _append can refuse a message now, and these ids have already
                 # been taken out of the only place that remembers them: put
@@ -140,9 +140,9 @@ class Connection:
                 # known trigger.)
                 pending_frees.extendleft(reversed(ids))
                 raise
-        return self._append(kind, fields, size)
+        return self._append(kind, fields)
 
-    def _append(self, kind, fields, size):
+    def _append(self, kind, fields):
         # Encoded here, before anything is committed, so a value the wire
         # cannot carry raises at the call that passed it rather than at some
         # later flush - and leaves the queue exactly as it was, with no gap in
@@ -150,13 +150,18 @@ class Connection:
         # kept, not thrown away: _flush and the replay join them up, so this
         # costs no extra encoding on the streaming path.
         entry = (self.seq + 1, wire.encode_element([self.seq + 1, kind, *fields]))
+        # What the queues cost is the encoded message they hold, which is right
+        # here: an estimate would let a RUN carrying an inline host tensor - or
+        # a whole graph description - past both the byte-triggered flush and
+        # the replay limit below, counted as a header and nothing else.
+        n = len(entry[1])
         self.seq += 1
         self.pending.append(entry)
-        self.pending_bytes += 64 + size
+        self.pending_bytes += n
         self.stats["messages"] += 1
         if self.replay_possible:
             self.unacked.append(entry)
-            self.unacked_bytes += 64 + size
+            self.unacked_bytes += n
             if self.unacked_bytes > MAX_UNACKED:
                 # Holding gigabytes of uploads to replay would cost more than
                 # the recovery is worth. Until the server next acknowledges
@@ -171,15 +176,15 @@ class Connection:
                     MAX_UNACKED >> 20)
         return self.seq
 
-    def post(self, kind, *fields, size=0):
+    def post(self, kind, *fields):
         with self.lock:
-            self._queue(kind, fields, size)
+            self._queue(kind, fields)
             if len(self.pending) >= self.flush_ops or self.pending_bytes >= self.flush_bytes:
                 self._flush()
 
     def request(self, kind, *fields):
         with self.lock:
-            seq = self._queue(kind, fields, 0)
+            seq = self._queue(kind, fields)
             self._flush()
             self.stats["waits"] += 1
             return self._await(seq)
@@ -234,7 +239,7 @@ class Connection:
                         "messages the server never received were too large to keep "
                         "for replay; tensors on rgpu may be stale")
                 while self.unacked and self.unacked[0][0] <= server_seq:
-                    self.unacked.popleft()
+                    self.unacked_bytes -= len(self.unacked.popleft()[1])
                 if not self.unacked:
                     self.unacked_bytes = 0
                     self.replay_possible = True
@@ -303,10 +308,11 @@ class Connection:
         self._recovery_deadline = None   # a reply arrived: the connection is proven alive
         self._recovery_delay = None
         while self.unacked and self.unacked[0][0] <= seq:
-            self.unacked.popleft()
-        # unacked_bytes is an upper bound on what is held for replay, reset once
-        # the server has acknowledged everything (so the 64 MB limit can only
-        # trip early, never late).
+            self.unacked_bytes -= len(self.unacked.popleft()[1])
+        # unacked_bytes is what the deque still holds. Subtracting per message
+        # keeps that true after a partial acknowledgement: a connection the
+        # server never fully catches up with would otherwise carry a figure
+        # that only grows, and trip the replay limit on messages long acked.
         if not self.unacked:
             self.unacked_bytes = 0
             self.replay_possible = True
