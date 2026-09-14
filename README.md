@@ -107,6 +107,10 @@ That run used torch 2.11 on the server against 2.14 on the client with
 `RGPU_ALLOW_VERSION_MISMATCH=1`, because no 2.14 wheel exists for that host's
 CUDA 12.8 driver. Matching versions is the supported configuration.
 
+`docs/performance-notes.md` collects these measurements with their methodology
+and caveats, along with what compresses on the wire and what graph shipping is
+worth.
+
 An earlier run against an A40 at 44.7 ms RTT: a ResNet-18 training step costs
 one round trip at 90–106 ms depending on mode (eager inference is 152.0 ms),
 and a 200-step run survived the tunnel being killed and restored with
