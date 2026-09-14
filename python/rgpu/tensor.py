@@ -44,7 +44,18 @@ def id_of(meta):
     try:
         return meta._rgpu_id
     except AttributeError:
-        raise RuntimeError("this tensor was never sent to the server") from None
+        # Overwhelmingly this is torch.compile with the wrong backend. The
+        # default is inductor, which cannot work here by construction: it
+        # generates code that allocates its own tensors, and rgpu never sees
+        # them, so the first one to reach the wire has no id. Saying only that
+        # a tensor was never sent describes a symptom several layers below the
+        # cause, and leaves the user with nothing to change.
+        raise RuntimeError(
+            "this tensor was never sent to the server. If you called "
+            "torch.compile, pass backend=\"rgpu\", dynamic=False: other "
+            "backends (inductor is the default) compile to code that "
+            "allocates tensors rgpu never sees, so they cannot run on an "
+            "rgpu tensor") from None
 
 
 def is_traced(t):

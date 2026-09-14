@@ -187,3 +187,25 @@ def test_a_graph_that_is_only_unshippable_still_runs_eagerly_and_correctly(caplo
         got = torch.compile(f, backend=EAGER)(x.to("rgpu"))
     assert "eagerly" in caplog.text and "a constant tensor" in caplog.text
     assert torch.allclose(got.cpu(), f(x), atol=1e-5)
+
+
+def test_the_default_backend_says_which_backend_to_use():
+    """torch.compile(model) picks inductor, which cannot work here: it generates
+    code that allocates tensors rgpu never sees, and the first one to reach the
+    wire used to raise "this tensor was never sent to the server" from deep in
+    dispatch - true, but a symptom several layers below the cause. The error has
+    to name the backend and the fix, because that is what the user has to
+    change."""
+    net = nn.Linear(8, 8).to("rgpu")
+    x = torch.randn(4, 8, device="rgpu")
+    with pytest.raises(RuntimeError, match=r'backend="rgpu"'):
+        torch.compile(net)(x).sum().item()
+
+
+def test_the_rgpu_backend_still_works_after_that():
+    """The advice the message gives has to be advice that works."""
+    net = nn.Linear(8, 8).to("rgpu")
+    x = torch.randn(4, 8, device="rgpu")
+    got = torch.compile(net, backend="rgpu", dynamic=False)(x)
+    assert got.shape == (4, 8)
+    assert torch.isfinite(got.cpu()).all()
