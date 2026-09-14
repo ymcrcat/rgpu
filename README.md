@@ -3,6 +3,21 @@
 Run PyTorch on a machine with no GPU. The tensors and the work live on a remote
 GPU host; your code runs locally and looks ordinary.
 
+## Product documentation
+
+The Fumadocs site lives in [`website/`](website/README.md). It includes setup,
+training, deployment, configuration, troubleshooting, performance, and the JAX
+roadmap. To preview it locally:
+
+```sh
+cd website
+npm ci
+npm run dev
+```
+
+Open <http://localhost:3000>. `npm run build` produces a static site in
+`website/out/` for hosting at a domain root.
+
 ## Which of the two paths do you want?
 
 They are independent. Pick one before reading further.
@@ -182,9 +197,19 @@ space replaces the runtime for this reason.
 ## Build and test, no GPU required
 
 ```sh
+./scripts/build_client.sh
+```
+
+That is the whole thing, from a fresh clone. It fetches `cuda.h` from the
+nvidia pip wheel if it is missing, regenerates the client and server code when
+`cuda.h` or anything in `codegen/` is newer than what it produced, builds the
+container image if it is not there, then builds and runs the test suite.
+
+The steps are also runnable on their own when you want just one of them:
+
+```sh
 ./scripts/fetch_headers.sh   # cuda.h from the nvidia pip wheel, about 1 MB
 ./codegen/run.sh             # parse cuda.h, generate client and server code
-./scripts/build_client.sh    # build the shim and run the test suite
 ```
 
 `build/libcuda.so.1` is the shim.

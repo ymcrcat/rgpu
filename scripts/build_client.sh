@@ -12,10 +12,29 @@ cd "$(dirname "$0")/.."
 IMAGE=rgpu-build
 PLATFORM=${PLATFORM:-linux/arm64}
 
+# Everything this build needs, so one command is enough from a fresh clone.
 if [[ ! -f third_party/cuda_include/cuda.h ]]; then
   ./scripts/fetch_headers.sh
 fi
-if [[ ! -f client/generated/client_stubs.cpp ]]; then
+
+# Regenerate when an input is newer than what it produced, not only when the
+# output is missing. Editing codegen/annotations.py and getting a build of the
+# code generated before the edit is a silent wrong answer, and the edit is the
+# whole reason anyone touches the generator.
+STUBS=client/generated/client_stubs.cpp
+regen=0
+if [[ ! -f $STUBS ]]; then
+  regen=1
+else
+  for src in codegen/*.py third_party/cuda_include/cuda.h; do
+    if [[ -f $src && $src -nt $STUBS ]]; then
+      echo "$src is newer than the generated code; regenerating"
+      regen=1
+      break
+    fi
+  done
+fi
+if (( regen )); then
   ./codegen/run.sh
 fi
 
