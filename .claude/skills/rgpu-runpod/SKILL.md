@@ -53,21 +53,23 @@ to unlock it, and `! op signin` in the session is the quickest way to ask.
 
 **Name the pod `rgpu-dev`, which is what `NAME` already defaults to.**
 Every subcommand in `scripts/runpod.sh` - `status`, `start`, `stop`, `delete` -
-finds the pod by matching `NAME`. A pod created under any other name is
-invisible to all of them. Creating one as `rgpu-yangpt` has already cost real
-money here: `status` printed "no pods: nothing is billing" for five minutes
-while an A40 at $0.49/hr was up, because the filter did not match. If you do
-create a pod under another name, you must put `NAME=that-name` in front of
-every later command, including the delete.
+finds the pod by matching `NAME`. Creating one as `rgpu-yangpt` wasted five minutes here: the wait loop
+watched for the ssh block, which `status` only printed for a name match, so a
+pod that was up and healthy looked like one that never started. If you do
+create a pod under another name, put `NAME=that-name` in front of every later
+command, including the delete.
 
 **Always run `status` first.** It is one call, it costs nothing, and it stops
 you renting a second pod while one is already running.
 
-**`status` does NOT list every pod on the account** - it lists pods matching
-`NAME`. So "nothing is billing" means "nothing *called `rgpu-dev`* is
-billing", which is not the same thing and is exactly the reassurance you do
-not want to be wrong about. To see the whole account, ask the API directly and
-filter nothing:
+**What the `NAME` filter does and does not cover.** `status`'s summary table
+is unfiltered and always lists every pod. `start`, `stop` and `delete` are
+not: they match on `NAME`. Before this was fixed, `stop` and `delete` printed
+"no pod named rgpu-dev" and exited **0** - success - while a differently named
+pod went on billing. They now list any such pod and exit non-zero, and
+`status` prints the ssh block for every pod rather than only a name match.
+
+To see the whole account without going through the script at all:
 
 ```sh
 curl -s https://rest.runpod.io/v1/pods \

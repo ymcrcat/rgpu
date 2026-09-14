@@ -20,7 +20,11 @@ NAME=${NAME:-rgpu-dev}
 SSH_KEY=${SSH_KEY:-$HOME/.ssh/rgpu_runpod}
 # An RTX A4000 or A5000 is around twenty cents an hour and has more than enough
 # memory for this. Ampere is sm_86, which the test fatbin already targets.
-GPUS=${GPUS:-'["NVIDIA RTX A5000","NVIDIA RTX A4000","NVIDIA GeForce RTX 3090"]'}
+GPUS=${GPUS:-'["NVIDIA RTX A5000","NVIDIA RTX A4000","NVIDIA GeForce RTX 3090","NVIDIA A40"]'}
+# Community cloud has repeatedly had no capacity for these cards, and a create
+# that finds none fails without saying why. Secure cloud costs more but is
+# actually available; override with CLOUD=COMMUNITY to try the cheap one first.
+CLOUD=${CLOUD:-SECURE}
 # CUDA 12.8.1 with torch 2.9.1: matches the headers the shims are generated
 # from. Includes an ssh server, which a bare nvidia/cuda image does not.
 IMAGE=${IMAGE:-runpod/pytorch:1.2.0-rc.162-cu1281-torch291-ubuntu2204}
@@ -52,6 +56,21 @@ except Exception:
     sys.stderr.write('runpod API did not return JSON:\n  %s\n' % raw[:300].strip())
     sys.exit(1)
 $1
+"
+}
+
+all_ids() {
+  api GET /pods | parse "print(' '.join(p['id'] for p in doc))"
+}
+
+# Pods on the account that this NAME does not match. Printed by stop and
+# delete, which would otherwise report success while one of these bills on.
+others() {
+  api GET /pods | parse "
+for p in doc:
+    if p.get('name') != '$NAME':
+        print('  %s %s %s \$%s/hr' % (p['id'], p.get('name'),
+              p.get('desiredStatus'), p.get('costPerHr')))
 "
 }
 
@@ -95,7 +114,7 @@ print(json.dumps({
   "imageName": "$IMAGE",
   "gpuTypeIds": json.loads('$GPUS'),
   "gpuCount": 1,
-  "cloudType": "COMMUNITY",
+  "cloudType": "$CLOUD",
   "computeType": "GPU",
   "containerDiskInGb": 40,
   "volumeInGb": 0,
@@ -137,8 +156,10 @@ for p in doc:
     print('%-16s %-12s %-9s \$%s/hr %s' % (p.get('id'), p.get('name'),
           p.get('desiredStatus'), p.get('costPerHr'), m.get('gpuTypeId') or ''))
 "
-    id=$(pod_id)
-    [[ -n "$id" ]] && { echo; show "$id"; }
+    for one in $(all_ids); do
+      echo
+      show "$one"
+    done
     exit 0
     ;;
   start)
@@ -155,7 +176,17 @@ for p in doc:
     ;;
   stop)
     id=$(pod_id)
-    [[ -n "$id" ]] || { echo "no pod named $NAME"; exit 0; }
+    if [[ -z "$id" ]]; then
+      echo "no pod named $NAME"
+      rest=$(others)
+      [[ -z "$rest" ]] || {
+        echo "but these pods ARE on the account and still billing:" >&2
+        echo "$rest" >&2
+        echo "stop one with: NAME=<its-name> $0 stop" >&2
+        exit 1
+      }
+      exit 0
+    fi
     api POST "/pods/$id/stop" >/dev/null
     echo "stopped $id; the GPU is released, the disk still costs a little"
     ;;
@@ -164,7 +195,17 @@ for p in doc:
     ids=$(api GET /pods | parse "
 print(' '.join(p['id'] for p in doc if p.get('name') == '$NAME'))
 ")
-    [[ -n "$ids" ]] || { echo "no pod named $NAME"; exit 0; }
+    if [[ -z "$ids" ]]; then
+      echo "no pod named $NAME"
+      rest=$(others)
+      [[ -z "$rest" ]] || {
+        echo "but these pods ARE on the account and still billing:" >&2
+        echo "$rest" >&2
+        echo "delete one with: NAME=<its-name> $0 delete" >&2
+        exit 1
+      }
+      exit 0
+    fi
     id=$ids
     # Nothing on a community pod's container disk survives a stop anyway, so
     # deleting usually costs nothing that stopping would have kept.
@@ -182,7 +223,18 @@ print(' '.join(p['id'] for p in doc if p.get('name') == '$NAME'))
     # case that leaves something billing.
     sleep 3
     left=$(api GET /pods | parse "print(len(doc))")
-    echo "pods remaining on the account: $left"
+    if [[ "$left" == "0" ]]; then
+      echo "pods remaining on the account: 0, nothing is billing"
+    else
+      echo "WARNING: $left pod(s) still on the account, still billing:" >&2
+      others >&2
+      api GET /pods | parse "
+for p in doc:
+    if p.get('name') == '$NAME':
+        print('  %s %s %s' % (p['id'], p.get('name'), p.get('desiredStatus')))
+" >&2
+      exit 1
+    fi
     ;;
   *)
     echo "usage: $0 {create|start|status|stop|delete}" >&2
