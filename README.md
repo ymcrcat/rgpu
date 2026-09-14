@@ -127,6 +127,7 @@ TF32 is off by default on a CUDA device so results match a CPU reference; set
 | `RGPU_OPSERVER` | `host:port` of the op server, default `127.0.0.1:9720` |
 | `RGPU_TF32` | `1` to allow TF32 matmuls and convolutions on the server |
 | `RGPU_ALLOW_VERSION_MISMATCH` | `1` to connect to a server whose torch differs |
+| `RGPU_ADVISE_AFTER` | messages before suggesting graph shipping, default `50000` |
 | `RGPU_SESSION_GRACE` | seconds the server keeps a session whose connection dropped, default `120` |
 
 ## Limits

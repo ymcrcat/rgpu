@@ -400,3 +400,48 @@ def test_reconnect_shares_one_recovery_deadline_across_calls(monkeypatch):
             calls += 1
             conn._reconnect()
     assert calls < 100   # gave up once the shared deadline passed, not after 100 successes
+
+
+# --- the graph-shipping hint --------------------------------------------------
+#
+# Graph shipping is opt-in and undiscoverable: a session can send a hundred
+# thousand messages that torch.compile would have cut to a third, and nothing
+# says so. Message count is the currency of a remoting backend, so the client
+# says it once, when the number is large enough that the advice is worth
+# hearing.
+
+def test_a_chatty_session_is_told_about_graph_shipping(conn, caplog):
+    conn.advise_after = 5
+    with caplog.at_level("INFO", logger="rgpu"):
+        for i in range(10):
+            conn.post(wire.SEED, i)
+    said = [r for r in caplog.records if "torch.compile" in r.getMessage()]
+    assert len(said) == 1, "said %d times" % len(said)
+    assert 'backend="rgpu"' in said[0].getMessage()
+
+
+def test_the_hint_is_given_once_however_long_the_session_runs(conn, caplog):
+    conn.advise_after = 5
+    with caplog.at_level("INFO", logger="rgpu"):
+        for i in range(60):
+            conn.post(wire.SEED, i)
+    said = [r for r in caplog.records if "torch.compile" in r.getMessage()]
+    assert len(said) == 1
+
+
+def test_a_quiet_session_is_left_alone(conn, caplog):
+    conn.advise_after = 1000
+    with caplog.at_level("INFO", logger="rgpu"):
+        for i in range(10):
+            conn.post(wire.SEED, i)
+    assert not [r for r in caplog.records if "torch.compile" in r.getMessage()]
+
+
+def test_a_session_that_already_ships_graphs_is_not_advised(conn, caplog):
+    """The advice is to do what this session is already doing."""
+    conn.advise_after = 5
+    with caplog.at_level("INFO", logger="rgpu"):
+        conn.post(wire.COMPILE, 1, [["placeholder"]], "eager", None)
+        for i in range(30):
+            conn.post(wire.SEED, i)
+    assert not [r for r in caplog.records if "torch.compile" in r.getMessage()]

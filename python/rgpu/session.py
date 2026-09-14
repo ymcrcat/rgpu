@@ -87,6 +87,13 @@ class Connection:
         self.had_session = False
         self._recovery_deadline = None   # shared across _reconnect() calls; see _reconnect
         self._recovery_delay = None      # ditto: the backoff also has to persist
+        # Graph shipping is opt-in and undiscoverable, and on a remoting
+        # backend message count is the currency: a traceable workload can send
+        # about a third as many. Said once, and only when the number is big
+        # enough that it is worth interrupting for.
+        self.advise_after = _env_int("RGPU_ADVISE_AFTER", 50000)
+        self.advised = False
+        self.ships_graphs = False
         self.flush_ops = _env_int("RGPU_FLUSH_OPS", 64)
         self.flush_bytes = _env_int("RGPU_FLUSH_BYTES", 256 * 1024)
         # Keepalive is the primary detector of a peer that has gone away: it
@@ -159,6 +166,16 @@ class Connection:
         self.pending.append(entry)
         self.pending_bytes += n
         self.stats["messages"] += 1
+        if kind == wire.COMPILE:
+            self.ships_graphs = True
+        elif (not self.advised and not self.ships_graphs
+              and self.stats["messages"] >= self.advise_after):
+            self.advised = True
+            log.info(
+                "rgpu: this session has sent %d messages. A traceable workload "
+                'can send far fewer with torch.compile(model, backend="rgpu", '
+                "dynamic=False), which ships the graph once instead of every op",
+                self.stats["messages"])
         if self.replay_possible:
             self.unacked.append(entry)
             self.unacked_bytes += n
