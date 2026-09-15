@@ -96,10 +96,46 @@ can be obtained or built for the GPU host, transparent remote `jax.Array`
 might not need a hand-written PJRT plugin at all — which is the expensive part
 of the plan's milestone 3.
 
-Not yet investigated: whether a proxy server binary is distributed, what
-transport it speaks, and how its version couples to jaxlib. **This should be
-checked before any PJRT plugin is written**, because it could remove most of
-that work.
+### What the client turns out to be
+
+Investigated. The client half is real, usable, and better than expected:
+
+- **It is a supported extension point**, not an internal: `jax.extend.backend`
+  re-exports `ifrt_proxy`.
+- **Transport is gRPC, and only gRPC.** The address must be
+  `grpc://host:port`; `http://` is rejected with "available transports are:
+  grpc", and a bare `host:port` is rejected outright.
+- **It defaults to ALTS credentials** — Google-internal transport security, so
+  an ordinary server is refused with `INVALID_ARGUMENT: Invalid credentials`
+  before anything else can go wrong.
+- **`IFRT_PROXY_USE_INSECURE_GRPC_CREDENTIALS=true` turns that off**, which is
+  what makes it usable over an ssh tunnel. The value must be exactly lowercase
+  `true`: `1`, `TRUE`, `True` and `yes` all silently keep ALTS, with no warning
+  that the setting was ignored. That is a long debugging session for anyone who
+  guesses `=1`.
+- Other knobs present: `IFRT_PROXY_CRASH_ON_DISCONNECT`,
+  `IFRT_PROXY_GRPC_MAX_ONGOING_HOST_BUFFER_{STORES,LOOKUPS}`,
+  `IFRT_PROXY_GRPC_LARGE_TRANSFER_OPTIMIZATION_{THRESHOLD_BYTES,DIRECTORY}`.
+  The last two suggest bulk transfer already has a tuned path, which is exactly
+  the weight-upload cost that dominated the torch measurements.
+
+### The server is not distributed
+
+- No PyPI package: `ifrt-proxy`, `ifrt_proxy`, `xla-ifrt-proxy` and
+  `jax-ifrt-proxy` all resolve to nothing.
+- Not in jaxlib. `_ifrt_proxy.so` is a 49K nanobind wrapper exposing exactly
+  one entry point, `get_client`; the implementation lives in
+  `libjax_common.dylib` and contains no IFRT proxy server code. jaxlib is built
+  from the same targets on every platform, so the Linux CUDA wheel is very
+  unlikely to differ — though that was not directly verified, since checking it
+  needs a Linux host.
+
+So the server has to be built from OpenXLA (`xla/python/ifrt_proxy/server`)
+with bazel. That is real work, but it is a *build* problem against an existing,
+maintained implementation rather than a protocol and C-API design problem.
+
+**This is still far cheaper than writing a PJRT plugin**, and it is the thing
+to try first. The exact bazel target has not been confirmed.
 
 ## Status
 
