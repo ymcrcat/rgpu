@@ -1,0 +1,43 @@
+---
+title: Configuration reference
+description: Settings for each independent remoting path.
+---
+
+## Python device
+
+| Setting | Read by | Default / behavior |
+| --- | --- | --- |
+| `RGPU_OPSERVER` | Client | `127.0.0.1:9720` |
+| `RGPU_ALLOW_VERSION_MISMATCH` | Client | Set `1` to bypass version checking; matching major.minor is supported |
+| `RGPU_ADVISE_AFTER` | Client | `50000` messages before suggesting graph shipping |
+| `RGPU_TF32` | Server | Disabled; set `1` to allow TF32 matmuls and convolutions |
+| `RGPU_SESSION_GRACE` | Server | `120` seconds to retain a dropped session |
+
+Set server variables in the environment that starts `rgpu-opserver`; setting `RGPU_TF32` only on the laptop does not configure the remote server.
+
+```sh
+RGPU_TF32=1 rgpu-opserver
+```
+
+TF32 trades numerical behavior for performance. Compare results at your workload's tolerance before enabling it.
+
+`RGPU_ALLOW_VERSION_MISMATCH=1` is a diagnostic escape hatch, not a compatibility guarantee. Do not use a mismatched benchmark run as the supported installation recipe.
+
+## CUDA shim
+
+| Setting | Read by | Default / behavior |
+| --- | --- | --- |
+| `RGPU_SERVER` | Client | `127.0.0.1:9713` |
+| `RGPU_PORT` | Server | `9713` |
+| `RGPU_VERBOSE` | Shim | Log forwarded calls |
+| `RGPU_BATCH` | Client | Batching enabled; set `0` for synchronous debugging |
+| `RGPU_CUBLAS`, `RGPU_CUBLASLT`, `RGPU_CUDNN` | Server | Override paths to real math libraries |
+| `RGPU_SESSION_GRACE` | Server | `120` seconds |
+| `RGPU_MAX_SESSIONS` | Server | `64`, including sessions in their grace period |
+| `RGPU_RECONNECT_SECONDS` | Client | `60` seconds |
+| `RGPU_MAX_CLIENT_THREADS` | Server | `4096` live client threads per session |
+| `RGPU_MAX_CONTEXT_STACK` | Server | `64` entries per client thread |
+
+`RGPU_BATCH` belongs to the CUDA path. Do not assume it controls Python opserver batching.
+
+For command options, use `rgpu-run --help` and `rgpu-opserver --help`. For network restrictions, read [deployment](/docs/operations/).

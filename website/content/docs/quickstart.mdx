@@ -1,0 +1,82 @@
+---
+title: PyTorch quickstart
+description: Connect a CPU-only client to a GPU host and run your first remote tensor operation.
+---
+
+## Prerequisites
+
+- A client with Python 3.10 or newer. A Mac is supported without CUDA or Docker for this path.
+- A GPU host with a working NVIDIA driver and CUDA-enabled PyTorch.
+- SSH access to that host and a checkout of this repository on both machines.
+- Matching PyTorch major.minor versions on client and server. The current package requires `torch>=2.14`; confirm that a compatible CUDA wheel and driver are available before choosing a host.
+
+Run all installation commands from the repository root, preferably inside a virtual environment. Installing a package does not verify GPU availability.
+
+## Start the GPU server
+
+Install a CUDA-enabled PyTorch build compatible with the host driver using the [official PyTorch installation selector](https://pytorch.org/get-started/locally/), then install rGPU:
+
+```sh
+python -m pip install -e python
+python -c 'import torch; print(torch.__version__); print(torch.cuda.is_available())'
+rgpu-opserver
+```
+
+The availability check must print `True`. The server defaults to CUDA and listens on `127.0.0.1:9720`. Keep it running while the client connects.
+
+Check the installed Torch version after installation, since dependency resolution may have changed it.
+
+## Install the client
+
+```sh
+python -m pip install -e python
+python -c 'import torch; print(torch.__version__)'
+```
+
+A CPU-only Torch build is sufficient. Compare the version with the server: major.minor must match.
+
+Save this as `smoke.py`:
+
+```python
+import rgpu
+import torch
+
+x = torch.ones(4, device="rgpu")
+print((x * 2).sum().item())  # 8.0
+```
+
+## Run through SSH
+
+```sh
+rgpu-run --host user@gpu-host python smoke.py
+```
+
+The launcher opens the tunnel, points `RGPU_OPSERVER` at it, runs the child command and closes the tunnel. It does not install or start the remote server, or change device placement in your script.
+
+For a custom SSH port or key:
+
+```sh
+rgpu-run --host user@gpu-host --ssh-port 2222 -i ~/.ssh/gpu_key python smoke.py
+```
+
+## Use an existing tunnel
+
+In a separate terminal:
+
+```sh
+ssh -N -L 9720:127.0.0.1:9720 user@gpu-host
+```
+
+Then run:
+
+```sh
+RGPU_OPSERVER=127.0.0.1:9720 python smoke.py
+```
+
+Port 9720 is the Python opserver. Port 9713 belongs to the incompatible CUDA shim server.
+
+## Try the protocol without a GPU
+
+Start `rgpu-opserver --device cpu` in another terminal, then run the same smoke test against localhost. This checks the Python client/server path; it does not establish CUDA compatibility or GPU performance.
+
+Next: [train a model](/docs/training/) or [diagnose connection problems](/docs/troubleshooting/).

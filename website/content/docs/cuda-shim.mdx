@@ -1,0 +1,65 @@
+---
+title: CUDA shim
+description: Run the Linux CUDA API remoting path while keeping device="cuda".
+---
+
+This path intercepts CUDA driver, runtime and supported math-library calls. It is independent of the Python `rgpu` device. The client needs Linux; a Mac uses a Linux container.
+
+## Build and test without a GPU
+
+With Docker running and Python 3 with pip installed, run this from the repository root:
+
+```sh
+./scripts/build_client.sh
+```
+
+This fetches missing CUDA headers, regenerates code when needed, builds the
+container image if absent, then compiles the shim and runs the test suite.
+You do not need to run `fetch_headers.sh` or `codegen/run.sh` separately;
+those are available when you want to run only an individual preparation step.
+
+The driver shim is `build/libcuda.so.1`. GPU-free tests exercise client serialization and server dispatch against a fake CUDA driver. They cannot establish support for every real GPU workload.
+
+## Run the server
+
+On a GPU host with the NVIDIA driver and CUDA toolkit:
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build -j
+./build/rgpu-server
+```
+
+**Restrict inbound port 9713 before starting the server.** The current C++ server binds all IPv4 interfaces and has no authentication. An SSH tunnel does not close the externally listening port. Use host/cloud firewall rules to deny untrusted access. See [deployment](/docs/operations/).
+
+## Run a smoke test through a tunnel
+
+```sh
+ssh -N -L 9713:127.0.0.1:9713 user@gpu-host
+```
+
+In another client terminal:
+
+```sh
+LD_LIBRARY_PATH=build RGPU_SERVER=127.0.0.1:9713 ./build/rpc_smoke
+```
+
+## Run PyTorch
+
+For a GPU-free client, `scripts/run_torch.sh` builds and runs the container path. It downloads PyTorch and CUDA libraries, which require several gigabytes of disk space.
+
+For a loopback check on an existing GPU host:
+
+```sh
+./scripts/remote_torch.sh user@gpu-host
+```
+
+The test ladder checks CUDA availability, memory operations, math libraries and ResNet-18 inference against a CPU reference. Inspect which libraries actually load.
+
+`LD_LIBRARY_PATH` alone is insufficient for PyTorch: library RPATH and absolute-path preloads can take precedence. Use the provided scripts, which arrange interception, rather than assuming the driver shim alone covers the stack. The runtime, cuBLAS, cuBLASLt and cuDNN need their corresponding shims too.
+
+## Compatibility limits
+
+Managed memory and zero-copy host mapping are unsupported across this network boundary. Unimplemented API stubs return `CUDA_ERROR_NOT_SUPPORTED`; successful startup does not imply every CUDA feature is available.
+
+See the generated `codegen/report.txt` after code generation for the API coverage breakdown. For diagnosis, `RGPU_BATCH=0` disables deferred batching so failures surface closer to their source, at the cost of more round trips.

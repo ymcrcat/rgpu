@@ -1,0 +1,68 @@
+---
+title: Training and graph compilation
+description: Use autograd and keep training state on the remote device.
+---
+
+## Move the model before its first forward pass
+
+Construct the model, move it to `rgpu`, and then construct the optimizer. Move inputs and targets to the same device.
+
+```python
+import rgpu
+import torch
+from torch import nn
+
+model = nn.Sequential(nn.Linear(16, 32), nn.ReLU(), nn.Linear(32, 1)).to("rgpu")
+optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+x = torch.randn(64, 16).to("rgpu")
+target = torch.randn(64, 1).to("rgpu")
+
+for step in range(100):
+    optimizer.zero_grad()
+    loss = (model(x) - target).square().mean()
+    loss.backward()
+    optimizer.step()
+    if step % 10 == 0:
+        print(step, loss.item())
+
+print("Final loss:", loss.item())
+```
+
+This is a small API example with synthetic data, not a performance benchmark. Downloading a loss every step adds a host wait. Decide how frequently you need metrics.
+
+Moving a model after a grad-tracking forward can fail because rGPU swaps parameter tensors and autograd still holds references to them. Move before the first forward, instead of trying to migrate a live autograd graph.
+
+## Ship compiled graphs
+
+Use rGPU's compiler backend explicitly:
+
+```python
+model = torch.compile(
+    model,
+    backend=rgpu.compile_backend(),
+    dynamic=False,
+)
+```
+
+Forward and backward graphs are serialized and sent to the server. The server compiles them; repeated calls refer to the stored graph. This reduces operation messages, but compilation cost must be amortized over repeated work.
+
+For a diagnostic comparison that ships graphs without server-side Inductor compilation:
+
+```python
+model = torch.compile(
+    model,
+    backend=rgpu.compile_backend(compiler="eager"),
+    dynamic=False,
+)
+```
+
+A bare `torch.compile(model)` selects PyTorch's default backend, not rGPU's graph-shipping backend. Use the explicit backend above.
+
+## Know the boundaries
+
+- Use fixed shapes for the compiled path. Some unshippable graphs fall back to eager remote operations, with a warning.
+- Non-ATen custom operators are unsupported in both eager and compiled execution.
+- Data-dependent output shapes require a server response and cannot use an `out=` tensor on that path.
+- Keep parameters, optimizer state and repeated inputs remote where the workload permits.
+
+Read [performance guidance](/docs/performance/) before treating reduced message counts as a speedup.

@@ -1,0 +1,48 @@
+---
+title: Troubleshooting and limits
+description: Resolve common setup, device placement and compilation failures.
+---
+
+## Connection refused or handshake failure
+
+Check that the server is running, the SSH tunnel is open, and the client points to the correct local port. Python uses `RGPU_OPSERVER` and port 9720. The CUDA shim uses `RGPU_SERVER` and port 9713. The two protocols cannot connect to one another.
+
+## PyTorch version mismatch
+
+Print `torch.__version__` in both environments after installation. Align major.minor versions and verify a CUDA-enabled server wheel works with its driver. Avoid making `RGPU_ALLOW_VERSION_MISMATCH=1` the permanent fix.
+
+## CUDA is unavailable on the server
+
+Run `python -c 'import torch; print(torch.cuda.is_available())'` on the GPU host. Check the driver and installed Torch build. `rgpu-opserver --device cpu` is an explicit test mode, not a GPU setup repair.
+
+## “Couldn't swap” a model parameter
+
+Move the model to `rgpu` before its first grad-tracking forward pass. An existing autograd graph can hold parameter references that prevent tensor swapping. Reconstruct the model on the intended device and load saved weights if you need a fresh training setup.
+
+## torch.compile selects the wrong backend
+
+Pass `backend=rgpu.compile_backend()` explicitly, with `dynamic=False` for fixed-shape graph shipping. For diagnosis, `compiler="eager"` keeps graph shipping while avoiding server-side Inductor compilation.
+
+## A custom operation fails
+
+The Python opserver resolves ATen operations. A non-ATen custom operator has no supported server implementation, even if the graph falls back to eager execution. Replace it with supported operations or treat it as a missing feature.
+
+## Data-dependent output with out=
+
+The client cannot preallocate an output whose size depends on GPU data. Use the operation without `out=`; expect a host wait to obtain the result metadata.
+
+## The session is gone
+
+The GPU process may have restarted, or the disconnected session may have expired. Its old tensor handles are no longer valid. Restart the workload and restore a saved checkpoint. Extending a grace period cannot recover memory after a server restart.
+
+## The CUDA shim starts but math fails
+
+Check that all required runtime and math-library shims are loaded. PyTorch may preload stock libraries by absolute path. Use the provided test scripts and inspect loaded library paths. An unimplemented driver call should report `CUDA_ERROR_NOT_SUPPORTED`.
+
+## Remote execution is slower
+
+Start with `rgpu.stats()` on the Python path. Look for repeated host reads, small batches, large uploads and compilation cost over a short run. Follow the [measurement checklist](/docs/performance/) before selecting an optimization.
+
+## Report a problem
+
+Open a [GitHub issue](https://github.com/ymcrcat/rgpu/issues) with the backend, client/server versions, host GPU and driver, command, minimal reproducer and full error. Include statistics or timings when relevant. Remove credentials and private input data from logs.

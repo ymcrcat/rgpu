@@ -1,0 +1,13 @@
+{
+  "title": "Documentation",
+  "pages": [
+    "index",
+    "quickstart",
+    "training",
+    "cuda-shim",
+    "operations",
+    "configuration",
+    "performance",
+    "troubleshooting"
+  ]
+}

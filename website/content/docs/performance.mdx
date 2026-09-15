@@ -1,0 +1,40 @@
+---
+title: Performance
+description: Count synchronization points and completed work, not just messages.
+---
+
+## Measure your own workload
+
+Remote execution costs include local dispatch, encoding, transfer, GPU execution and host waits. Small operations with frequent host reads can spend more time on the network than on the GPU.
+
+For the Python device:
+
+```python
+print(rgpu.stats())
+```
+
+Inspect `messages`, `waits`, `bytes_out` and `bytes_in`. A message is not necessarily a network round trip: rGPU batches work until an answer is required.
+
+Reduce unnecessary `.item()` calls, tensor downloads and printing in the inner loop. Keep training state remote. Try [graph compilation](/docs/training/) for repeated work, then measure whether compilation pays for itself.
+
+## Recorded evidence, not new benchmarks
+
+The repository's [performance notes](https://github.com/ymcrcat/rgpu/blob/main/docs/performance-notes.md) record September 13–14, 2026 runs on one Apple M3 client and a rented NVIDIA A40. These are historical single-run observations, not fresh measurements from this documentation build.
+
+| Workload / configuration | Recorded result | Qualification |
+| --- | --- | --- |
+| nanoGPT, batch 64, context 256, 20 steps | 3.04 s/step local MPS opserver; 1.04 s/step remote A40 at 116 ms RTT | Both use rGPU; the local baseline is not native MPS |
+| Same run, remote traffic | 139,931 messages, 5 waits | Counts span the recorded run, not each step |
+| Graph shipping, batch 8, context 64, local MPS server | 139,931 → 44,880 messages; 7.2 → 8.3 s train loop | Fewer messages, slower elapsed time in this short run |
+
+The A40 run used Torch 2.11 on the server and 2.14 on the client with the version-mismatch override. That is outside the supported matching-version configuration. Startup, upload, train-loop time and generation are separate measurements; do not compare their totals interchangeably.
+
+An older CUDA-path measurement on an RTX 3090 over loopback reports 20.3 μs per launch without batching versus 3.2 μs with batching **including synchronization**, across 2,000 launches. This is a separate workload and backend, not a prediction for WAN training.
+
+## Make a defensible comparison
+
+1. Hold hardware, shapes, precision, software versions and logging frequency constant.
+2. Separate startup and compilation from warmed execution.
+3. Wait for completed work at the measurement boundary. Submission-only timing hides deferred execution.
+4. Record RTT, transfer bytes, waits, sample counts and variability.
+5. Compare the same workload before and after one change.

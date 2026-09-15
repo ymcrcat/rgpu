@@ -1,0 +1,33 @@
+---
+title: Overview
+description: Run local Python against a remote GPU. Choose the integration that fits your application.
+---
+
+rGPU keeps your application on the client while GPU state and work live on another machine. There are two independent integrations. Their servers and protocols are not interchangeable.
+
+## Choose a path
+
+| | PyTorch device | CUDA shim |
+| --- | --- | --- |
+| Application device | `rgpu` | `cuda` |
+| Client | CPU-only PyTorch; native macOS supported | Linux with CUDA runtime and math-library shims |
+| Server | `rgpu-opserver`, Python and PyTorch | `rgpu-server`, C++ and NVIDIA driver |
+| Default port | 9720 | 9713 |
+| Unit of work | PyTorch operations or compiled graphs | CUDA driver/runtime and math-library calls |
+| Start here | [PyTorch quickstart](/docs/quickstart/) | [CUDA shim guide](/docs/cuda-shim/) |
+
+**Start with the PyTorch device** when you can change device placement in your program. It avoids a local CUDA installation and supports a Mac client directly.
+
+Choose the CUDA shim when the application needs to keep `device="cuda"`. On macOS this path needs a Linux container; it is not a native Mac CUDA backend.
+
+## What stays local?
+
+Python control flow stays on the client. For the PyTorch path, local tensor wrappers hold metadata and references to server tensors. Operations queue until an answer is needed. Reading a tensor back, for example with `.item()`, creates a synchronization point.
+
+With the rGPU compiler backend, graphs travel once and subsequent executions refer to them by ID. Learn how to [train and compile](/docs/training/).
+
+## Supported scope
+
+The current Python device exposes one remote device. These docs do not claim transparent distributed training or arbitrary custom operators. See [limits and troubleshooting](/docs/troubleshooting/).
+
+Both servers lack authentication. Use trusted hosts, restrict network access, and read [deployment and connection recovery](/docs/operations/).

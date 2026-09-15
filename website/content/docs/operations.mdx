@@ -1,0 +1,41 @@
+---
+title: Deployment and recovery
+description: Keep access restricted and understand what a reconnect can recover.
+---
+
+## Use the right server
+
+| | Python opserver | CUDA server |
+| --- | --- | --- |
+| Command | `rgpu-opserver` | `./build/rgpu-server` |
+| Default port | 9720 | 9713 |
+| Listen address | `127.0.0.1` by default | All IPv4 interfaces in the current implementation |
+| Access protection | SSH tunnel; keep the localhost bind | Firewall/private network restriction plus SSH tunnel |
+
+Neither protocol authenticates clients. Use only trusted hosts. Do not expose either service to the public internet. An encrypted SSH connection protects the tunnel; it does not protect a separate public listener.
+
+The Python server accepts `--bind` and `--port`; retaining the default loopback bind is the simplest deployment. The C++ server currently has no equivalent bind-address option, so restrict its port through networking controls.
+
+## Prepare an existing GPU host
+
+For the Python path, the repository includes:
+
+```sh
+./scripts/opserver_pod.sh 2.14
+```
+
+Run it on the GPU host. It creates a virtual environment, installs a matching Torch major.minor and starts the opserver detached. A compatible Torch CUDA build and driver remain prerequisites; inspect the script and logs if installation fails.
+
+For the C++ path, `scripts/deploy_server.sh user@host` copies and builds the server on an existing host. The repository also contains cloud rental scripts; these create billable resources and are not needed if you already have a GPU machine.
+
+## Recovering a connection
+
+The server retains disconnected session state for a grace period, default 120 seconds. The clients can attempt to reconnect to retained state. This handles some transport interruptions; it does not make GPU memory persistent.
+
+A server restart or expired session loses remote state. The client must not silently treat old tensor handles as new allocations. Restart the workload from a saved checkpoint when its session is lost.
+
+Reconnect details differ between the Python and CUDA protocols. Do not assume identical retry counts or error types. Keep regular application checkpoints for training that must survive server or machine loss.
+
+## Shut down deliberately
+
+Stop clients before shutting down their GPU server. A running cloud GPU may continue billing after the client exits; stopping a rented instance may still incur storage costs. Manage that instance through its provider independently of `rgpu-run`, which owns only its local tunnel and child process.
