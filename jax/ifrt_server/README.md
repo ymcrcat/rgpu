@@ -19,10 +19,54 @@ in-tree example of standing the server up over a PJRT client.
 
 ## Status
 
-**Not yet built or run.** The source is written from the upstream headers and
-the reference example; it has not been compiled, so treat the exact include
-paths and the GPU client entry point as unverified against a real checkout.
-They move between XLA releases.
+**Not yet built or run.** Our `main()` has never reached the compiler: three
+build attempts all failed earlier, inside gRPC, on XLA's own target. Treat the
+include paths and the GPU client entry point as unverified.
+
+### Build attempt, 2026-09-15
+
+Rented A40 box, 96 cores, 200 GB disk, XLA HEAD `1bfc689`, bazel 8.7.0 via
+bazelisk, `configure.py --backend=CPU`.
+
+**A full XLA build takes about 15 minutes here, not hours.** The first attempt
+ran 905 s across 6,419 actions before failing. Retries with a warm cache were
+105 s and 38 s. That makes iteration cost roughly two minutes and a few cents,
+so an earlier "budget hours" warning was wrong by an order of magnitude — on a
+many-core box. Note RunPod's API reported `vcpuCount: 9` for a machine where
+`nproc` says 96; trust `nproc`.
+
+All three failures were the same upstream target, and none involved our code:
+
+```
+external/grpc+/src/core/BUILD:11471:16
+  Compiling src/core/channelz/v2tov1/property_list.cc failed:
+  undeclared inclusion(s) in rule '@@grpc+//src/core:channelz_v2tov1_property_list'
+```
+
+`property_list.cc` includes `google/protobuf/{any,duration,timestamp}.upb.h`
+without the target declaring them — a dependency-hygiene bug in the gRPC
+revision XLA currently pins.
+
+What was tried:
+
+| flag | effect |
+|---|---|
+| none | fails the modules `layering_check` |
+| `--features=-layering_check` | gets past that, then fails Bazel's undeclared-inclusion check on the same file |
+| `--features=-strict_header_check` | **no effect** — not a feature this toolchain (`rules_ml_toolchain`) defines, so it is silently ignored |
+
+### What to try next
+
+**Pin XLA to the revision jaxlib 0.11.1 was built from, rather than HEAD.**
+This is worth doing for its own sake regardless of the build break: the IFRT
+proxy performs a version handshake between client and server, so a server built
+from HEAD may well refuse to talk to a 0.11.1 client even if it compiles. A
+matching revision fixes both problems at once, and is very likely to predate
+this gRPC breakage.
+
+Failing that, the surgical fix is patching the gRPC target to declare the upb
+deps it already includes, which means carrying a patch against an external
+repository — worse than pinning.
 
 ## Building it
 
