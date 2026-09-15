@@ -16,10 +16,10 @@ that CPU success alone does not answer it.
 | CUDA-targeted export from a CPU-only Mac | **works** |
 | Serialize / deserialize round trip | **works** |
 | Platform safety check refuses a CPU run | **works** |
-| All four cases run on a real CUDA host and match native JAX | **not yet run** |
+| All four cases run on a real CUDA host and match native JAX | **works** |
 
-Until that last row is done, cross-platform feasibility is unverified and no
-milestone 1 work should start.
+Milestone 0 passes. Cross-platform feasibility is established: JAX exported on
+a machine with no GPU runs correctly on a remote one.
 
 ## Running it
 
@@ -86,3 +86,28 @@ jax 0.11.1 / jaxlib 0.11.1, exported on macOS arm64 (CPU only).
 export really is lowered for CUDA, rather than CPU code wearing a label.
 
 All four CPU cases match native JAX exactly (`max|diff|` of 0.0).
+
+### The CUDA run
+
+Exported on an M3 Mac (CPU only), run on an NVIDIA A40 rented from RunPod,
+jax/jaxlib 0.11.1 on both sides — the tested version pair the plan asks for.
+
+```
+artifacts exported by jax 0.11.1 on ['cpu'] for 'cuda'
+running on jax 0.11.1, devices [CudaDevice(id=0)]
+
+  matmul     ok    max|diff| 0.000e+00  outputs 1  ran on ['gpu']
+  mlp_grad   ok    max|diff| 0.000e+00  outputs 5  ran on ['gpu']
+  prng       ok    max|diff| 0.000e+00  outputs 2  ran on ['gpu']
+  scan       ok    max|diff| 0.000e+00  outputs 2  ran on ['gpu']
+
+PASS: all 4 cases match native JAX within rtol=1e-06 atol=1e-06
+```
+
+Every case was bit-identical to native JAX on that GPU, the differentiated
+update and the PRNG included. Nothing needed a fallback, and no lowering was
+refused.
+
+One wrinkle worth knowing: `jax.export` takes the platform as `"cuda"`, but
+`jax.devices()[0].platform` reports `"gpu"`. A check comparing them directly
+refuses a run that should have gone ahead.

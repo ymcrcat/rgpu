@@ -178,7 +178,10 @@ def do_run(args):
     print(f"artifacts exported by jax {manifest['jax']} on {manifest['exported_on']} "
           f"for '{manifest['platform']}'")
     print(f"running on jax {jax.__version__}, devices {jax.devices()}\n")
-    if manifest["platform"] not in here:
+    # jax reports a CUDA device's platform as "gpu", while export takes "cuda".
+    aliases = {"cuda": {"cuda", "gpu"}, "cpu": {"cpu"}, "tpu": {"tpu"}}
+    runnable = aliases.get(manifest["platform"], {manifest["platform"]})
+    if not runnable & set(here):
         print(f"REFUSING: these were exported for '{manifest['platform']}' but this "
               f"machine has {here}. Run them where they were meant to run.")
         return 2
