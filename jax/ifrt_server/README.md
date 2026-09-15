@@ -55,35 +55,49 @@ What was tried:
 | `--features=-layering_check` | gets past that, then fails Bazel's undeclared-inclusion check on the same file |
 | `--features=-strict_header_check` | **no effect** — not a feature this toolchain (`rules_ml_toolchain`) defines, so it is silently ignored |
 
-### What to try next
+### The revision is now pinned
 
-**Pin XLA to the revision jaxlib 0.11.1 was built from, rather than HEAD.**
-This is worth doing for its own sake regardless of the build break: the IFRT
-proxy performs a version handshake between client and server, so a server built
-from HEAD may well refuse to talk to a 0.11.1 client even if it compiles. A
-matching revision fixes both problems at once, and is very likely to predate
-this gRPC breakage.
+`build_on_host.sh` pins XLA to **`dcf304bc5dca1932b99f740b911dbd73631a1a69`**,
+which is what jaxlib 0.11.1 was built from — read out of
+`third_party/xla/revision.bzl` at the `jax-v0.11.1` tag.
 
-Failing that, the surgical fix is patching the gRPC target to declare the upb
-deps it already includes, which means carrying a patch against an external
-repository — worse than pinning.
+That pin does two jobs:
+
+- **Protocol.** The IFRT proxy performs a version handshake, so a server built
+  from a different XLA than the client's jaxlib may refuse the connection even
+  when it compiles. Matching the revision removes that whole class of problem.
+- **The build break.** `dcf304bc` is dated 2026-08-17, a month before the HEAD
+  that failed (`1bfc689`, 2026-09-15), so it predates the gRPC breakage above.
+  Not yet confirmed by a build.
+
+To follow a different jaxlib, read the commit out of the matching jax tag
+rather than guessing:
+
+```sh
+gh api repos/jax-ml/jax/contents/third_party/xla/revision.bzl?ref=jax-vX.Y.Z \
+  -q .content | base64 -d | grep XLA_COMMIT
+```
+
+The alternative — patching gRPC to declare the upb headers it already includes
+— means carrying a patch against an external repository, which is worse than
+pinning and does nothing for the handshake.
 
 ## Building it
 
 It has to be built inside an OpenXLA checkout, because it depends on XLA
 targets that are not exposed by any released package.
 
+Copy `build_on_host.sh` to the build machine and run it there. It installs
+bazelisk, fetches the pinned XLA revision, drops our source into the tree,
+configures, and builds upstream's target before ours:
+
 ```sh
-git clone https://github.com/openxla/xla.git
-mkdir -p xla/xla/python/ifrt_proxy/rgpu
-cp rgpu_ifrt_server.cc BUILD xla/xla/python/ifrt_proxy/rgpu/
-cd xla
-./configure.py --backend=CUDA      # or --backend=CPU for the cheap first test
-bazel build -c opt //xla/python/ifrt_proxy/rgpu:rgpu_ifrt_server
+bash build_on_host.sh              # CPU backend, the cheap proof
+BACKEND=CUDA bash build_on_host.sh
 ```
 
-Budget hours, not minutes, and tens of gigabytes. A full XLA build with CUDA on
-a 9-vCPU box is the dominant cost of this whole approach.
+About fifteen minutes cold on a 96-core box, under two minutes warm, and tens
+of gigabytes of disk.
 
 **Do the CPU backend first.** `--backend=cpu` needs no CUDA in the build at
 all, and proves the part that is actually in question: that a Mac client can
