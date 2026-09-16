@@ -16,6 +16,15 @@ xla_cc_binary(
         "//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
         "//xla/pjrt/gpu:gpu_helpers",
         "//xla/pjrt/gpu:se_gpu_pjrt_client",
+        # Platform registration is an alwayslink static initialiser: without a
+        # direct dependency it is not linked in, and the server starts fine and
+        # then fails every session with
+        #   Could not find registered platform with name: "cuda"
+        "//xla/stream_executor/cuda:all_runtime",
+        # Same alwayslink story: without this the GPU client allocates device
+        # memory and then dies on
+        #   Check failed: No collectives registered for platform: cuda
+        "//xla/backends/gpu/collectives:gpu_collectives_plugin",
         "//xla/python/ifrt",
         "//xla/python/ifrt:attribute_map",
         "//xla/python/ifrt_proxy/server:grpc_server",

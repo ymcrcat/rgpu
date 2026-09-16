@@ -41,8 +41,55 @@ grpc_service_impl.cc:152] Done with IFRT session 8
 That is the plan's milestone 3 acceptance shape — real remote-backed arrays,
 `device_put`, jitted arithmetic — reached **without writing a PJRT plugin**.
 
-Verified on the CPU backend only. The GPU backend is the same binary with
-`--backend=gpu` and a CUDA build, and is not yet run.
+### GPU backend: most of the way, stops at JIT
+
+The CUDA build works and the remote A40 is fully visible from the Mac. What
+does not yet work is executing a compiled computation.
+
+Working:
+
+```
+StreamExecutor [0]: NVIDIA A40, Compute Capability 8.6 (Driver: 13.0.0[580.159.4])
+backend has 1 device(s), platform cuda
+Addressable PjRt-IFRT device: CudaDevice(id=0)
+```
+```
+connected to grpc://127.0.0.1:12345
+  devices: [CudaDevice(id=0)]      <- the remote A40, seen from macOS
+  placed  : (3, 4) on cuda:0       <- device_put to the remote GPU
+```
+
+So the handshake, device discovery and host-to-remote-GPU transfer all work.
+`jax.jit` then dies: the server logs
+`se_gpu_pjrt_compiler.cc:382 Performing a JIT compilation` and the session
+ends, the client seeing `Stream removed (Socket closed)`. **No fatal error is
+logged and the server process stays alive**, so a worker thread is going down
+without reporting. Diagnosing it needs a core dump or gdb rather than logs.
+
+Ruled out: XLA autotuning (`--xla_gpu_autotune_level=0` changes nothing),
+memory (503 GB, no OOM), and missing ptxas.
+
+Worth a look next: the box's CUDA is inconsistent — `ptxas` on disk is 12.8
+while XLA reports `Runtime: 13.2.0; Toolkit: 13.2.0` from its hermetic CUDA,
+against a 13.0 driver. A pinned XLA compiled for one CUDA and JIT-compiling
+against another is a plausible cause, and a pod image whose CUDA matches the
+pin would test it cheaply.
+
+### Two BUILD deps the compiler cannot tell you about
+
+Both are `alwayslink` static-initialiser registries: omit them and the binary
+builds and starts perfectly, then fails at runtime.
+
+| dep | symptom without it |
+|---|---|
+| `//xla/stream_executor/cuda:all_runtime` | `Could not find registered platform with name: "cuda"` |
+| `//xla/backends/gpu/collectives:gpu_collectives_plugin` | allocates 33 GiB on the GPU, then `Check failed: No collectives registered for platform: cuda` |
+
+Neither is reachable by reading headers, which is how the rest of the dep list
+was written. They are in `BUILD` now.
+
+The CUDA build took **4h22m** for 15,382 actions and a 349 MB binary, against
+74 minutes for CPU. Incremental rebuilds after a dep change were 84-137 s.
 
 ### What it cost
 
