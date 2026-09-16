@@ -1,5 +1,8 @@
 # rgpu for JAX
 
+Results and conclusions for the whole effort are in
+[`docs/jax-findings.md`](../docs/jax-findings.md). This file covers milestone 0 only.
+
 Work towards `docs/jax-extension-plan.md`. Nothing here is a JAX backend yet:
 this is milestone 0, which asks one question and builds no remoting.
 

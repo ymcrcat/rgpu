@@ -140,6 +140,13 @@ For a remote GPU: `scripts/opserver_pod.sh <major.minor>` sets up the server on
 a fresh box, and `rgpu-run --host user@gpuhost python train.py` opens the
 tunnel and runs the workload.
 
+## JAX
+
+Measured separately in [jax-findings.md](jax-findings.md): cross-platform export
+is bit-identical on a remote A40, and transparent remote `jax.Array` works
+through the IFRT proxy. No JAX throughput numbers yet — the GPU `jit` path does
+not run, so there is nothing honest to time.
+
 ## Open threads
 
 - #10 — performance proposal; item 1 (queue byte accounting) done.

@@ -1,6 +1,14 @@
 # Extending rGPU to JAX
 
-Status: proposed; no implementation or JAX benchmarks yet. Updated 2026-09-14.
+Status: **partly superseded by results.** See
+[jax-findings.md](jax-findings.md), which reports what was actually built and
+run on 2026-09-15/16. In short: transparent remote JAX works through the IFRT
+proxy, so milestone 1 (the explicit `jax.export` API) can be skipped and
+milestone 3 (writing a PJRT plugin) is unnecessary. The reasoning below is kept
+as the proposal it was; where it conflicts with the findings, the findings win.
+
+Original status line: proposed; no implementation or JAX benchmarks yet.
+Updated 2026-09-14.
 Code inspected at `b87d874`; existing uncommitted connection/test edits are outside this proposal.
 
 ## Recommendation
