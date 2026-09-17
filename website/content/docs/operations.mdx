@@ -21,10 +21,16 @@ The Python server accepts `--bind` and `--port`; retaining the default loopback 
 For the Python path, the repository includes:
 
 ```sh
-./scripts/opserver_pod.sh 2.14
+./scripts/deploy_opserver.sh user@gpu-host -p 2222 -i ~/.ssh/gpu_key
 ```
 
-Run it on the GPU host. It creates a virtual environment, installs a matching Torch major.minor and starts the opserver detached. A compatible Torch CUDA build and driver remain prerequisites; inspect the script and logs if installation fails.
+Run it on the client with its Python environment active. It copies the Python
+backend, detects the client's Torch major.minor, and starts the opserver
+detached. Pass `--torch-version MAJOR.MINOR` to select the remote version
+explicitly. A compatible Torch CUDA build and driver remain prerequisites;
+inspect `~/opserver.log` on the GPU host if startup fails. The server virtual
+environment is `~/opvenv`; set `RGPU_OPSERVER_VENV` or `RGPU_OPSERVER_LOG` on
+the host to override those locations.
 
 For the C++ path, `scripts/deploy_server.sh user@host` copies and builds the server on an existing host. The repository also contains cloud rental scripts; these create billable resources and are not needed if you already have a GPU machine.
 

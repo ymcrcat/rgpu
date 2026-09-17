@@ -47,9 +47,9 @@ minutes because nothing ever looked at the whole list.
 ./scripts/runpod.sh delete    # destroy it, stops the disk charge too
 ```
 
-The API key comes from 1Password at `op://YOUR_VAULT/Runpod/api-key`. If a
-command fails with an authorization timeout the vault has locked; the user has
-to unlock it, and `! op signin` in the session is the quickest way to ask.
+Set `RUNPOD_API_KEY`, or set `OP_ITEM` to a 1Password secret reference. If a
+command using `OP_ITEM` fails with an authorization timeout, the user has to
+unlock the vault before retrying.
 
 **Name the pod `rgpu-dev`, which is what `NAME` already defaults to.**
 Every subcommand in `scripts/runpod.sh` - `status`, `start`, `stop`, `delete` -
@@ -73,7 +73,7 @@ To see the whole account without going through the script at all:
 
 ```sh
 curl -s https://rest.runpod.io/v1/pods \
-  -H "Authorization: Bearer $(op read 'op://YOUR_VAULT/Runpod/api-key')" |
+  -H "Authorization: Bearer $RUNPOD_API_KEY" |
   python3 -c "import json,sys
 for p in json.load(sys.stdin): print(p['id'], p['name'], p.get('desiredStatus'), p.get('costPerHr'))"
 ```

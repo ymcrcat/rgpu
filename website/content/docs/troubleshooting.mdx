@@ -11,6 +11,14 @@ Check that the server is running, the SSH tunnel is open, and the client points 
 
 Print `torch.__version__` in both environments after installation. Align major.minor versions and verify a CUDA-enabled server wheel works with its driver. Avoid making `RGPU_ALLOW_VERSION_MISMATCH=1` the permanent fix.
 
+## Deployment takes several minutes
+
+The first `deploy_opserver.sh` run creates a remote environment and downloads a
+multi-gigabyte CUDA-enabled PyTorch wheel. The installer prints its current
+CUDA index and pip progress. Wait for `LISTENING`; do not start a second
+deployment while the first pip process is active. If it ends with `DEAD`, read
+`~/opserver.log` on the GPU host.
+
 ## CUDA is unavailable on the server
 
 Run `python -c 'import torch; print(torch.cuda.is_available())'` on the GPU host. Check the driver and installed Torch build. `rgpu-opserver --device cpu` is an explicit test mode, not a GPU setup repair.

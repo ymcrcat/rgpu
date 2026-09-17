@@ -41,6 +41,7 @@ class SessionLost(RuntimeError):
 pending_frees = collections.deque()
 
 MAX_UNACKED = 64 << 20
+REPLAY_ACK_AT = MAX_UNACKED * 3 // 4
 
 # Module-local names for the two time functions _reconnect needs, so a test
 # can fake the clock and the sleep for just this module (monkeypatching the
@@ -162,6 +163,15 @@ class Connection:
         # a whole graph description - past both the byte-triggered flush and
         # the replay limit below, counted as a header and nothing else.
         n = len(entry[1])
+        if (kind != wire.ACK and self.replay_possible and self.unacked
+                and self.unacked_bytes + n > REPLAY_ACK_AT):
+            # A reply acknowledges every message before it. Ask only for that
+            # acknowledgement: unlike SYNC, ACK does not wait for queued GPU
+            # work to finish. A single message can still exceed MAX_UNACKED;
+            # retaining one without a bound would defeat the memory limit.
+            self.request(wire.ACK)
+            entry = (self.seq + 1, wire.encode_element([self.seq + 1, kind, *fields]))
+            n = len(entry[1])
         self.seq += 1
         self.pending.append(entry)
         self.pending_bytes += n

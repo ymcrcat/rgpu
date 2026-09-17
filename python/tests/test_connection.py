@@ -237,6 +237,17 @@ def test_unacked_bytes_drains_on_ack(conn):
     assert conn.replay_possible is True
 
 
+def test_replay_queue_requests_a_lightweight_ack_before_its_limit(conn, monkeypatch):
+    monkeypatch.setattr(session, "REPLAY_ACK_AT", 1)
+    conn.flush_ops, conn.flush_bytes = 1 << 30, 1 << 30
+    conn.post(wire.SEED, 1)
+    conn.post(wire.SEED, 2)
+    assert conn.stats["waits"] == 1
+    assert conn.seq == 3
+    assert [wire.decode(blob)[2] for _, blob in conn.unacked] == [2]
+    assert conn.replay_possible is True
+
+
 # The queues hold the encoded message, so what they cost is len(blob) - not an
 # estimate. A RUN carrying an inline host tensor is the case that matters: it
 # can be megabytes, and counting it as a fixed overhead lets it slip past both

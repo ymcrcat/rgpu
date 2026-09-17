@@ -5,17 +5,25 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 want=${1:?give the client torch version, e.g. 2.14}
-if [[ ! -x /root/opvenv/bin/python ]]; then
-  python3 -m venv /root/opvenv
+venv=${RGPU_OPSERVER_VENV:-$HOME/opvenv}
+log=${RGPU_OPSERVER_LOG:-$HOME/opserver.log}
+if [[ ! -x "$venv/bin/python" ]]; then
+  python3 -m venv "$venv"
 fi
-if ! /root/opvenv/bin/python -c "import torch,sys; sys.exit(torch.__version__.split('.')[:2] != '$want'.split('.')[:2])" 2>/dev/null; then
+if ! "$venv/bin/python" -c "import torch,sys; sys.exit(torch.__version__.split('.')[:2] != '$want'.split('.')[:2])" 2>/dev/null; then
   for cu in cu128 cu126 cu130; do
-    /root/opvenv/bin/pip install -q "torch==$want.*" --index-url "https://download.pytorch.org/whl/$cu" && break
+    echo "installing Torch $want from the $cu index (the CUDA wheel is several GB)"
+    "$venv/bin/pip" install "torch==$want.*" \
+      --index-url "https://download.pytorch.org/whl/$cu" && break
   done
 fi
-/root/opvenv/bin/pip install -q -e python --no-deps
+"$venv/bin/python" -c "import torch,sys; sys.exit(torch.__version__.split('.')[:2] != '$want'.split('.')[:2])" || {
+  echo "could not install Torch $want with a compatible CUDA wheel" >&2
+  exit 1
+}
+"$venv/bin/pip" install -q -e python --no-deps
 pkill -f "rgpu.server" 2>/dev/null || true
 sleep 1
-setsid nohup /root/opvenv/bin/python -m rgpu.server --device cuda > /root/opserver.log 2>&1 < /dev/null &
+setsid nohup "$venv/bin/python" -m rgpu.server --device cuda > "$log" 2>&1 < /dev/null &
 sleep 5
-if (exec 3<>/dev/tcp/127.0.0.1/9720) 2>/dev/null; then echo LISTENING; else echo DEAD; tail -20 /root/opserver.log; fi
+if (exec 3<>/dev/tcp/127.0.0.1/9720) 2>/dev/null; then echo LISTENING; else echo DEAD; tail -20 "$log"; fi

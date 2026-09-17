@@ -189,9 +189,13 @@ class Session:
             torch.mps.synchronize()
         return None
 
+    def _ack(self):
+        return None
+
     _ASYNC = {wire.RUN: _run, wire.UPLOAD: _upload, wire.FREE: _free, wire.SEED: _seed,
               wire.COMPILE: _compile, wire.CALL: _call}
-    _WAITED = {wire.RUN_SYNC: _run_sync, wire.DOWNLOAD: _download, wire.SYNC: _sync}
+    _WAITED = {wire.RUN_SYNC: _run_sync, wire.DOWNLOAD: _download, wire.SYNC: _sync,
+               wire.ACK: _ack}
 
     def execute(self, message):
         seq, kind, *fields = message

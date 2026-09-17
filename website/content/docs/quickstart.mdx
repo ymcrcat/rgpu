@@ -1,82 +1,92 @@
 ---
 title: PyTorch quickstart
-description: Connect a CPU-only client to a GPU host and run your first remote tensor operation.
+description: Deploy the Python backend and run a local program on a remote GPU.
 ---
 
 ## Prerequisites
 
-- A client with Python 3.10 or newer. A Mac is supported without CUDA or Docker for this path.
-- A GPU host with a working NVIDIA driver and CUDA-enabled PyTorch.
-- SSH access to that host and a checkout of this repository on both machines.
-- Matching PyTorch major.minor versions on client and server. The current package requires `torch>=2.14`; confirm that a compatible CUDA wheel and driver are available before choosing a host.
+- A client with Python 3.10 or newer. macOS works without CUDA or Docker.
+- A GPU host with an NVIDIA driver, Python 3, and SSH access.
+- This repository checked out on the client. The deployment script copies the
+  server package, so the GPU host does not need GitHub access or its own clone.
 
-Run all installation commands from the repository root, preferably inside a virtual environment. Installing a package does not verify GPU availability.
+The supported setup uses matching PyTorch major.minor versions on the client
+and server. The package currently requires `torch>=2.14`.
 
-## Start the GPU server
+## 1. Install rGPU in the workload environment
 
-Install a CUDA-enabled PyTorch build compatible with the host driver using the [official PyTorch installation selector](https://pytorch.org/get-started/locally/), then install rGPU:
-
-```sh
-python -m pip install -e python
-python -c 'import torch; print(torch.__version__); print(torch.cuda.is_available())'
-rgpu-opserver
-```
-
-The availability check must print `True`. The server defaults to CUDA and listens on `127.0.0.1:9720`. Keep it running while the client connects.
-
-Check the installed Torch version after installation, since dependency resolution may have changed it.
-
-## Install the client
+Activate the environment that will run your program, then install the local
+rGPU package. For example, from a sibling project:
 
 ```sh
-python -m pip install -e python
-python -c 'import torch; print(torch.__version__)'
+cd /path/to/workload
+source venv/bin/activate
+python -m pip install -e /path/to/rgpu/python
+python -c 'import torch, rgpu; print(torch.__version__)'
 ```
 
-A CPU-only Torch build is sufficient. Compare the version with the server: major.minor must match.
+Importing `rgpu` registers the device. Every program that uses
+`device="rgpu"` must import it.
 
-Save this as `smoke.py`:
+Save this as `smoke.py` in the workload directory:
 
 ```python
-import rgpu
 import torch
+import rgpu
 
 x = torch.ones(4, device="rgpu")
 print((x * 2).sum().item())  # 8.0
 ```
 
-## Run through SSH
+## 2. Deploy the server
+
+Keep the workload environment active so the script can detect its PyTorch
+version:
 
 ```sh
-rgpu-run --host user@gpu-host python smoke.py
+/path/to/rgpu/scripts/deploy_opserver.sh \
+  user@gpu-host -p 2222 -i ~/.ssh/gpu_key
 ```
 
-The launcher opens the tunnel, points `RGPU_OPSERVER` at it, runs the child command and closes the tunnel. It does not install or start the remote server, or change device placement in your script.
+The script works from any directory. It:
 
-For a custom SSH port or key:
+1. copies the Python backend from the local checkout;
+2. creates a virtual environment on the GPU host;
+3. installs the matching CUDA-enabled PyTorch build;
+4. starts `rgpu-opserver` on the host's loopback interface;
+5. prints `LISTENING` after verifying port 9720.
+
+The first deployment downloads a multi-gigabyte PyTorch wheel and can take
+several minutes. Installation progress is printed. Pass
+`--torch-version MAJOR.MINOR` only when deliberately selecting the remote
+version.
+
+## 3. Run through SSH
+
+Use the same SSH destination and options:
 
 ```sh
-rgpu-run --host user@gpu-host --ssh-port 2222 -i ~/.ssh/gpu_key python smoke.py
+rgpu-run --host user@gpu-host --ssh-port 2222 -i ~/.ssh/gpu_key \
+  python smoke.py
 ```
 
-## Use an existing tunnel
+`rgpu-run` opens a private tunnel, sets `RGPU_OPSERVER` for the child process,
+runs the command, and closes the tunnel. It does not change the device used by
+the program; the program must import `rgpu` and select `device="rgpu"`.
 
-In a separate terminal:
+## Existing server or local test
+
+To use an existing tunnel:
 
 ```sh
 ssh -N -L 9720:127.0.0.1:9720 user@gpu-host
-```
-
-Then run:
-
-```sh
 RGPU_OPSERVER=127.0.0.1:9720 python smoke.py
 ```
 
-Port 9720 is the Python opserver. Port 9713 belongs to the incompatible CUDA shim server.
+To test the protocol without a GPU, run `rgpu-opserver --device cpu` locally.
+That validates the client/server path, not CUDA behavior or GPU performance.
 
-## Try the protocol without a GPU
-
-Start `rgpu-opserver --device cpu` in another terminal, then run the same smoke test against localhost. This checks the Python client/server path; it does not establish CUDA compatibility or GPU performance.
+Port 9720 belongs to the Python backend. Port 9713 belongs to the separate
+CUDA compatibility shim.
 
 Next: [train a model](/docs/training/) or [diagnose connection problems](/docs/troubleshooting/).

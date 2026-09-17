@@ -8,19 +8,19 @@
 #   ./scripts/runpod.sh delete     # destroy it and everything on it
 #   ./scripts/runpod.sh delete --yes
 #
-# The API key comes from 1Password, so it never lands in a file or the shell
-# history. A running pod bills by the hour; a stopped one still bills for its
-# disk, so delete it when you are done for good.
+# Set RUNPOD_API_KEY, or let the script read OP_ITEM from 1Password. A running
+# pod bills by the hour; a stopped one still bills for its disk, so delete it
+# when you are done for good.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-OP_ITEM=${OP_ITEM:-op://YOUR_VAULT/Runpod/api-key}
+OP_ITEM=${OP_ITEM:-}
 NAME=${NAME:-rgpu-dev}
 SSH_KEY=${SSH_KEY:-$HOME/.ssh/rgpu_runpod}
-# An RTX A4000 or A5000 is around twenty cents an hour and has more than enough
-# memory for this. Ampere is sm_86, which the test fatbin already targets.
-GPUS=${GPUS:-'["NVIDIA RTX A5000","NVIDIA RTX A4000","NVIDIA GeForce RTX 3090","NVIDIA A40"]'}
+# Prefer the affordable 16-24 GB cards, with A40 as a last fallback. Keeping a
+# broad pool avoids creation failures when one GPU family has no capacity.
+GPUS=${GPUS:-'["NVIDIA L4","NVIDIA GeForce RTX 4090","NVIDIA GeForce RTX 4080 SUPER","NVIDIA RTX 4000 Ada Generation","NVIDIA RTX A4500","NVIDIA RTX A5000","NVIDIA RTX A4000","NVIDIA GeForce RTX 3090","NVIDIA A40"]'}
 # Community cloud has repeatedly had no capacity for these cards, and a create
 # that finds none fails without saying why. Secure cloud costs more but is
 # actually available; override with CLOUD=COMMUNITY to try the cheap one first.
@@ -29,17 +29,34 @@ CLOUD=${CLOUD:-SECURE}
 # from. Includes an ssh server, which a bare nvidia/cuda image does not.
 IMAGE=${IMAGE:-runpod/pytorch:1.2.0-rc.162-cu1281-torch291-ubuntu2204}
 
-key() { op read "$OP_ITEM"; }
+case "${1:-status}" in
+  create|start|status|stop|delete) ;;
+  *) echo "usage: $0 {create|start|status|stop|delete}" >&2; exit 1 ;;
+esac
+
+if [[ -n "${RUNPOD_API_KEY:-}" ]]; then
+  RUNPOD_TOKEN=$RUNPOD_API_KEY
+elif [[ -z "$OP_ITEM" ]]; then
+  echo "set RUNPOD_API_KEY or set OP_ITEM to a 1Password secret reference" >&2
+  exit 1
+elif ! RUNPOD_TOKEN=$(op read "$OP_ITEM"); then
+  echo "set RUNPOD_API_KEY or unlock 1Password, then retry" >&2
+  exit 1
+fi
+if [[ -z "$RUNPOD_TOKEN" ]]; then
+  echo "the RunPod API key is empty" >&2
+  exit 1
+fi
 
 api() {
   local method=$1 path=$2 body=${3:-}
   if [[ -n "$body" ]]; then
     curl -s -X "$method" "https://rest.runpod.io/v1$path" \
-      -H "Authorization: Bearer $(key)" -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $RUNPOD_TOKEN" -H "Content-Type: application/json" \
       -d "$body"
   else
     curl -s -X "$method" "https://rest.runpod.io/v1$path" \
-      -H "Authorization: Bearer $(key)"
+      -H "Authorization: Bearer $RUNPOD_TOKEN"
   fi
 }
 
@@ -107,14 +124,15 @@ case "${1:-status}" in
       echo "creating an ssh key at $SSH_KEY"
       ssh-keygen -t ed25519 -N "" -C "rgpu-runpod" -f "$SSH_KEY"
     fi
-    body=$(python3 - "$(cat "$SSH_KEY.pub")" <<PY
+    body=$(python3 - "$(cat "$SSH_KEY.pub")" "$NAME" "$IMAGE" "$GPUS" "$CLOUD" <<'PY'
 import json, sys
+public_key, name, image, gpu_types, cloud = sys.argv[1:]
 print(json.dumps({
-  "name": "$NAME",
-  "imageName": "$IMAGE",
-  "gpuTypeIds": json.loads('$GPUS'),
+  "name": name,
+  "imageName": image,
+  "gpuTypeIds": json.loads(gpu_types),
   "gpuCount": 1,
-  "cloudType": "$CLOUD",
+  "cloudType": cloud,
   "computeType": "GPU",
   "containerDiskInGb": 40,
   "volumeInGb": 0,
@@ -123,11 +141,16 @@ print(json.dumps({
   "interruptible": False,
   # cuFuncGetParamInfo, which the kernel launch path needs, arrived in 12.4.
   "allowedCudaVersions": ["12.4","12.5","12.6","12.7","12.8","12.9"],
-  "env": {"PUBLIC_KEY": sys.argv[1]},
+  "env": {"PUBLIC_KEY": public_key},
 }))
 PY
 )
-    id=$(api POST /pods "$body" | parse "print(doc.get('id',''))") || id=""
+    id=$(api POST /pods "$body" | parse "
+if not isinstance(doc, dict) or not doc.get('id'):
+    sys.stderr.write('runpod create failed:\n  %s\n' % raw[:1000].strip())
+    sys.exit(1)
+print(doc['id'])
+") || id=""
     if [[ -z "$id" ]]; then
       # The request may still have created something. Say so loudly rather
       # than exiting and leaving it to bill unnoticed.
@@ -215,7 +238,7 @@ print(' '.join(p['id'] for p in doc if p.get('name') == '$NAME'))
     fi
     for one in $ids; do
       code=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
-             -H "Authorization: Bearer $(key)" \
+             -H "Authorization: Bearer $RUNPOD_TOKEN" \
              "https://rest.runpod.io/v1/pods/$one")
       echo "deleted $one (http $code)"
     done
@@ -235,9 +258,5 @@ for p in doc:
 " >&2
       exit 1
     fi
-    ;;
-  *)
-    echo "usage: $0 {create|start|status|stop|delete}" >&2
-    exit 1
     ;;
 esac

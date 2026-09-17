@@ -18,6 +18,7 @@ Run these commands from the repository root unless a script says otherwise.
 | Script | Purpose |
 | --- | --- |
 | `deploy_server.sh` | Copy the checkout to an SSH host and build the CUDA server there |
+| `deploy_opserver.sh` | Copy the Python backend to an SSH host and start `rgpu-opserver` there |
 | `build_fatbin.sh` | Build the test CUDA kernel on a machine with `nvcc` |
 | `hw_check.sh` | Run driver probes and end-to-end checks on a GPU host |
 | `remote_torch.sh` | Run the PyTorch compatibility ladder on the remote host |

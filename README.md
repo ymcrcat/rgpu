@@ -27,23 +27,26 @@ Engineering records and experiments are indexed in [`docs/README.md`](docs/READM
 
 ## Quick start: Python backend
 
-Install the package on both machines:
+Activate the workload environment and install the local package:
 
 ```bash
-python -m pip install -e ./python
+cd /path/to/workload
+source venv/bin/activate
+python -m pip install -e /path/to/rgpu/python
 ```
 
-Start the server on the GPU machine:
+Deploy and start the server through SSH:
 
 ```bash
-rgpu-opserver --device cuda
+/path/to/rgpu/scripts/deploy_opserver.sh \
+  user@gpu-host -p 2222 -i ~/.ssh/gpu_key
 ```
 
-Tunnel the service and run a program on the client:
+Run the local program through the managed tunnel:
 
 ```bash
-ssh -N -L 9720:127.0.0.1:9720 user@gpu-host
-rgpu-run --server 127.0.0.1:9720 -- python train.py
+rgpu-run --host user@gpu-host --ssh-port 2222 -i ~/.ssh/gpu_key \
+  python train.py
 ```
 
 Or select the device directly:
@@ -109,3 +112,7 @@ steps are in [`codegen/README.md`](codegen/README.md).
 Current implementation status is recorded in
 [`docs/PRODUCT_SPEC.md`](docs/PRODUCT_SPEC.md); measured performance is in
 [`docs/performance-notes.md`](docs/performance-notes.md).
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).

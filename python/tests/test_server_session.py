@@ -111,6 +111,15 @@ def test_an_op_returning_nothing_is_not_mistaken_for_a_failure():
     assert torch.equal(c.get(2), torch.ones(3))
 
 
+def test_ack_does_not_synchronize_the_device(monkeypatch):
+    c = Client()
+    c.s.device = torch.device("cuda")
+    synchronized = []
+    monkeypatch.setattr(torch.cuda, "synchronize", synchronized.append)
+    assert c.reply(wire.ACK)[0] == wire.OK
+    assert synchronized == []
+
+
 def test_free_forgets_tensors():
     c = Client()
     c.put(1, torch.zeros(3))

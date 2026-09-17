@@ -25,7 +25,7 @@ import struct
 import torch
 
 MAGIC = b"RGOP"
-VERSION = 1
+VERSION = 2
 
 # Message kinds, client to server.
 RUN = 1        # op, args, kwargs, output ids; no reply
@@ -37,6 +37,7 @@ SEED = 6       # seed; no reply
 SYNC = 7       # the reply comes once everything before it has finished
 COMPILE = 8    # graph id, nodes, compiler, mode; no reply
 CALL = 9       # graph id, input ids, output ids; no reply
+ACK = 10       # lightweight reply after preceding messages are accepted
 
 # Reply status.
 OK = 0

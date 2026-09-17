@@ -33,6 +33,11 @@ The flush thresholds control when queued work is written to the socket; reaching
 one does not wait for the GPU or add a request-response round trip. Lower values
 can reduce the time before work reaches the server while increasing writes.
 
+The client retains up to 64 MiB of sent messages so it can replay them after a
+connection drop. Near that limit it requests a lightweight acknowledgement of
+all preceding messages. This adds a round trip without synchronizing queued GPU
+work. A single encoded message larger than 64 MiB cannot be retained for replay.
+
 `RGPU_CONNECT_TIMEOUT` applies to each connection attempt.
 `RGPU_RECONNECT_SECONDS` is the overall recovery budget, with retry backoff.
 `RGPU_RECV_TIMEOUT` is a backstop for a connection that stays open without
