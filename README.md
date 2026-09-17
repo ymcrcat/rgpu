@@ -104,6 +104,7 @@ steps are in [`codegen/README.md`](codegen/README.md).
 | `docs/` | Design records, measurements, and experiment reports |
 | `jax/` | Experimental JAX work; not a supported product path |
 | `scripts/` | Build, deployment, cloud, and test helpers |
+| `skills/` | Installable agent guidance for using rGPU |
 
 Current implementation status is recorded in
 [`docs/PRODUCT_SPEC.md`](docs/PRODUCT_SPEC.md); measured performance is in

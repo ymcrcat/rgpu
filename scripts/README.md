@@ -11,6 +11,7 @@ Run these commands from the repository root unless a script says otherwise.
 | `fetch_headers.sh` | Fetch the CUDA headers used by code generation and local builds |
 | `fetch_cudart.sh` | Fetch a stock CUDA Runtime library for compatibility testing |
 | `install.sh` | Install built client libraries and the `rgpu` launcher |
+| `install_agent_skill.sh` | Install the rGPU guidance skill for Claude Code and Codex |
 
 ## GPU server and hardware checks
 
