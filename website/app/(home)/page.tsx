@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { ArrowRight, Terminal, Network, BookOpen } from 'lucide-react';
 
 export default function HomePage() {
@@ -13,14 +14,31 @@ export default function HomePage() {
           <Link href="/docs/" className="rounded-lg border px-5 py-3 font-medium hover:bg-fd-accent">Compare the two paths</Link>
         </div>
       </div>
-      <div className="overflow-hidden rounded-xl border bg-fd-card shadow-sm">
-        <div className="flex items-center gap-2 border-b px-5 py-3 text-sm text-fd-muted-foreground"><Terminal size={16} /> train.py · local Python</div>
-        <pre className="overflow-x-auto p-6 text-sm leading-8"><code>{`import rgpu, torch
+      <div className="home-hero-carousel grid">
+        <div className="home-hero-image col-start-1 row-start-1 grid overflow-hidden rounded-xl border bg-fd-card shadow-sm">
+          <div className="flex items-center gap-2 border-b px-5 py-3 text-sm text-fd-muted-foreground"><Network size={16} /> Local code · remote GPU</div>
+          <div className="flex items-center bg-gradient-to-br from-cyan-50/70 via-transparent to-indigo-50/70 p-4 dark:from-cyan-950/20 dark:to-indigo-950/20 md:p-6">
+            <Image
+              src="/rgpu-architecture.png"
+              width={1400}
+              height={700}
+              priority
+              unoptimized
+              alt="A laptop sends tensor operations through an encrypted tunnel to a remote GPU server and receives results"
+              className="h-auto w-full"
+            />
+          </div>
+          <div className="border-t px-5 py-4 text-sm text-fd-muted-foreground">Python stays with you. Tensors stay on the GPU.</div>
+        </div>
+        <div className="home-hero-code col-start-1 row-start-1 grid overflow-hidden rounded-xl border bg-fd-card shadow-sm">
+          <div className="flex items-center gap-2 border-b px-5 py-3 text-sm text-fd-muted-foreground"><Terminal size={16} /> train.py · local Python</div>
+          <pre className="self-center overflow-x-auto p-6 text-sm leading-8"><code><span className="text-violet-700 dark:text-violet-300">import</span>{` rgpu, torch
 
-x = torch.randn(1024, 1024, device="rgpu")
+x = torch.randn(`}<span className="text-amber-700 dark:text-amber-300">1024</span>{`, `}<span className="text-amber-700 dark:text-amber-300">1024</span>{`, device=`}<span className="text-teal-700 dark:text-teal-300">"rgpu"</span>{`)
 y = (x @ x).relu().sum()
-print(y.item())`}</code></pre>
-        <div className="border-t px-5 py-4 text-sm text-fd-muted-foreground">Local Python → SSH tunnel → GPU server</div>
+`}<span className="text-cyan-700 dark:text-cyan-300">print</span>{`(y.item())`}</code></pre>
+          <div className="border-t px-5 py-4 text-sm text-fd-muted-foreground">Local Python → SSH tunnel → GPU server</div>
+        </div>
       </div>
     </div>
     <div className="mt-20 grid gap-4 md:grid-cols-3">

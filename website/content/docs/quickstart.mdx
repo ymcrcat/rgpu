@@ -74,6 +74,49 @@ rgpu-run --host user@gpu-host --ssh-port 2222 -i ~/.ssh/gpu_key \
 runs the command, and closes the tunnel. It does not change the device used by
 the program; the program must import `rgpu` and select `device="rgpu"`.
 
+## Jupyter notebooks
+
+Start Jupyter through `rgpu-run` so the notebook server and its kernels inherit
+the tunnel configuration:
+
+```sh
+rgpu-run --host user@gpu-host --ssh-port 2222 -i ~/.ssh/gpu_key \
+  python -m jupyter lab
+```
+
+Select the kernel from the environment where rGPU is installed, then use the
+device normally:
+
+```python
+import torch
+import rgpu
+
+x = torch.arange(10, device="rgpu")
+(x * 2).cpu()
+```
+
+Remote tensors belong to that kernel's server session. Restart the kernel and
+recreate them after redeploying `rgpu-opserver` or restarting the GPU host.
+
+## Local MPS loopback
+
+On a Mac, rGPU can exercise the same client/server protocol locally while MPS
+runs the operations. Start the server in one terminal:
+
+```sh
+rgpu-opserver --device mps
+```
+
+Then run the workload from another terminal:
+
+```sh
+rgpu-run --server 127.0.0.1:9720 python smoke.py
+```
+
+The workload still selects `device="rgpu"`; using `device="mps"` directly
+bypasses rGPU. Both commands should use the same Python environment, so no
+version-mismatch override is needed.
+
 ## Existing server or local test
 
 To use an existing tunnel:

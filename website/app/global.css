@@ -14,3 +14,29 @@ html > body[data-scroll-locked] {
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 :root { --color-fd-primary: oklch(0.43 0.08 185); --color-fd-primary-foreground: white; }
 .dark { --color-fd-primary: oklch(0.8 0.12 180); --color-fd-primary-foreground: oklch(0.18 0.02 180); }
+
+.home-hero-image,
+.home-hero-code {
+  grid-template-rows: auto 1fr auto;
+  animation-duration: 16s;
+  animation-iteration-count: infinite;
+}
+
+.home-hero-image { animation-name: home-hero-image; }
+.home-hero-code { animation-name: home-hero-code; }
+
+@keyframes home-hero-image {
+  0%, 40%, 100% { opacity: 1; visibility: visible; }
+  50%, 90% { opacity: 0; visibility: hidden; }
+}
+
+@keyframes home-hero-code {
+  0%, 40%, 100% { opacity: 0; visibility: hidden; }
+  50%, 90% { opacity: 1; visibility: visible; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-hero-image,
+  .home-hero-code { animation: none; }
+  .home-hero-code { visibility: hidden; }
+}
