@@ -9,7 +9,7 @@ documentation:
 
 | Document | Role | Status |
 | --- | --- | --- |
-| [`PRODUCT_SPEC.md`](PRODUCT_SPEC.md) | Product and implementation snapshot | Point-in-time record from 2026-09-11 |
+| [`PRODUCT_SPEC.md`](PRODUCT_SPEC.md) | Historical implementation notes and plans | Begun 2026-09-11; not current product status |
 | [`performance-notes.md`](performance-notes.md) | Measurements and optimization analysis | Update when benchmarks change |
 | [`jax-findings.md`](jax-findings.md) | Results of the JAX experiments | Current experiment outcome |
 | [`jax-extension-plan.md`](jax-extension-plan.md) | Original JAX proposal | Partly superseded by `jax-findings.md` |

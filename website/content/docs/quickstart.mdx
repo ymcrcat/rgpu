@@ -1,6 +1,6 @@
 ---
 title: PyTorch quickstart
-description: Deploy the Python backend and run a local program on a remote GPU.
+description: Set up the PyTorch device and run a local program on a remote GPU.
 ---
 
 ## Prerequisites
@@ -50,7 +50,7 @@ version:
 
 The script works from any directory. It:
 
-1. copies the Python backend from the local checkout;
+1. copies the server package from the local checkout;
 2. creates a virtual environment on the GPU host;
 3. installs the matching CUDA-enabled PyTorch build;
 4. starts `rgpu-opserver` on the host's loopback interface;
@@ -74,6 +74,9 @@ rgpu-run --host user@gpu-host --ssh-port 2222 -i ~/.ssh/gpu_key \
 runs the command, and closes the tunnel. It does not change the device used by
 the program; the program must import `rgpu` and select `device="rgpu"`.
 
+The expected output is `8.0`. You are ready to [train a model](/docs/training/).
+If this fails, start with [troubleshooting](/docs/troubleshooting/).
+
 ## Jupyter notebooks
 
 Start Jupyter through `rgpu-run` so the notebook server and its kernels inherit
@@ -84,52 +87,11 @@ rgpu-run --host user@gpu-host --ssh-port 2222 -i ~/.ssh/gpu_key \
   python -m jupyter lab
 ```
 
-Select the kernel from the environment where rGPU is installed, then use the
-device normally:
-
-```python
-import torch
-import rgpu
-
-x = torch.arange(10, device="rgpu")
-(x * 2).cpu()
-```
+Select the kernel from the environment where rGPU is installed, then run the
+same `smoke.py` code in a cell.
 
 Remote tensors belong to that kernel's server session. Restart the kernel and
 recreate them after redeploying `rgpu-opserver` or restarting the GPU host.
 
-## Local MPS loopback
-
-On a Mac, rGPU can exercise the same client/server protocol locally while MPS
-runs the operations. Start the server in one terminal:
-
-```sh
-rgpu-opserver --device mps
-```
-
-Then run the workload from another terminal:
-
-```sh
-rgpu-run --server 127.0.0.1:9720 python smoke.py
-```
-
-The workload still selects `device="rgpu"`; using `device="mps"` directly
-bypasses rGPU. Both commands should use the same Python environment, so no
-version-mismatch override is needed.
-
-## Existing server or local test
-
-To use an existing tunnel:
-
-```sh
-ssh -N -L 9720:127.0.0.1:9720 user@gpu-host
-RGPU_OPSERVER=127.0.0.1:9720 python smoke.py
-```
-
-To test the protocol without a GPU, run `rgpu-opserver --device cpu` locally.
-That validates the client/server path, not CUDA behavior or GPU performance.
-
-Port 9720 belongs to the Python backend. Port 9713 belongs to the separate
-CUDA compatibility shim.
-
-Next: [train a model](/docs/training/) or [diagnose connection problems](/docs/troubleshooting/).
+For [manual tunnels](/docs/operations/#use-an-existing-tunnel) or
+[local CPU/MPS testing](/docs/operations/#test-locally), see Operations.

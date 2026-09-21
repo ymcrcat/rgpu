@@ -7,7 +7,7 @@ description: Count synchronization points and completed work, not just messages.
 
 Remote execution costs include local dispatch, encoding, transfer, GPU execution and host waits. Small operations with frequent host reads can spend more time on the network than on the GPU.
 
-For the Python device:
+For the PyTorch device:
 
 ```python
 print(rgpu.stats())
@@ -23,11 +23,15 @@ The repository's [performance notes](https://github.com/ymcrcat/rgpu/blob/main/d
 
 | Workload / configuration | Recorded result | Qualification |
 | --- | --- | --- |
-| nanoGPT, batch 64, context 256, 20 steps | 3.04 s/step local MPS opserver; 1.04 s/step remote A40 at 116 ms RTT | Both use rGPU; the local baseline is not native MPS |
+| nanoGPT (`yangpt` variant), batch 64, context 256, 20 steps | 3.04 s/step local MPS opserver; 1.04 s/step remote A40 at 116 ms RTT | Both use rGPU; the local baseline is not native MPS |
 | Same run, remote traffic | 139,931 messages, 5 waits | Counts span the recorded run, not each step |
 | Graph shipping, batch 8, context 64, local MPS server | 139,931 → 44,880 messages; 7.2 → 8.3 s train loop | Fewer messages, slower elapsed time in this short run |
 
 The A40 run used Torch 2.11 on the server and 2.14 on the client with the version-mismatch override. That is outside the supported matching-version configuration. Startup, upload, train-loop time and generation are separate measurements; do not compare their totals interchangeably.
+
+These measurements used a local `yangpt` variant with modified settings, not the
+pinned lecture script in the [nanoGPT example](/docs/nanogpt/). The recorded
+compilation comparison does not establish a break-even point for longer runs.
 
 An older CUDA-path measurement on an RTX 3090 over loopback reports 20.3 μs per launch without batching versus 3.2 μs with batching **including synchronization**, across 2,000 launches. This is a separate workload and backend, not a prediction for WAN training.
 

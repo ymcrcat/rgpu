@@ -7,10 +7,10 @@ the client. It currently offers two paths:
 
 | Path | Use it for | Interface |
 | --- | --- | --- |
-| Python operation backend | PyTorch programs that can opt into an `rgpu` device | `torch` operations over TCP |
-| CUDA compatibility shim | Existing Linux CUDA programs, including stock CUDA PyTorch | `libcuda`, CUDA Runtime, cuBLAS, cuBLASLt, and cuDNN shims |
+| PyTorch device | PyTorch programs that can opt into an `rgpu` device | `torch` operations over TCP |
+| CUDA shim | Existing Linux CUDA programs, including stock CUDA PyTorch | `libcuda`, CUDA Runtime, cuBLAS, cuBLASLt, and cuDNN shims |
 
-The Python backend is the simpler integration. The CUDA shim covers existing
+The PyTorch device is the simpler integration. The CUDA shim covers existing
 binaries but has a larger compatibility surface.
 
 ## Documentation
@@ -18,8 +18,9 @@ binaries but has a larger compatibility surface.
 The Fumadocs site in [`website/`](website/) is the product documentation:
 
 - [Quickstart](website/content/docs/quickstart.mdx)
-- [Python backend](website/content/docs/training.mdx)
-- [CUDA compatibility shim](website/content/docs/cuda-shim.mdx)
+- [Training](website/content/docs/training.mdx)
+- [nanoGPT example](website/content/docs/nanogpt.mdx)
+- [CUDA shim](website/content/docs/cuda-shim.mdx)
 - [Operations](website/content/docs/operations.mdx)
 - [Configuration reference](website/content/docs/configuration.mdx)
 - [Performance](website/content/docs/performance.mdx)
@@ -27,54 +28,38 @@ The Fumadocs site in [`website/`](website/) is the product documentation:
 
 Engineering records and experiments are indexed in [`docs/README.md`](docs/README.md).
 
-## Quick start: Python backend
+## Quick start: PyTorch device
 
-Activate the workload environment and install the local package:
-
-```bash
-cd /path/to/workload
-source venv/bin/activate
-python -m pip install -e /path/to/rgpu/python
-```
-
-Deploy and start the server through SSH:
-
-```bash
-/path/to/rgpu/scripts/deploy_opserver.sh \
-  user@gpu-host -p 2222 -i ~/.ssh/gpu_key
-```
-
-Run the local program through the managed tunnel:
-
-```bash
-rgpu-run --host user@gpu-host --ssh-port 2222 -i ~/.ssh/gpu_key \
-  python train.py
-```
-
-Or select the device directly:
+Follow the [quickstart](website/content/docs/quickstart.mdx) to install rGPU
+and deploy the server. Save this as `smoke.py` in your workload directory:
 
 ```python
 import torch
 import rgpu
 
-x = torch.arange(8, device="rgpu")
-print((x * 2).cpu())
+x = torch.ones(4, device="rgpu")
+print((x * 2).sum().item())  # 8.0
 ```
 
-## Quick start: CUDA shim
+Run it in the environment where rGPU is installed, using your server's SSH
+destination and options:
 
-Build the generated client and its GPU-free tests:
-
-```bash
-./scripts/build_client.sh
+```sh
+rgpu-run --host user@gpu-host --ssh-port 2222 -i ~/.ssh/gpu_key \
+  python smoke.py
 ```
 
-Build and start `rgpu-server` on a GPU host, then expose it through an SSH
-tunnel. The full setup and loader requirements are in the
-[CUDA shim guide](website/content/docs/cuda-shim.mdx).
+The program selects the device; `rgpu-run` opens the tunnel and configures the
+connection. The expected output is `8.0`.
 
-The protocol has no authentication or encryption. Bind servers to localhost
-and reach them through SSH or another private transport.
+For existing Linux CUDA programs, follow the
+[CUDA shim guide](website/content/docs/cuda-shim.mdx), starting with
+`./scripts/build_client.sh`.
+
+Neither protocol authenticates or encrypts connections. Keep `rgpu-opserver`
+on its default localhost bind and use SSH. The CUDA server listens on all IPv4
+interfaces: restrict port 9713 with host/cloud firewall rules before starting
+it, even when using an SSH tunnel. See [deployment](website/content/docs/operations.mdx).
 
 ## Development
 
@@ -102,7 +87,7 @@ steps are in [`codegen/README.md`](codegen/README.md).
 | `client/` | CUDA client shims and transport |
 | `server/` | CUDA server and dispatch |
 | `common/` | Shared protocol and generated API metadata |
-| `python/` | PyTorch operation backend and launcher |
+| `python/` | PyTorch device and launcher |
 | `tests/` | C++, Python, CUDA, and hardware checks |
 | `codegen/` | CUDA header parser and source generators |
 | `website/` | Fumadocs product documentation |
@@ -111,9 +96,8 @@ steps are in [`codegen/README.md`](codegen/README.md).
 | `scripts/` | Build, deployment, cloud, and test helpers |
 | `skills/` | Installable agent guidance for using rGPU |
 
-Current implementation status is recorded in
-[`docs/PRODUCT_SPEC.md`](docs/PRODUCT_SPEC.md); measured performance is in
-[`docs/performance-notes.md`](docs/performance-notes.md).
+Historical implementation notes and experimental results are indexed in
+[`docs/README.md`](docs/README.md).
 
 ## License
 

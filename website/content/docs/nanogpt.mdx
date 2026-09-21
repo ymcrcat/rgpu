@@ -1,127 +1,70 @@
 ---
-title: Train nanoGPT on a remote GPU
-description: "A worked example: two lines turn an unmodified training script into one that trains on a remote GPU."
+title: nanoGPT example
+description: Adapt the GPT lecture script to train through the PyTorch device.
 ---
 
-Karpathy's nanoGPT — the character-level transformer from *Let's build GPT* —
-trains on a remote GPU with **two changes** to the script. Nothing else moves:
-not the model, not the optimizer, not the training loop, not the sampling code.
+This example uses Andrej Karpathy's GPT lecture script from
+[`ng-video-lecture`, revision `5220142`](https://github.com/karpathy/ng-video-lecture/blob/52201428ed7b46804849dea0b3ccf0de9df1a5c3/gpt.py).
+It is the character-level model from *Let's build GPT*, rather than the separate
+`nanoGPT` repository's training program.
 
-## The two changes
+## Get the example
+
+In a new workload directory, download the script and its dataset at the same
+pinned revision:
+
+```sh
+curl -fL -o gpt.py https://raw.githubusercontent.com/karpathy/ng-video-lecture/52201428ed7b46804849dea0b3ccf0de9df1a5c3/gpt.py
+curl -fL -o input.txt https://raw.githubusercontent.com/karpathy/ng-video-lecture/52201428ed7b46804849dea0b3ccf0de9df1a5c3/input.txt
+```
+
+Complete the [PyTorch quickstart](/docs/quickstart/) in your workload's Python
+environment to install rGPU, deploy the server, and verify the connection.
+
+## Change the device
+
+Make these two edits to `gpt.py`:
 
 ```diff
 +import rgpu
  import torch
- import torch.nn as nn
- from torch.nn import functional as F
+```
 
-@@ hyperparameters @@
--device = 'cuda' if torch.cuda.is_available() else 'mps'
+```diff
+-device = 'cuda' if torch.cuda.is_available() else 'cpu'
 +device = 'rgpu'
 ```
 
-That is the whole diff.
+The script already uses `device` for the model, input batches, position indices,
+and sampling context. It moves the model before the first forward pass and
+before constructing the optimizer, as required by the [training guide](/docs/training/).
 
-**`import rgpu`** registers the device with PyTorch. It has to happen before
-anything asks for `device="rgpu"`, so keep it at the top with the other
-imports. The package is `rgpu`; there is no `rcuda` module.
+## Run it
 
-**`device = 'rgpu'`** is the only other change because nanoGPT already threads
-its `device` variable everywhere it matters — `model.to(device)` in the setup,
-`x, y = x.to(device), y.to(device)` in `get_batch`, and
-`torch.zeros((1, 1), dtype=torch.long, device=device)` for the sampling
-context. Scripts written that way need nothing else.
+From the directory containing `gpt.py` and `input.txt`, use the SSH destination
+and options from your quickstart:
 
-The model is moved with `m = model.to(device)` *before* the first forward pass
-and before `torch.optim.AdamW(model.parameters())` is constructed, which is
-what [the training rules](/docs/training) require. nanoGPT already does this,
-in that order.
-
-## Running it
-
-Start a server on the GPU host. It runs PyTorch, so it needs its own install,
-of the same major.minor as yours:
-
-```bash
-pip install torch          # must match the client's major.minor
-pip install -e python
-rgpu-opserver              # binds 127.0.0.1:9720
+```sh
+rgpu-run --host user@gpu-host --ssh-port 2222 -i ~/.ssh/gpu_key \
+  python gpt.py
 ```
 
-Then, on your machine, let `rgpu-run` open the tunnel and run the script:
+The script prints the parameter count, periodic training and validation losses,
+and generated text. Its defaults run 5,000 training iterations and 200 evaluation
+batches per split. For a short connection check, reduce `max_iters` and
+`eval_iters`, and shorten the final `max_new_tokens=500` sample.
 
-```bash
-rgpu-run --host user@gpu-host python train.py
-```
+Evaluation calls `.item()` for each batch, which waits for the server. Sampling
+also introduces frequent host waits. Both can be slow over a high-latency link;
+use a short sample while checking the setup.
 
-Or manage the tunnel yourself:
+## Compilation and measurements
 
-```bash
-ssh -N -L 9720:localhost:9720 user@gpu-host
-RGPU_OPSERVER=127.0.0.1:9720 python train.py
-```
+For optional graph compilation, follow the [training guide](/docs/training/#ship-compiled-graphs)
+after eager training works. Measure completed work before deciding whether
+compilation helps your run.
 
-## What to expect
-
-Measured on this model — 10.8M parameters, batch 64, block 256 — from a
-MacBook to an A40 in Sweden, 116 ms round trip, eager mode:
-
-| | local Apple GPU (MPS) | remote A40, 116 ms away |
-|---|---|---|
-| per iteration | 3.04 s | **1.04 s** |
-| messages | 139,931 | 139,931 |
-| round trips | 5 | 5 |
-
-The GPU across an ocean is about three times faster than the local one. Five
-round trips at 116 ms is roughly 0.6 s of network time across the whole
-20-iteration run, because operations are queued and sent in batches rather than
-waited on individually. `rgpu.stats()` reports those round trips as `waits`;
-if a workload ever feels latency-bound, count them first.
-
-Loss matched a CPU reference exactly at step 0 and tracked it thereafter.
-Later steps differ in the last digits because dropout draws from a per-device
-RNG — expected, not a discrepancy.
-
-> **On an Apple Silicon Mac, nanoGPT's own fallback cannot train this model at
-> all.** With `device = 'mps'`, PyTorch 2.14 raises
-> `opt_ready_stream && opt_parent_stream INTERNAL ASSERT FAILED` from the
-> autograd engine on `loss.backward()`. The remote path is unaffected, because
-> the backward pass runs on the server.
-
-## Making it faster
-
-**Ship the graph.** Eager mode sends about 7,000 operations per iteration.
-Compiling collapses that:
-
-```python
-model = torch.compile(model, backend="rgpu", dynamic=False)
-```
-
-On this model that cut messages from 139,931 to 44,880 over 20 iterations — a
-3.1x reduction. Note two things: `dynamic=False` is required, and compilation
-is a one-time cost that short runs do not amortise. Over 20 iterations it was
-*slower* in wall-clock; over a real 5,000-iteration training run it pays for
-itself many times over.
-
-Use `backend="rgpu"` explicitly. `torch.compile(model)` with no backend picks
-Inductor, which cannot work on rgpu tensors and raises an error telling you so.
-
-**Expect the weights to dominate the bytes.** Of the 70.9 MB sent in that run,
-43.2 MB was the one-time upload of the model's float32 parameters when
-`.to("rgpu")` ran. That cost is paid once per session, not per step, and it is
-why total bytes are a poor guide to per-iteration cost.
-
-## Sampling
-
-`generate()` needs no changes either. It runs `torch.multinomial` on the
-remote device and the `.tolist()` at the end brings the token ids back:
-
-```python
-context = torch.zeros((1, 1), dtype=torch.long, device=device)
-print(decode(m.generate(context, max_new_tokens=2000)[0].tolist()))
-```
-
-Each generated token is a separate forward pass with a host wait at the
-sampling step, so generation is far more latency-sensitive than training.
-Long samples over a high-latency link are slow; that is the round trips, not
-the GPU.
+The [recorded performance results](/docs/performance/#recorded-evidence-not-new-benchmarks)
+come from a local `yangpt` variant with modified settings, not this pinned script.
+They document short runs and their limitations; they are not expected timings
+for this example.

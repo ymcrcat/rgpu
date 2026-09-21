@@ -1,5 +1,10 @@
 # rgpu: what works, what is missing, what to build next
 
+> **Historical record — September 2026.** This document preserves earlier
+> implementation notes and plans, including tasks subsequently completed.
+> For current setup and supported behavior, use the
+> [product documentation](../website/content/docs/index.mdx).
+
 Written 2026-09-11, after the torch.compile work. This is the honest state of
 the thing: what has been measured, what has never been tried, and what would
 have to be true before anyone but us relied on it.

@@ -5,7 +5,7 @@ description: Keep access restricted and understand what a reconnect can recover.
 
 ## Use the right server
 
-| | Python opserver | CUDA server |
+| | PyTorch device | CUDA shim |
 | --- | --- | --- |
 | Command | `rgpu-opserver` | `./build/rgpu-server` |
 | Default port | 9720 | 9713 |
@@ -18,21 +18,53 @@ The Python server accepts `--bind` and `--port`; retaining the default loopback 
 
 ## Prepare an existing GPU host
 
-For the Python path, the repository includes:
-
-```sh
-./scripts/deploy_opserver.sh user@gpu-host -p 2222 -i ~/.ssh/gpu_key
-```
-
-Run it on the client with its Python environment active. It copies the Python
-backend, detects the client's Torch major.minor, and starts the opserver
-detached. Pass `--torch-version MAJOR.MINOR` to select the remote version
-explicitly. A compatible Torch CUDA build and driver remain prerequisites;
-inspect `~/opserver.log` on the GPU host if startup fails. The server virtual
+For the PyTorch device, follow the [quickstart](/docs/quickstart/) to install
+and deploy with `deploy_opserver.sh`. Inspect `~/opserver.log` on the GPU host
+if startup fails. The server virtual
 environment is `~/opvenv`; set `RGPU_OPSERVER_VENV` or `RGPU_OPSERVER_LOG` on
 the host to override those locations.
 
 For the C++ path, `scripts/deploy_server.sh user@host` copies and builds the server on an existing host. The repository also contains cloud rental scripts; these create billable resources and are not needed if you already have a GPU machine.
+
+## Use an existing tunnel
+
+For the PyTorch device, keep this command running in a separate client terminal,
+using your server's SSH destination and options:
+
+```sh
+ssh -N -L 9720:127.0.0.1:9720 -p 2222 -i ~/.ssh/gpu_key user@gpu-host
+```
+
+In your workload environment, run the quickstart's `smoke.py` through that tunnel:
+
+```sh
+rgpu-run --server 127.0.0.1:9720 python smoke.py
+```
+
+For a process started without `rgpu-run`, set `RGPU_OPSERVER=127.0.0.1:9720`
+in its environment. Port 9713 and `RGPU_SERVER` belong to the separate
+[CUDA shim](/docs/cuda-shim/).
+
+## Test locally
+
+After installing rGPU as in the quickstart, start a CPU server in one terminal:
+
+```sh
+rgpu-opserver --device cpu
+```
+
+Run the quickstart's `smoke.py` in another terminal:
+
+```sh
+rgpu-run --server 127.0.0.1:9720 python smoke.py
+```
+
+Both terminals should use the same Python environment. The expected output is
+`8.0`; this checks the protocol without establishing CUDA support or GPU performance.
+
+On an Apple Silicon Mac, use `rgpu-opserver --device mps` to execute on the local
+Apple GPU instead. The workload still selects `device="rgpu"`; selecting
+`device="mps"` in the workload bypasses rGPU.
 
 ## Recovering a connection
 

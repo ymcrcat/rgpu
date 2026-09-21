@@ -5,7 +5,7 @@ description: Resolve common setup, device placement and compilation failures.
 
 ## Connection refused or handshake failure
 
-Check that the server is running, the SSH tunnel is open, and the client points to the correct local port. Python uses `RGPU_OPSERVER` and port 9720. The CUDA shim uses `RGPU_SERVER` and port 9713. The two protocols cannot connect to one another.
+Check that the server is running, the SSH tunnel is open, and the client points to the correct local port. The PyTorch device uses `RGPU_OPSERVER` and port 9720. The CUDA shim uses `RGPU_SERVER` and port 9713. The two protocols cannot connect to one another.
 
 ## PyTorch version mismatch
 
@@ -29,7 +29,7 @@ Move the model to `rgpu` before its first grad-tracking forward pass. An existin
 
 ## torch.compile selects the wrong backend
 
-Pass `backend=rgpu.compile_backend()` explicitly, with `dynamic=False` for fixed-shape graph shipping. For diagnosis, `compiler="eager"` keeps graph shipping while avoiding server-side Inductor compilation.
+Pass `backend="rgpu"` explicitly, with `dynamic=False` for fixed-shape graph shipping. For diagnosis, use `backend=rgpu.compile_backend(compiler="eager")` to keep graph shipping while avoiding server-side Inductor compilation.
 
 ## A custom operation fails
 
@@ -49,7 +49,7 @@ Check that all required runtime and math-library shims are loaded. PyTorch may p
 
 ## Remote execution is slower
 
-Start with `rgpu.stats()` on the Python path. Look for repeated host reads, small batches, large uploads and compilation cost over a short run. Follow the [measurement checklist](/docs/performance/) before selecting an optimization.
+Start with `rgpu.stats()` with the PyTorch device. Look for repeated host reads, small batches, large uploads and compilation cost over a short run. Follow the [measurement checklist](/docs/performance/) before selecting an optimization.
 
 ## Report a problem
 

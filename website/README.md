@@ -37,9 +37,12 @@ and testing; the current build assumes `/`.
 
 ## Content conventions
 
-- Describe the Python device and CUDA shim separately; their ports and protocols differ.
+- Describe the PyTorch device and CUDA shim separately; their ports and protocols differ.
 - Check commands and defaults against the implementation before changing docs.
 - Document supported functionality; keep engineering proposals separate.
+- Keep installation and deployment steps in the quickstart. Link to them from
+  examples; put alternative connection setups in Operations.
+- Keep benchmark summaries in Performance and detailed evidence in `docs/`.
 - Keep measurement scope and limitations beside benchmark numbers. Do not relabel
   historical results as fresh measurements or native baselines.
 - Link to engineering documents for detailed evidence; avoid copying entire internal specs.

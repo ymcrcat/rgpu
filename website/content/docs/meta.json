@@ -1,14 +1,18 @@
 {
   "title": "Documentation",
   "pages": [
+    "---Start---",
     "index",
     "quickstart",
+    "---Use---",
     "training",
     "nanogpt",
     "cuda-shim",
+    "---Operate---",
     "operations",
+    "troubleshooting",
+    "---Reference---",
     "configuration",
-    "performance",
-    "troubleshooting"
+    "performance"
   ]
 }
