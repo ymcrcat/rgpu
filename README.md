@@ -1,5 +1,7 @@
 # rGPU
 
+[![CI](https://github.com/ymcrcat/rgpu/actions/workflows/ci.yml/badge.svg)](https://github.com/ymcrcat/rgpu/actions/workflows/ci.yml)
+
 rGPU runs GPU work on a remote NVIDIA machine while the application stays on
 the client. It currently offers two paths:
 
