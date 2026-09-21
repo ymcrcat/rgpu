@@ -154,12 +154,24 @@ def test_giving_up_clears_recovery_state_so_a_later_attempt_gets_a_fresh_budget(
     port = free_port()
     srv = socket.create_server(("127.0.0.1", port))
 
+    # The flapping peer has to be *provably* gone before the real server takes
+    # the port back. Closing a listening socket does not reliably wake another
+    # thread blocked in accept(), so this polls a flag instead of relying on
+    # that: a peer still alive when the client reconnects would close the
+    # connection under it, which is exactly what this peer is built to do, and
+    # the failure would land on the real server's turn.
+    stop = threading.Event()
+    srv.settimeout(0.1)
+
     def serve_flapping():
-        while True:
+        while not stop.is_set():
             try:
                 conn, _ = srv.accept()
+            except socket.timeout:
+                continue
             except OSError:
                 return
+            conn.settimeout(None)   # accepted sockets inherit srv's timeout
             try:
                 wire.recv_exact(conn, len(wire.MAGIC))
                 wire.recv_frame(conn)
@@ -169,7 +181,8 @@ def test_giving_up_clears_recovery_state_so_a_later_attempt_gets_a_fresh_budget(
                 pass
             conn.close()
 
-    threading.Thread(target=serve_flapping, daemon=True).start()
+    flapper = threading.Thread(target=serve_flapping, daemon=True)
+    flapper.start()
     monkeypatch.setenv("RGPU_OPSERVER", f"127.0.0.1:{port}")
     monkeypatch.setenv("RGPU_RECONNECT_SECONDS", "1")
     session.reset()
@@ -177,7 +190,10 @@ def test_giving_up_clears_recovery_state_so_a_later_attempt_gets_a_fresh_budget(
     with pytest.raises(ConnectionError):
         torch.ones(3, device="rgpu").cpu()
 
-    srv.close()   # stop the flapping peer and free the port
+    stop.set()
+    flapper.join(timeout=10)
+    assert not flapper.is_alive(), "the flapping peer outlived its port"
+    srv.close()   # only now is the port free of it
     session.get().had_session = False   # see docstring: isolate the wedge from session identity
 
     proc, _ = start_server(port=port)   # a real, working server on the same address
