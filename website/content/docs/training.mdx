@@ -28,7 +28,7 @@ for step in range(100):
 print("Final loss:", loss.item())
 ```
 
-This is a small API example with synthetic data, not a performance benchmark. Downloading a loss every step adds a host wait. Decide how frequently you need metrics.
+This is a small API example with synthetic data, not a performance benchmark. For a real model end to end, see [Train nanoGPT on a remote GPU](/docs/nanogpt), which needs two changed lines. Downloading a loss every step adds a host wait. Decide how frequently you need metrics.
 
 Moving a model after a grad-tracking forward can fail because rGPU swaps parameter tensors and autograd still holds references to them. Move before the first forward, instead of trying to migrate a live autograd graph.
 

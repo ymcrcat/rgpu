@@ -4,6 +4,7 @@
     "index",
     "quickstart",
     "training",
+    "nanogpt",
     "cuda-shim",
     "operations",
     "configuration",
