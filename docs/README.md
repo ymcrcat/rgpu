@@ -14,7 +14,6 @@ documentation:
 | [`jax-findings.md`](jax-findings.md) | Results of the JAX experiments | Current experiment outcome |
 | [`jax-extension-plan.md`](jax-extension-plan.md) | Original JAX proposal | Partly superseded by `jax-findings.md` |
 | [`superpowers/specs/`](superpowers/specs/) | Design decisions behind implemented work | Historical design records |
-| [`superpowers/plans/`](superpowers/plans/) | Detailed implementation plans | Historical execution records |
 
 JAX remains experimental and intentionally stays outside the product docs. Its
 code and entry points are indexed in [`jax/README.md`](../jax/README.md).
