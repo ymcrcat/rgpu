@@ -15,6 +15,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# The 1Password secret reference is deliberately not in the repository: set
+# OP_ITEM (or RUNPOD_API_KEY) in your environment. Every subcommand exits 1
+# with a message if neither is set.
 OP_ITEM=${OP_ITEM:-}
 NAME=${NAME:-rgpu-dev}
 SSH_KEY=${SSH_KEY:-$HOME/.ssh/rgpu_runpod}
