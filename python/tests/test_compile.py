@@ -209,3 +209,20 @@ def test_the_rgpu_backend_still_works_after_that():
     got = torch.compile(net, backend="rgpu", dynamic=False)(x)
     assert got.shape == (4, 8)
     assert torch.isfinite(got.cpu()).all()
+
+
+@pytest.mark.parametrize("f", [
+    lambda x: (x * 2).conj(),                      # a lazy view of an intermediate
+    lambda x: torch.view_as_real(x * 2).neg()[..., 1].mul(1),
+    lambda x: (x * 2).conj().imag,                 # the negative bit, on a real view
+], ids=["conj", "resolved", "neg"])
+def test_a_compiled_output_keeps_its_conjugate_and_negative_bits(f):
+    # The bits are metadata the client predicts, like the strides. An output
+    # rebuilt without them reads as a different tensor from the one the server
+    # holds: .cpu() resolves by the client's bit, so the values come back wrong.
+    torch.manual_seed(0)
+    x = torch.randn(8, dtype=torch.complex64)
+    want = f(x)
+    got = torch.compile(f, backend=EAGER, dynamic=False)(x.to("rgpu"))
+    assert (got.is_conj(), got.is_neg()) == (want.is_conj(), want.is_neg())
+    assert torch.allclose(got.cpu(), want)

@@ -63,12 +63,18 @@ def is_traced(t):
     return isinstance(t, RemoteTensor) and isinstance(t._rgpu_meta, _TRACED)
 
 
-def meta_like(dtype, shape, stride, offset=0):
-    """A meta tensor with exactly this layout, offset included."""
+def meta_like(dtype, shape, stride, offset=0, conj=False, neg=False):
+    """A meta tensor with exactly this layout, offset and lazy bits included."""
     if offset == 0 or any(s == 0 for s in shape):
-        return torch.empty_strided(shape, stride, dtype=dtype, device="meta")
-    extent = offset + 1 + sum((s - 1) * st for s, st in zip(shape, stride))
-    return torch.empty(extent, dtype=dtype, device="meta").as_strided(shape, stride, offset)
+        m = torch.empty_strided(shape, stride, dtype=dtype, device="meta")
+    else:
+        extent = offset + 1 + sum((s - 1) * st for s, st in zip(shape, stride))
+        m = torch.empty(extent, dtype=dtype, device="meta").as_strided(shape, stride, offset)
+    if conj:
+        torch._C._set_conj(m, True)
+    if neg:
+        torch._C._set_neg(m, True)
+    return m
 
 
 class RemoteTensor(torch.Tensor):

@@ -145,7 +145,8 @@ def _compiler(mode, compiler):
             outs, out_ids = [], []
             for v in values:
                 if isinstance(v, torch.Tensor):
-                    m = meta_like(v.dtype, list(v.shape), list(v.stride()), v.storage_offset())
+                    m = meta_like(v.dtype, list(v.shape), list(v.stride()), v.storage_offset(),
+                                  v.is_conj(), v.is_neg())
                     out_ids.append(register(m))
                     outs.append(m)
                 else:
