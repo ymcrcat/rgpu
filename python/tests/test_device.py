@@ -165,3 +165,23 @@ def test_an_unsupported_argument_raises_at_the_call_and_spares_the_queue():
         torch.normal(0.0, 1.0, size=(3,), device="rgpu", generator=torch.Generator())
     assert torch.equal(r.cpu(), torch.tensor([1.0, 2.0]))
     assert torch.equal(r.cpu(), torch.tensor([1.0, 2.0]))
+
+
+def _local_accelerator():
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return None
+
+
+@pytest.mark.skipif(_local_accelerator() is None, reason="needs a local cuda or mps device")
+@pytest.mark.xfail(strict=True, raises=RuntimeError,
+                   reason="pytorch/pytorch#161129: naming the PrivateUse1 backend makes it the "
+                          "process's accelerator, and backward on any other one asserts")
+def test_backward_on_a_local_accelerator_still_works_with_rgpu_imported():
+    """Not ours to fix: see the troubleshooting page. Strict, so that the
+    PyTorch release which fixes it fails this test and the page gets updated."""
+    x = torch.randn(4, 4, device=_local_accelerator(), requires_grad=True)
+    (x @ x).sum().backward()
+    assert x.grad is not None

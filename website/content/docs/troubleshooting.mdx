@@ -39,6 +39,18 @@ The Python opserver resolves ATen operations. A non-ATen custom operator has no 
 
 The client cannot preallocate an output whose size depends on GPU data. Use the operation without `out=`; expect a host wait to obtain the result metadata.
 
+## backward() on a local GPU fails after importing rgpu
+
+A process that imports `rgpu` cannot also train on a local `cuda` or `mps` device. The local `backward()` fails with:
+
+```text
+RuntimeError: opt_ready_stream && opt_parent_stream INTERNAL ASSERT FAILED at ".../torch/csrc/autograd/engine.cpp"
+```
+
+This is a PyTorch limitation, not a failure of the remote session. PyTorch assumes one accelerator per process, and naming a custom device makes that device the accelerator, so gradients on any other one lose their stream. It is tracked as [pytorch/pytorch#161129](https://github.com/pytorch/pytorch/issues/161129) and affects PyTorch 2.8 and later.
+
+Forward passes on the local device still work, and so does everything on `rgpu`. To compare local and remote training, run them in separate processes and import `rgpu` only in the remote one.
+
 ## The session is gone
 
 The GPU process may have restarted, or the disconnected session may have expired. Its old tensor handles are no longer valid. Restart the workload and restore a saved checkpoint. Extending a grace period cannot recover memory after a server restart.

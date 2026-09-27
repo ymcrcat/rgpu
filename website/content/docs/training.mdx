@@ -65,5 +65,6 @@ A bare `torch.compile(model)` selects PyTorch's default backend, not rGPU's grap
 - Non-ATen custom operators are unsupported in both eager and compiled execution.
 - Data-dependent output shapes require a server response and cannot use an `out=` tensor on that path.
 - Keep parameters, optimizer state and repeated inputs remote where the workload permits.
+- Do not train on a local `cuda` or `mps` device in a process that has imported `rgpu`. See [troubleshooting](/docs/troubleshooting/).
 
 Read [performance guidance](/docs/performance/) before treating reduced message counts as a speedup.
