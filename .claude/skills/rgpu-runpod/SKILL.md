@@ -47,9 +47,12 @@ minutes because nothing ever looked at the whole list.
 ./scripts/runpod.sh delete    # destroy it, stops the disk charge too
 ```
 
-Set `RUNPOD_API_KEY`, or set `OP_ITEM` to a 1Password secret reference. If a
-command using `OP_ITEM` fails with an authorization timeout, the user has to
-unlock the vault before retrying.
+Set `RUNPOD_API_KEY`, or set `OP_ITEM` to a 1Password secret reference. The
+reference itself is deliberately not in the repository: it lives in the
+agent's session memory outside the checkout, so pass it on the command line
+(`OP_ITEM=op://... ./scripts/runpod.sh status`). If a command using `OP_ITEM`
+fails with an authorization timeout, the user has to unlock the vault before
+retrying.
 
 **Name the pod `rgpu-dev`, which is what `NAME` already defaults to.**
 Every subcommand in `scripts/runpod.sh` - `status`, `start`, `stop`, `delete` -
@@ -262,11 +265,12 @@ token; if a runpod command behaves strangely, check the key looks like a key
 before debugging anything else. This is worst when it happens on the way out:
 a delete that fails this way leaves the pod billing, so always re-check the
 pod list after any command that printed "Malformed Bearer token". Two accounts
-are configured on this machine, so the signin has to name one, and a bare
+are configured on this machine, so the signin has to name one (the account is
+recorded in session memory next to the secret reference), and a bare
 `op signin` fails with "multiple accounts found":
 
 ```sh
-op signin --account my.1password.com   # the Personal vault lives here
+op signin --account <account>
 ```
 
 ## Choosing hardware
