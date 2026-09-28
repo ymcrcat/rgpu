@@ -66,6 +66,36 @@ On an Apple Silicon Mac, use `rgpu-opserver --device mps` to execute on the loca
 Apple GPU instead. The workload still selects `device="rgpu"`; selecting
 `device="mps"` in the workload bypasses rGPU.
 
+## Share one GPU
+
+One `rgpu-opserver` accepts any number of clients. Each connection gets its
+own session, and one client cannot reach another's tensors. The clients
+share the GPU by time-slicing, just as two local processes would.
+
+For workloads that should not affect each other, run one server per
+workload on its own port, and cap each server's share of GPU memory:
+
+```sh
+rgpu-opserver --port 9720 --memory-fraction 0.5 &
+rgpu-opserver --port 9721 --memory-fraction 0.5 &
+```
+
+Without a cap, a workload can take all of the GPU's memory, and the others
+then fail with out-of-memory errors. The cap applies to the whole server
+process, not to each session, which is why each workload needs its own
+server. Separate servers also stop the workloads competing for one Python
+process's CPU time.
+
+rGPU does not schedule GPU time between workloads. For fair shares or
+hardware isolation, use NVIDIA's own tools underneath: run the MPS daemon
+(`nvidia-cuda-mps-control -d`) on the GPU host, or partition a MIG-capable
+GPU and start each server on its own partition with `CUDA_VISIBLE_DEVICES`.
+
+Share a server only with people you would give a shell on the GPU host.
+There is no authentication, so anyone who can reach the port can run any
+operation on the GPU. Give each person their own SSH tunnel, and never
+expose the port.
+
 ## Recovering a connection
 
 The server retains disconnected session state for a grace period, default 120 seconds. The clients can attempt to reconnect to retained state. This handles some transport interruptions; it does not make GPU memory persistent.

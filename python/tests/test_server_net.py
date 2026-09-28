@@ -145,3 +145,45 @@ def test_the_drop_hook_closes_mid_batch():
             wire.recv_frame(s)
     finally:
         proc.kill()
+
+
+def test_two_clients_share_a_server_without_seeing_each_others_tensors(server):
+    # Both name their tensor 1, at the same time, from separate sessions.
+    # Each must get back only its own, and a third session asking for
+    # tensor 1 must be told it has none.
+    results, errors = {}, []
+
+    def client(scale):
+        try:
+            s, _ = handshake(server, os.urandom(16))
+            ops = [[1, wire.RUN, "aten::ones", "default", [[4]],
+                    {"dtype": torch.float32, "device": wire.Dev("rgpu")}, [1]]]
+            ops += [[seq, wire.RUN, "aten::add_", "Scalar", [wire.Ref(1), scale], {}, []]
+                    for seq in range(2, 202)]
+            wire.send_frame(s, wire.encode(ops + [[202, wire.DOWNLOAD, 1]]))
+            _, status, host = wire.decode(wire.recv_frame(s))
+            assert status == wire.OK
+            results[scale] = host.tensor()
+        except Exception as e:  # noqa: BLE001 - surfaced by the main thread
+            errors.append(e)
+
+    threads = [threading.Thread(target=client, args=(k,)) for k in (1.0, -1.0)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+    assert not errors
+    assert torch.equal(results[1.0], torch.full((4,), 201.0))
+    assert torch.equal(results[-1.0], torch.full((4,), -199.0))
+
+    s, _ = handshake(server, os.urandom(16))
+    wire.send_frame(s, wire.encode([[1, wire.DOWNLOAD, 1]]))
+    _, status, _ = wire.decode(wire.recv_frame(s))
+    assert status == wire.ERROR
+
+
+def test_a_memory_fraction_is_refused_for_a_device_that_cannot_limit_it(capsys):
+    from rgpu.server.__main__ import main
+    with pytest.raises(SystemExit):
+        main(["--device", "cpu", "--memory-fraction", "0.5"])
+    assert "--memory-fraction needs a CUDA device" in capsys.readouterr().err

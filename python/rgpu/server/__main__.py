@@ -153,7 +153,12 @@ def main(argv=None):
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--port", type=int, default=9720)
     parser.add_argument("--bind", default="127.0.0.1")
+    parser.add_argument("--memory-fraction", type=float, metavar="F",
+                        help="cap this server at fraction F of the GPU's memory, "
+                             "so workloads sharing the GPU cannot starve each other")
     args = parser.parse_args(argv)
+    if args.memory_fraction is not None and torch.device(args.device).type != "cuda":
+        parser.error("--memory-fraction needs a CUDA device")
 
     torch.empty(0, device=args.device)   # fail now if the device is unusable
     if torch.device(args.device).type == "cuda":
@@ -165,6 +170,10 @@ def main(argv=None):
         allow = os.environ.get("RGPU_TF32") == "1"
         torch.backends.cuda.matmul.allow_tf32 = allow
         torch.backends.cudnn.allow_tf32 = allow
+        if args.memory_fraction is not None:
+            # Per process, not per session: run one server per workload.
+            torch.cuda.set_per_process_memory_fraction(args.memory_fraction,
+                                                       torch.device(args.device))
     registry = Registry(args.device, float(os.environ.get("RGPU_SESSION_GRACE", 120)))
     drop = Drop(int(os.environ.get("RGPU_DROP_AFTER", 0)))
     server = socket.create_server((args.bind, args.port))

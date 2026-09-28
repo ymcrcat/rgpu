@@ -27,6 +27,9 @@ RGPU_TF32=1 rgpu-opserver
 
 TF32 trades numerical behavior for performance. Compare results at your workload's tolerance before enabling it.
 
+`rgpu-opserver --memory-fraction F` caps the server at fraction `F` of the
+GPU's memory. It needs a CUDA device. See [Share one GPU](/docs/operations/#share-one-gpu).
+
 `RGPU_ALLOW_VERSION_MISMATCH=1` is a diagnostic escape hatch, not a compatibility guarantee. Do not use a mismatched benchmark run as the supported installation recipe.
 
 The flush thresholds control when queued work is written to the socket; reaching
