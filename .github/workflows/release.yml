@@ -1,0 +1,27 @@
+name: Release
+
+# Publishes python/ to PyPI when a v* tag is pushed. PyPI trusts this
+# workflow file and the pypi environment, so no token is stored anywhere.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  pypi:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check the tag matches the package version
+        run: |
+          version=$(python -c "import tomllib; print(tomllib.load(open('python/pyproject.toml','rb'))['project']['version'])")
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME but pyproject says $version"; exit 1; }
+      - run: python -m pip install build && python -m build python
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: python/dist
