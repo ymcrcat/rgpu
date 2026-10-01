@@ -1,0 +1,8 @@
+........................................                                 [100%]
+=============================== warnings summary ===============================
+tests/test_compile.py::test_the_default_backend_says_which_backend_to_use
+  /Users/yan/Documents/LlmGames/rgpu/python/.venv/lib/python3.14/site-packages/torch/_functorch/_aot_autograd/autograd_cache.py:707: UserWarning: RemoteTensor does not implement _stable_hash_for_caching. For PT2-compatible tensor subclasses, it is recommended to implement _stable_hash_for_caching(self) -> str for stable AOT autograd caching.
+    warn_once(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+40 passed, 1 warning in 42.54s

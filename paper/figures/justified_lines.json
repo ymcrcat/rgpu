@@ -1,0 +1,6092 @@
+[
+ {
+  "page": 1,
+  "gap": 1.007,
+  "text": "bility-oriented CUDA interception stack and a PyTorch device that",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.015,
+  "text": "preserving the application's expectations without making every op-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.018,
+  "text": "the client. The PyTorch path computes output metadata locally, as-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.03,
+  "text": "amine that question rather than claim that API remoting, asynchro-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.032,
+  "text": "points and forwards them to a server with the real CUDA stack. Its",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.044,
+  "text": "measure the Python path only, on one GPU model, one model, and",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.047,
+  "text": "creates obligations: output identities must exist before their values,",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.06,
+  "text": "rGPU implements two answers to this problem. Its CUDA path re-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.065,
+  "text": "tions include a 20-step transformer training loop taking 20.8 s on a",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.069,
+  "text": "would add work to the side that is already the constraint. These re-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.075,
+  "text": "execution from 45.42 ms to 2.07 ms for a small repeated computa-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.08,
+  "text": "er than native execution with a matched single-tensor optimizer, at",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.08,
+  "text": "those that provide the desired accelerator. Moving the entire appli-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.084,
+  "text": "cation to a GPU server is straightforward when its data, dependen-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.093,
+  "text": "coarse-RPC baseline needed for a submission are specified in Sec-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.132,
+  "text": "remote A40 at a reported 116 ms RTT, versus 60.8 s through a lo-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.142,
+  "text": "paper is an implementation and characterization report; it does not",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.153,
+  "text": "on the same GPU from a client on the server's host, limited by the",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.179,
+  "text": "overhead. A new CPU loopback experiment finds that graph ship-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.182,
+  "text": "PyTorch path exposes an explicit rgpu device and forwards ATen",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.206,
+  "text": "mine the practicality of remote execution? We use rGPU to ex-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.207,
+  "text": "tained by a remote session. Static graphs can be shipped once and",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.23,
+  "text": "GPU applications are often developed on machines different from",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.231,
+  "text": "deferred errors, replay, and API compatibility. Historical observa-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.268,
+  "text": "and eager remoting of a training step was 8.9x slower than native",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.277,
+  "text": "when interactive state, development tools, or host-side integration",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.284,
+  "text": "Third, it reports historical GPU observations, a reproducible CPU",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.302,
+  "text": "performance and correctness tradeoffs, including synchronization,",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.314,
+  "text": "boundary: retain the host program locally and execute accelerator",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.328,
+  "text": "sults come from one GPU model, one model, and one batch size.",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.339,
+  "text": "This is an implementation and characterization report: it does not",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.339,
+  "text": "plementation that introduces a reply at every submission destroys",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.34,
+  "text": "compilation reduced messages but slowed a short historical train-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.347,
+  "text": "The artifact examined is commit 7a8ba43 (full hash in Appendix",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.349,
+  "text": "implementation's contracts are narrower than the design suggests.",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.354,
+  "text": "from the longer-lived execution session. We explain the resulting",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.36,
+  "text": "the step reduced that to 3.0x. A follow-up experiment with client",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.364,
+  "text": "ping reduces 601 protocol messages to 41 and median completed",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.367,
+  "text": "nous submission, or framework-level execution is new. The most",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.372,
+  "text": "rating client, server, and network time, making the limits of each",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.372,
+  "text": "dict many output shapes and strides locally. It therefore returns a",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.383,
+  "text": "invoked by identifier. These are separate protocols and execution",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.4,
+  "text": "tained as historical evidence, not silently attributed to the current",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.405,
+  "text": "Remote GPU execution separates application placement from ac-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.409,
+  "text": "cal MPS server; this compares deployment choices, not remoting",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.412,
+  "text": "tion, while remaining slower than native CPU execution. On one",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.434,
+  "text": "boundary and the frequency of host-observable results deter-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.437,
+  "text": "celerator placement, but fine-grained host-device interactions can",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.472,
+  "text": "cies, and control logic already belong there. It is less convenient",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.476,
+  "text": "The difficult part is not sending an operation over a socket. It is",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.479,
+  "text": "downloaded tensor, or an explicit synchronization. A remote im-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.488,
+  "text": "ing run, tiny operations remain much cheaper to execute locally,",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.493,
+  "text": "failures must remain observable, and reconnecting must not exe-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.494,
+  "text": "and server pinned to disjoint cores and latency injected on loop-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.499,
+  "text": "forwards tensor operations while retaining application control on",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.507,
+  "text": "the ordering and failure mechanisms required to make streaming",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.521,
+  "text": "operations. The latter has enough framework information to pre-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.532,
+  "text": "defensible contribution is a concrete implementation and charac-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.547,
+  "text": "terization of their combination for client-resident programs. This",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.568,
+  "text": "round trip from 0 to 116 ms, while time spent blocked grew by",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.568,
+  "text": "the same workload in half the time through a 46 ms ssh tunnel.",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.577,
+  "text": "signs remote tensor identifiers before execution, and streams or-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.627,
+  "text": "server's was about half, and eager time did not change with the",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.628,
+  "text": "graph shipping moves repeated forward and backward computa-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.636,
+  "text": "answer the central question with a controlled comparison of the",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.661,
+  "text": "turn a fast accelerator into a slow distributed system. rGPU ex-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.676,
+  "text": "places supported driver, runtime, and mathematical-library entry",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.76,
+  "text": "The central question of this paper is: how do the interception",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.795,
+  "text": "tion to the server. Both paths distinguish a network connection",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.799,
+  "text": "A). Historical measurements predate this inspection and are re-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.857,
+  "text": "The paper contributes three things. First, it presents the design",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.865,
+  "text": "metadata-bearing tensor immediately, with the actual tensor re-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.895,
+  "text": "whose results remain on the device before it needs a scalar, a",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.896,
+  "text": "this opportunity for overlap. Conversely, returning immediately",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.897,
+  "text": "tradeoff between compatibility through CUDA interception and",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.923,
+  "text": "Compression of the operation stream, measured offline at 10x,",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.934,
+  "text": "mechanism experiment, and two same-GPU L40S experiments,",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.978,
+  "text": "back found the client process CPU-bound throughout: with no",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 2.044,
+  "text": "added delay its CPU time was within 0.4% of wall time, the",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 2.158,
+  "text": "mission from completion. A client can issue many operations",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 2.298,
+  "text": "belong on the client. GPU remoting offers another execution",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 2.322,
+  "text": "dered operations without awaiting individual replies. Optional",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 2.36,
+  "text": "explicit. The evaluation deliberately includes negative results:",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 2.722,
+  "text": "one batch size. The matched two-boundary comparison and",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.006,
+  "text": "its reconnect protocol retains live server state rather than creating a",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.007,
+  "text": "execution. A low boundary preserves more of the original software",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.02,
+  "text": "ty claim. The relevant distinction is the additional framework-level",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.022,
+  "text": "narrower programming interface. This choice is independent of the",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.023,
+  "text": "into CPU- and GPU-intensive subgraphs and coordinate placement",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.043,
+  "text": "Genie. Hong et al.'s HotNets paper, Lost in Translation, argues for",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.049,
+  "text": "imposing overhead on an otherwise identical execution. rGPU cur-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.049,
+  "text": "framework-level accelerator disaggregation and proposes a seman-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.06,
+  "text": "ary in this survey, but it addresses a different problem: distributing",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.064,
+  "text": "one workload's kernels among several accelerators that are all near",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.068,
+  "text": "the prototype on an LLM executed across a disaggregated network",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.101,
+  "text": "HPC nodes, including communication optimizations and an Infini-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.104,
+  "text": "porting remote execution and checkpoint/restart. Their paper sepa-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.106,
+  "text": "ated resource control. AvA is particularly relevant to the engineer-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.107,
+  "text": "that has none. Its relevance here is as a data point that kernel-level",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.117,
+  "text": "tensor properties, then applies an FX pass, and the paper evaluates",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.117,
+  "text": "granularity is workable when the interconnect is a cluster fabric; it",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.121,
+  "text": "celerator specification system or hypervisor-enforced sharing poli-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.144,
+  "text": "[8, Section 3.1 and evaluation]. rGPU's Python path uses the same",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.151,
+  "text": "rates API virtualization from checkpointing and evaluates applica-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.156,
+  "text": "ware transparency, nor can results from their datacenter setup pre-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.157,
+  "text": "sharing, and pipelined model execution. Asynchronous redirection",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.168,
+  "text": "ference is in use rather than mechanism: rGPU executes intercept-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.184,
+  "text": "Torpor. Yu et al. build a serverless inference platform that shares",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.204,
+  "text": "durable checkpoint. A broken connection and a failed GPU server",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.215,
+  "text": "overlaps rGPU at the mechanism level, not only in motivation: its",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.216,
+  "text": "tically rich graph carrying execution and residency information. It",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.216,
+  "text": "tion performance, microbenchmarks, and state recovery. It also il-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.218,
+  "text": "interception point, a _ _ torch_ dispatch_ _ tensor subclass carry-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.223,
+  "text": "wrappers and annotations, but does not provide AvA's general ac-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.229,
+  "text": "transport: TCP, RDMA, and shared memory can support different",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.24,
+  "text": "ing meta-derived properties, and FX graphs for shipping. The dif-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.245,
+  "text": "from API specifications and combine them with hypervisor-medi-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.247,
+  "text": "lustrates how frequent host-device exchanges can expose commu-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.249,
+  "text": "tradeoff: preserving the software-facing device abstraction can re-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.249,
+  "text": "This distinction is directly useful here: a system can outperform a",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.253,
+  "text": "make API requests outstanding rather than awaited, keep a client-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.263,
+  "text": "quire specialized infrastructure. rGPU instead uses software inter-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.283,
+  "text": "DxPU. He et al. disaggregate GPUs at the PCIe transaction level,",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.284,
+  "text": "with elastic resizing. That is relocation of execution state. rGPU's",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.315,
+  "text": "DGSF. Fingler et al. specialize API remoting for serverless func-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.327,
+  "text": "within a serving cluster. It is the finest-grained placement bound-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.329,
+  "text": "aggregate work and understand tensors or graphs, at the cost of a",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.339,
+  "text": "ing cost of a broad, evolving interface. rGPU also uses generated",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.343,
+  "text": "pooled GPUs as prior art. rGPU's CUDA path belongs to this es-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.346,
+  "text": "faces and ordinary stream sockets. It cannot inherit DxPU's hard-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.35,
+  "text": "are the same two principles applied at the ATen boundary. rGPU",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.351,
+  "text": "stack but exposes less application meaning. A high boundary can",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.374,
+  "text": "execution into LazyTensor proxies that capture dependencies and",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.401,
+  "text": "swered locally and shadow identifiers mapped to real ones, com-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.403,
+  "text": "nication overhead. rGPU shares the API-interposition setting, but",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.406,
+  "text": "a node's GPUs among functions by swapping models onto GPUs",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.407,
+  "text": "prototype PyTorch frontend uses _ _ torch_ dispatch_ _ to defer",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.416,
+  "text": "ters, or regions, and resumes them from the point of preemption,",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.449,
+  "text": "the serving host, not keeping a host program resident on a client",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.451,
+  "text": "tions through resource pooling, latency-hiding optimizations, and",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.454,
+  "text": "rGPU's graph shipping retains a graph on one server; it does not",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.479,
+  "text": "preempts deep-learning jobs, migrates them to other nodes, clus-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.483,
+  "text": "rently addresses remote execution and connection continuity, not",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.487,
+  "text": "adds an implementation at that boundary over ordinary TCP and",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.487,
+  "text": "reconnect restores transport continuity to a live server session; it",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.5,
+  "text": "deployment baseline because of resource management while still",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.501,
+  "text": "GPU remoting interposes between an application and accelerator",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.506,
+  "text": "Singularity. Shukla et al. describe a scheduler that transparently",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.514,
+  "text": "and RDMA communication at production scale. Prism illustrates",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.528,
+  "text": "pare this with request batching, and validate an RTT- and band-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.535,
+  "text": "what workload semantics can enable beyond individual API for-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.549,
+  "text": "ment scenarios. This work establishes remote CUDA access and",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.576,
+  "text": "GPU execution migration. Their evaluation separates the cost of",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.587,
+  "text": "using proxy hardware and a performance model to guide imple-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.622,
+  "text": "side shadow of each remote resource so that queries can be an-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.66,
+  "text": "gregation baselines are a useful template for isolating overhead.",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.729,
+  "text": "and benchmarks to a production application and shared deploy-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.769,
+  "text": "larity of individual kernels, extracting inter-kernel dependencies",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.786,
+  "text": "rCUDA. Pena et al. describe transparent CUDA sharing across",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.821,
+  "text": "there serves resource sharing within a node. rGPU attempts no",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.848,
+  "text": "automatically partition a model or implement a topology-aware",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.856,
+  "text": "warding. Its native, colocated-disaggregation, and remote-disag-",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.879,
+  "text": "Band implementation. Their evaluation moves from correctness",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 1.898,
+  "text": "client-assigned tensor identifiers and locally predicted metadata",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 2.022,
+  "text": "remoting from the benefits of optimizations and consolidation.",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 2.035,
+  "text": "Network requirements for GPU API remoting. Wang et al.",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 2.086,
+  "text": "mentation and evaluation. This offers a different compatibility",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 2.091,
+  "text": "width-based cost model against RDMA measurements. rGPU's",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 2.102,
+  "text": "SSH, a separate CUDA implementation, and measurements of",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 2.103,
+  "text": "from PTX and scheduling kernels across heterogeneous GPUs",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 2.134,
+  "text": "on request, using asynchronous API redirection, GPU runtime",
+  "code_only": false
+ },
+ {
+  "page": 2,
+  "gap": 2.167,
+  "text": "AvA. Yu et al. generate accelerator virtualization components",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.005,
+  "text": "ior and lost execution state rather than silently continue with incor-",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.006,
+  "text": "tions over useful remote work. It should report unsupported behav-",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.007,
+  "text": "mechanisms individually have precedents; what this paper offers is",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.007,
+  "text": "tions: retain an interactive user experience while moving execution",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.009,
+  "text": "different integration choice, whose advantages should be evaluated",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.02,
+  "text": "and invocation. Graph shipping and compiler optimization are sep-",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.028,
+  "text": "point service, or a secure multi-tenant GPU platform. The two pro-",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.069,
+  "text": "PyTorch and PyTorch 2. PyTorch's imperative execution and au-",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.077,
+  "text": "the framework-level question studied here, so a technical compari-",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.097,
+  "text": "son is a required step before submission and is recorded as such in",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.132,
+  "text": "trust domain. The CUDA listener additionally requires firewall re-",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.142,
+  "text": "keeping host code separate while shipping GPU graphs for remote",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.15,
+  "text": "separately invoked serverless functions, implemented on Ray. The",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.152,
+  "text": "TorchDynamo and TorchInductor provide graph capture and com-",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.172,
+  "text": "arXiv, USENIX, ACM, and Semantic Scholar - and found no pre-",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.18,
+  "text": "dispatch as the integration boundary. A fair alternative for evalua-",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.21,
+  "text": "made. Given Wang et al., Genie, and Kernel-as-a-Service, rGPU's",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.217,
+  "text": "while Genie builds an annotated graph for a scheduler to place by",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.228,
+  "text": "strictions because its default bind exposes all IPv4 interfaces. The",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.278,
+  "text": "PyTorch RPC. Li et al. provide tensor-aware RPC, remote refer-",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.287,
+  "text": "tember 26, 2026 we attempted to obtain the full text through four",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.298,
+  "text": "tocols have no built-in authentication or encryption. The intended",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.306,
+  "text": "against execution of the whole program remotely. We cite the re-",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.369,
+  "text": "print or abstract. We therefore do not infer its mechanisms or re-",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.418,
+  "text": "arable: a shipped graph can execute eagerly on the server, which",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.45,
+  "text": "not the implemented counterpart of a conceptual proposal, and it",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.461,
+  "text": "rGPU aims to keep application control on a client, preserve sup-",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.507,
+  "text": "Kernel-as-a-Service. Pemberton et al. run host code as ordinary",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.511,
+  "text": "allows us to study granularity changes without kernel fusion. [9,",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.512,
+  "text": "group, a third-party OSDI 2026 index, and searches restricted to",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.534,
+  "text": "NotebookOS. Carver et al. address interactive GPU use through",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.537,
+  "text": "The literature review also located the OSDI 2026 program entry",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.547,
+  "text": "ences, and distributed autograd for explicitly distributed applica-",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.577,
+  "text": "ported tensor or CUDA behavior, and amortize network interac-",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.586,
+  "text": "deployment uses trusted access, normally SSH, and a server per",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.594,
+  "text": "Awareness. Only listing-level information was verified. On Sep-",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.595,
+  "text": "backend connects this infrastructure to remote graph registration",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.61,
+  "text": "phase and residency, which rGPU does not implement. rGPU is",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.611,
+  "text": "tion is a manually coarse-grained RPC that executes a complete",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.619,
+  "text": "two independent implementations for client-resident programs, a",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.625,
+  "text": "automated retrieval), the publications page of a listed coauthor's",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.631,
+  "text": "rect values. Clients may opt into the PyTorch device or use the",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.673,
+  "text": "The implementation is not a cluster scheduler, a durable check-",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.674,
+  "text": "serverless functions and execute graphs of GPU-only kernels as",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.756,
+  "text": "This is an important alternative to forwarding individual opera-",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.765,
+  "text": "at a notebook boundary. rGPU's client-resident process offers a",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.8,
+  "text": "statement of their ordering, failure, and recovery contracts, and",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.82,
+  "text": "interface and setting differ from rGPU's device abstraction, but",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.843,
+  "text": "replicated notebook kernels and on-demand resource allocation.",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.897,
+  "text": "problem. rGPU instead presents device placement and operator",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.915,
+  "text": "tions. These primitives solve a broader application-composition",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.954,
+  "text": "step or model remotely, since it may avoid much of the fine-",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.992,
+  "text": "pilation rather than components invented by rGPU. The rGPU",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 1.992,
+  "text": "rankings. Prior systems were not installed or measured in this",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 2.131,
+  "text": "tograd provide the programming model rGPU seeks to retain.",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 2.278,
+  "text": "study, and their published performance numbers use different",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 2.341,
+  "text": "hardware and workloads. No quantitative superiority claim is",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 2.471,
+  "text": "Table 1 summarizes architectural distinctions, not benchmark",
+  "code_only": false
+ },
+ {
+  "page": 3,
+  "gap": 2.932,
+  "text": "for Djinn: Transparent GPU Disaggregation with Semantic",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.005,
+  "text": "Distinguish these from F, the number of transport frames or writes.",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.007,
+  "text": "latency predictor. An awaited reply may also include server queue-",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.022,
+  "text": "Socket backpressure can stall submission without incrementing the",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.024,
+  "text": "Remote tensor identity is attached to the local meta tensor. This al-",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.031,
+  "text": "rgpu-opserver, which executes supported ATen operations on its",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.042,
+  "text": "width-delay effects require separate measurement. The presence of",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.075,
+  "text": "remote object without moving its values. Schema alias annotations",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.076,
+  "text": "This model yields three testable expectations. Frequent host obser-",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.076,
+  "text": "braries. Runtime calls include handwritten translation to driver op-",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.077,
+  "text": "primarily reduce repeated client dispatch and encoding, with bene-",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.079,
+  "text": "configured CUDA, MPS, or CPU device. CPU and MPS backends",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.091,
+  "text": "are serialized to a C++ server and executed through real CUDA li-",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.095,
+  "text": "lows wrapper reconstruction and graph tracing to refer to the same",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.103,
+  "text": "For example, multiplying two suitably shaped remote tensors need",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.116,
+  "text": "identify operations that return a written input rather than a new re-",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.117,
+  "text": "press a subsequent activation or matrix multiplication even though",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.117,
+  "text": "metadata bits. At the inspected commit, compiled-graph output re-",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.119,
+  "text": "dently measured components. Under approximately constant RTT,",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.15,
+  "text": "can infer them. The client therefore has enough information to ex-",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.16,
+  "text": "sult. Views and layout metadata matter because subsequent opera-",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.173,
+  "text": "can be measured with the available environment and distinguishes",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.183,
+  "text": "The implementation rejects several in-place metadata changes and",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.185,
+  "text": "vations should increase sensitivity to RTT. Graph shipping should",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.191,
+  "text": "downloading a tensor, and printing values also require a response.",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.192,
+  "text": "network ~= W * R. This is a sensitivity estimate, not a complete",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.201,
+  "text": "ble throughput, not necessarily added wall-clock time. Startup up-",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.215,
+  "text": "taining the operation name, overload, arguments, and output iden-",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.215,
+  "text": "Not every operation permits this treatment. A data-dependent out-",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.216,
+  "text": "fixed costs even on loopback. Section 6 tests the mechanisms that",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.24,
+  "text": "result. If the output metadata is known, rGPU allocates identifiers",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.247,
+  "text": "Let M denote the number of protocol messages, W the number of",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.259,
+  "text": "Similarly, B / beta describes transfer service demand under sta-",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.295,
+  "text": "tensor operations. A RemoteTensor carries local metadata and an",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.325,
+  "text": "driver, runtime, cuBLAS, cuBLASLt, and cuDNN surfaces. Calls",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.325,
+  "text": "demonstrated optimization. These are different research questions",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.343,
+  "text": "and out= parameters. It does not pretend every PyTorch operator",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.369,
+  "text": "can reduce M; it need not reduce W. Eliminating a host observa-",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.378,
+  "text": "ing, outstanding compute, and response serialization. Conversely,",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.382,
+  "text": "For an ordinary supported operation, the PyTorch dispatcher first",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.382,
+  "text": "Terms denote costs before subtracting their overlap, not indepen-",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.404,
+  "text": "compute time saved exceeds client dispatch, communication, and",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.424,
+  "text": "The PyTorch path places a dispatch layer under application-level",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.45,
+  "text": "neither operation has completed. This is more than socket batch-",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.489,
+  "text": "Batching reduces F; it need not reduce M or W. Graph shipping",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.516,
+  "text": "tifiers. The application can immediately construct another opera-",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.516,
+  "text": "client operations awaiting a reply, B the bytes transferred, R the",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.535,
+  "text": "The CUDA path exposes replacement libraries for the supported",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.578,
+  "text": "stride, and storage-layout information without allocating the real",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.604,
+  "text": "locally, builds wrapper outputs, and queues a RUN message con-",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.619,
+  "text": "should often remain faster locally because remote execution has",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.653,
+  "text": "unsupported combinations involving data-dependent output sizes",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.687,
+  "text": "synchronization costs. Against native execution on the same re-",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.853,
+  "text": "sequential non-overlapped reply dependencies suggest T_ wait,",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.867,
+  "text": "tions must interpret the server-side object consistently with the",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.869,
+  "text": "preloads can bypass an intended shim. This path targets Linux",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.881,
+  "text": "T = T_ start + T_ host + T_ remote + T_ encode + T_",
+  "code_only": true
+ },
+ {
+  "page": 4,
+  "gap": 1.882,
+  "text": "erations; regular driver wrappers are generated. Library-loading",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.97,
+  "text": "work can have executed while the client prepared the request.",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 1.994,
+  "text": "mote GPU, those costs must instead be hidden or offset by a",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 2.041,
+  "text": "The eager wrapper explicitly preserves conjugate and negative",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 2.068,
+  "text": "runs the operation on meta tensors. These carry shape, dtype,",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 2.42,
+  "text": "loads, bursty traffic, directionality, SSH overhead, and band-",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 2.45,
+  "text": "turning output metadata through RUN_SYNC. Scalar extraction,",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 2.581,
+  "text": "fits dependent on compilation amortization. Small operations",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 2.92,
+  "text": "details matter because an application's RPATH or absolute",
+  "code_only": false
+ },
+ {
+  "page": 4,
+  "gap": 3.353,
+  "text": "identifier; the server owns its values. Requests travel to",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.004,
+  "text": "input rather than a new output identifier, so when it fails, that input",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.008,
+  "text": "are unaffected. The synchronous-fallback reply of Section 4.2 like-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.014,
+  "text": "object is not freed ahead of an earlier queued operation that uses it.",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.02,
+  "text": "stream without fetching shapes. Shipping a graph changes commu-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.029,
+  "text": "entries until the session ends. A bare torch. compile selects a dif-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.048,
+  "text": "flushes preceding operations first. Crossing a flush threshold sends",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.051,
+  "text": "tract is narrower than the eager wrapper's. A dense non-contiguous",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.055,
+  "text": "ing-free list. A later safe queueing point combines those identifiers",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.061,
+  "text": "for the first two messages. Metadata prediction makes the first two",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.061,
+  "text": "path in the Python server can resolve them. Graph registrations are",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.076,
+  "text": "back with the bit cleared: is_conj() was false where CPU execu-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.078,
+  "text": "In the CUDA path, requests carry the issuing client thread's identi-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.079,
+  "text": "session's thread state rather than a particular socket, so a reconnect",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.082,
+  "text": "meaningful. The client may still stall on encoding, locks, or socket",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.116,
+  "text": "against a CPU server. It was fixed after the inspected commit, in a",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.117,
+  "text": "quest reports the original failure instead of presenting a cascade of",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.119,
+  "text": "executing, so a SYNC that raises a deferred error has not completed",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.121,
+  "text": "session-scoped: FREE releases tensors but not registered graphs, so",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.128,
+  "text": "and tensor identifiers. The server reconstructs an FX graph and ei-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.132,
+  "text": "thread. Pending operations are encoded before being committed to",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.14,
+  "text": "through an already-returned call. In the Python server, a failed op-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.143,
+  "text": "tion reports true. This gap was found by an external review of this",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.157,
+  "text": "produce B, and download B correctly without separate responses",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.159,
+  "text": "The supported compiled path assumes fixed shapes. Some unship-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.16,
+  "text": "the configured device. Confusing these would either introduce un-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.172,
+  "text": "the sequence. The default flush thresholds are 64 messages or 256",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.173,
+  "text": "number of arithmetic operations. Throughout this paper, M counts",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.184,
+  "text": "failure left, before any observation reports the error. And a waited",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.185,
+  "text": "writes, so asynchronous submission does not imply unlimited par-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.193,
+  "text": "separately; reduced message traffic does not guarantee a lower to-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.194,
+  "text": "The Python client uses one connection per process, protected by a",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.195,
+  "text": "them through COMPILE, and later sends CALL messages with graph",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.226,
+  "text": "a batch but does not by itself require a reply. There is no periodic",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.229,
+  "text": "This is an error-propagation mechanism, not a transaction system.",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.229,
+  "text": "pected output slots. A dependent operation encountering poisoned",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.238,
+  "text": "wrong result has been demonstrated from it, but its metadata con-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.239,
+  "text": "construction did not: it rebuilt output metadata from dtype, shape,",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.242,
+  "text": "does not simply discard it. Maintaining per-thread context seman-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.25,
+  "text": "that returned a lazily conjugated or negated view of an intermedi-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.266,
+  "text": "payload and exclude frame-length headers and TCP or SSH over-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.268,
+  "text": "It does not roll back operations that completed earlier, and it can-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.268,
+  "text": "into a FREE message. Finalizers therefore do not perform network",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.314,
+  "text": "tensor downloaded to the client has its layout reconstructed when",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.326,
+  "text": "tion, tracing, compilation, and warm execution must be measured",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.328,
+  "text": "ferent backend and is not a transparent substitute. Graph registra-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.34,
+  "text": "nication granularity: intermediates internal to the graph no longer",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.34,
+  "text": "tics requires more than serializing all requests through one server",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.353,
+  "text": "Two cases are narrower. An in-place operation returns its written",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.364,
+  "text": "retained replay data to be released. A SYNC additionally waits for",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.373,
+  "text": "pable graphs fall back to eager remote execution with a warning.",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.379,
+  "text": "ate, such as ( x * 2). conj() or ( x * 2). conj(). imag, came",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.399,
+  "text": "This ordering lets the server execute produce A, consume A to",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.405,
+  "text": "repeated recompilation in a long-lived session accumulates graph",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.409,
+  "text": "appropriate. Metadata correctness is thus not cosmetic: a missing",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.419,
+  "text": "eration records its first error and places poison objects in the ex-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.427,
+  "text": "not promise recovery from arbitrary partial device failure. It pre-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.43,
+  "text": "request that surfaces a deferred error reports that error instead of",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.452,
+  "text": "serves a useful diagnostic relationship between the failing opera-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.452,
+  "text": "rGPU integrates with AOTAutograd to obtain forward and back-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.464,
+  "text": "mode, and deferred asynchronous error. The error belongs to the",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.474,
+  "text": "compile. py; the fix is not part of the inspected artifact. Neither",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.483,
+  "text": "Protocol acknowledgement and GPU completion are distinct. An",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.521,
+  "text": "GPU operators or kernel launches. Byte counters report protocol",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.527,
+  "text": "knowledgement, and other control messages; it is not a count of",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.531,
+  "text": "conjugation bit can change how higher-level PyTorch operations",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.535,
+  "text": "I/O directly. Server-side release follows protocol ordering, so an",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.54,
+  "text": "Delayed frees also explain why a message count can exceed the",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.582,
+  "text": "ACK confirms progress through the operation stream and permits",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.606,
+  "text": "paper with a helper-level probe and then reproduced end to end",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.689,
+  "text": "submissions possible; the ordered session makes their execution",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.706,
+  "text": "benchmark uses complex tensors, so the reported measurements",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.722,
+  "text": "input skips execution and propagates poison. A later waited re-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.747,
+  "text": "change at every operation. It does not necessarily eliminate the",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.783,
+  "text": "sender: a tail below both thresholds stays buffered until a later",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.835,
+  "text": "ty. The server tracks that thread's context stack, stream-capture",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.884,
+  "text": "KiB of encoded pending data. A request that needs an answer",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.896,
+  "text": "wise carries only dtype, shape, stride, and offset; no reachable",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.952,
+  "text": "ward ATen graphs. It serializes allowed graph nodes, registers",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.994,
+  "text": "working-tree change that adds three regression cases to test_",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 2.091,
+  "text": "reentrant lock because autograd may issue work from another",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 2.092,
+  "text": "flush or waited request, so ordering is guaranteed but prompt",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 2.117,
+  "text": "Output metadata obtained during tracing again allows calls to",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 2.146,
+  "text": "require an individual client dispatch and remote identifier ex-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 2.198,
+  "text": "An asynchronous operation cannot report its execution failure",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 2.265,
+  "text": "Weak-reference finalizers enqueue dead identifiers in a pend-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 2.546,
+  "text": "backend is selected explicitly with torch. compile( model,",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.006,
+  "text": "shipping; when does host observation become expensive; and what",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.031,
+  "text": "tifact appendix maps each claim to source files. Handwritten anno-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.038,
+  "text": "and sharing impose additional trust-domain constraints. These lim-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.048,
+  "text": "tion uses the same operation-resolution boundary. This reduces the",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.056,
+  "text": "can fail when an earlier autograd graph still retains the original pa-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.056,
+  "text": "cause client and server operation schemas must agree. A mismatch",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.061,
+  "text": "ment near a 48 MiB threshold when applicable. A single oversized",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.068,
+  "text": "Version matching is checked at the PyTorch major/minor level be-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.068,
+  "text": "onciles progress and replays retained operations that the server has",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.076,
+  "text": "plemented entry points return an unsupported error. Some compat-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.077,
+  "text": "RNG state, so concurrent sessions can interfere with random-num-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.089,
+  "text": "client's reconnect retry loop has a default 60-second budget; this is",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.093,
+  "text": "stead of creating an empty replacement behind still-live tensor ref-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.094,
+  "text": "PyTorch 2.14.0 on macOS 26.5 arm64. Client and server are sepa-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.098,
+  "text": "ly-once guarantee across a server crash. The C++ path implements",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.104,
+  "text": "and unregistration without the device-map flag (with the flag, they",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.105,
+  "text": "Recovery is bounded. The Python client retains at most 64 MiB of",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.112,
+  "text": "benchmark.py on the inspected checkout using Python 3.14.7 and",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.129,
+  "text": "ported upstream as PyTorch issue 161129 and affects PyTorch 2.8",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.14,
+  "text": "name is enough to trigger it, with no rGPU code involved; it is re-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.146,
+  "text": "chronization, kernel execution, or every library version is support-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.15,
+  "text": "process and required session state survive. There is no durable log",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.167,
+  "text": "Same-GPU measurements (G). Two sessions on rented NVIDIA",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.173,
+  "text": "ferred merely from a C signature. An exported symbol or generat-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.177,
+  "text": "transparency. Fake-driver tests can validate serialization, dispatch,",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.193,
+  "text": "quest numbering. It should not be described as sharing the Python",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.196,
+  "text": "ization, C++ CUDA shims, and generated driver dispatch. The ar-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.197,
+  "text": "ters, or byte counts is marked as such. These estimates are neither",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.206,
+  "text": "Native CUDA and rGPU in one process. A process that has im-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.216,
+  "text": "an analogous live-session approach using its own protocol and re-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.218,
+  "text": "and caches the latest reply. After a connection loss, the client rec-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.227,
+  "text": "The implementation divides naturally into Python tensor dispatch,",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.246,
+  "text": "Python session transport, server operation execution, graph serial-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.265,
+  "text": "and protocol behavior; they cannot establish that real CUDA syn-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.266,
+  "text": "line is checked between attempts and a single connect (10-second",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.278,
+  "text": "datasets. Exact workload scripts and a benchmark commit are not",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.303,
+  "text": "restart reconstruction of lost GPU memory, and no general exact-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.304,
+  "text": "default timeout) or receive (300-second default) can overrun it. If",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.304,
+  "text": "not an end-to-end detection or recovery bound, because the dead-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.326,
+  "text": "cess: the two runtime profiler calls, and host-memory registration",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.328,
+  "text": "reset, whereas the Python client re-enables replay once the server",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.329,
+  "text": "pinned in the record. We preserve their caveats and do not attach",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.341,
+  "text": "and ordered replay address transport interruption while the server",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.341,
+  "text": "still consume resources, and authentication, authorization, quotas,",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.348,
+  "text": "device: PyTorch's autograd engine fails an internal assertion. The",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.359,
+  "text": "has acknowledged everything outstanding; and a waited C++ call",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.363,
+  "text": "tions prevent an obsolete connection from continuing to mutate a",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.375,
+  "text": "edged data exceeds a 64 MiB cap it disables replay with no later",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.384,
+  "text": "surface needed to represent a computation but does not make the",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.39,
+  "text": "request can exceed the cap and temporarily make replay unavail-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.394,
+  "text": "variables set OpenMP and MKL thread counts to one. No usable",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.401,
+  "text": "back. The client uses one Torch CPU thread; server environment",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.405,
+  "text": "Analytical estimates (A). Arithmetic using recorded RTT, coun-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.412,
+  "text": "the process's accelerator, and the engine then finds no stream for",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.414,
+  "text": "The evaluation asks four questions: can useful work amortize re-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.424,
+  "text": "Finally, ordering within one session is not isolation between ses-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.438,
+  "text": "The CUDA path does not support managed memory or network-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.451,
+  "text": "sions. In the Python server, seeding uses process-global PyTorch",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.459,
+  "text": "the server has lost the session, the client raises SessionLost in-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.463,
+  "text": "mote interaction; which costs are reduced by batching and graph",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.474,
+  "text": "ibility proof. Moving a model to rgpu before constructing a live",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.485,
+  "text": "erations rather than arbitrary Python callables. Graph reconstruc-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.486,
+  "text": "ibility entry points are instead intentional no-ops that return suc-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.499,
+  "text": "rate processes on the same host, communicating over TCP loop-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.505,
+  "text": "gets two transport attempts before it is abandoned with an error,",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.526,
+  "text": "CUDA or MPS device was exposed to this run. Host contention",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.527,
+  "text": "The guarantee is consequently conditional: duplicate suppression",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.539,
+  "text": "ported rGPU cannot run backward() on a local CUDA or MPS",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.55,
+  "text": "and later. Programs that train on both devices must use separate",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.563,
+  "text": "ber sequences. In the CUDA implementation, context ownership",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.586,
+  "text": "tations and library wrappers supply semantics that cannot be in-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.599,
+  "text": "wire format, and its replay contract differs: once its unacknowl-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.643,
+  "text": "transparent zero-copy host mappings. Generated stubs for unim-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.647,
+  "text": "sequence number; the server records the latest applied sequence",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.66,
+  "text": "tember 13-14, 2026 experiments using an Apple M3 client and,",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.66,
+  "text": "not applied. Duplicate sequences are suppressed. Attach genera-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.674,
+  "text": "TCP connection. Each operation has a monotonically increasing",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.705,
+  "text": "committing device effects atomically with protocol progress, no",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.73,
+  "text": "able. Detached sessions normally expire after 120 seconds. The",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.737,
+  "text": "Historical GPU observations (H). The repository records Sep-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.77,
+  "text": "return unsupported). Symbol coverage is therefore not semantic",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.771,
+  "text": "and power state were not controlled. This experiment measures",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.79,
+  "text": "unacknowledged encoded operations and requests acknowledge-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.814,
+  "text": "does recovery testing establish? We keep four evidence classes",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.867,
+  "text": "The Python handshake identifies a session independently of its",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.972,
+  "text": "grad-tracking execution is also significant: parameter swapping",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 2.008,
+  "text": "where specified, a rented NVIDIA A40 reached through SSH.",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 2.358,
+  "text": "These are single-run summaries rather than archived per-trial",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 2.818,
+  "text": "Fresh CPU measurements (F). We ran the accompanying",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.014,
+  "text": "ranges on shared cloud hosts, on a different GPU and link from the",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.042,
+  "text": "If graph execution adds setup cost C and saves d seconds per itera-",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.045,
+  "text": "A separate historical run used the same model family with batch 8,",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.056,
+  "text": "places and small later divergence between devices. This supports a",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.057,
+  "text": "py, ran native, colocated over loopback, and from a laptop through",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.061,
+  "text": "tion after warming, its simple break-even point is n > C / d, pro-",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.07,
+  "text": "limited numerical observation, not bitwise equivalence or long-run",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.072,
+  "text": "historical record, and are never combined with H. Arithmetic on G",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.077,
+  "text": "Each configuration receives two warmup calls. Remote blocks end",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.105,
+  "text": "convergence. A native-MPS attempt was recorded as failing in au-",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.145,
+  "text": "The graph configuration uses compiler=\"eager\" on the server. It",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.155,
+  "text": "sion. Warmup excludes tracing and graph registration from the re-",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.165,
+  "text": "vided d is positive. These two aggregate timings do not identify C",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.179,
+  "text": "operation. Multiplying five by 116 ms gives 0.58 s (A), but this is",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.183,
+  "text": "mizer, shipped the training step as a graph, and compared training",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.191,
+  "text": "therefore tests shipping and invoking a graph without Inductor fu-",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.199,
+  "text": "The recorded workload is a 10.8-million-parameter, six-layer, six-",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.204,
+  "text": "improvement over native A40 execution, nor quantify the price of",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.237,
+  "text": "remoting on the A40. The remote server ran Torch 2.11 while the",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.261,
+  "text": "more than propagation, and the counter and timing scopes are not",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.278,
+  "text": "with a device synchronization; downloads and numerical compar-",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.285,
+  "text": "cal host. The first, on September 26, 2026 with gpu_ benchmark.",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.287,
+  "text": "The loop-time ratio is 60. 8 / 20. 8 = 2. 92. The result demon-",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.287,
+  "text": "not a measured fraction of the 20.8 s loop: wait durations include",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.29,
+  "text": "01 to a 1,024-element float32 vector. Each timed block makes 20",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.315,
+  "text": "state against native (Section 6.9). Ratios within a session use that",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.316,
+  "text": "sured loop was 15.3% slower. This is a stronger evaluation result",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.325,
+  "text": "tograd; it therefore supplies no valid native-MPS timing baseline.",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.328,
+  "text": "als randomize the order of five configurations using a fixed seed.",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.375,
+  "text": "session's own native baseline. These are seven-trial medians with",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.396,
+  "text": "strates that this remote deployment completed the recorded train-",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.406,
+  "text": "yangpt build-along workload, not the later pinned tutorial script.",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.421,
+  "text": "Graph shipping reduced messages by 3.12x and operation-stream",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.428,
+  "text": "sequence length 64, and a local MPS server. Twenty eager itera-",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.479,
+  "text": "bytes by 2.60x, while total volume fell by only 1.16x. The mea-",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.488,
+  "text": "than simply reporting communication reduction: compilation and",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.528,
+  "text": "established as identical. It would be incorrect to attribute the re-",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.537,
+  "text": "cores, injected latency with a loopback proxy, matched the opti-",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.538,
+  "text": "an ssh tunnel (Section 6.8). The second, on September 27, 2026",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.539,
+  "text": "The recorded five waits are consistent with avoiding a reply per",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.55,
+  "text": "or d. They cannot establish that a longer run necessarily crosses",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.586,
+  "text": "head transformer with embedding width 384, batch size 64, se-",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.619,
+  "text": "with gpu_ experiments. py, pinned client and server to disjoint",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.672,
+  "text": "ported timed block. This is deliberately different from the short",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 1.734,
+  "text": "client ran 2.14 with the mismatch override enabled, outside the",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 2.03,
+  "text": "The historical note reports equal initial losses to four decimal",
+  "code_only": false
+ },
+ {
+  "page": 7,
+  "gap": 2.104,
+  "text": "isons occur outside the timed interval. The benchmark asserts",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.015,
+  "text": "Local execution is still best for tiny work. Native CPU execution",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.034,
+  "text": "1,968, about 23x. Median time falls by about 22x. Ratios are given",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.04,
+  "text": "20-step run. Each row specifies a different total number of sequen-",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.048,
+  "text": "complement to graph shipping, not a substitute: the record's graph-",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.049,
+  "text": "measurements report ratios of 1.08x, 5.38x, and 10.12x respective-",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.05,
+  "text": "savings exceed CPU and buffering costs. For payload size B, com-",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.061,
+  "text": "The graph configuration uses 41 messages versus 601, about a 15x",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.064,
+  "text": "training result therefore cannot be generalized to interactive gener-",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.065,
+  "text": "ms, about 1.5x the default eager median. This does not estimate an",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.096,
+  "text": "duce the weight upload far more than 1.08x. And compression is a",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.103,
+  "text": "changed. These quantities differ because eliminating per-operation",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.104,
+  "text": "shipped run cut operation-stream bytes 2.6x, from 12.5 to 4.8 MB,",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.118,
+  "text": "(A). These are optimistic conditional thresholds, not recommenda-",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.122,
+  "text": "keep them as the record's conclusions about those payloads, not as",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.136,
+  "text": "to two significant figures: they come from seven trials on a shared",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.142,
+  "text": "and 22.5 MB of operation traffic. Offline zlib level-1 compression",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.151,
+  "text": "ible part, because it repeats the same operator names and structure",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.154,
+  "text": "flow, and host-side sampling deserve explicit treatment in a WAN",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.165,
+  "text": "1.1, and outgoing protocol payload volume from 47,228 to 45,273",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.166,
+  "text": "each call adds 20 explicit waits and changes median time to 68.55",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.172,
+  "text": "stream's bytes to bound throughput, which no experiment here ex-",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.199,
+  "text": "example. Operation descriptions are repetitive and compress more",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.206,
+  "text": "the constraint. In the historical run the client sent about 1.3 MB/s,",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.207,
+  "text": "host, and the re-run recorded in Appendix A moved the time ratio",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.215,
+  "text": "results about a deployed transport, which does not exist. Floating-",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.228,
+  "text": "Table 5 evaluates the network-wait term W * R for a hypothetical",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.237,
+  "text": "low about 3.33 MB/s; for the operation stream, about 551.5 MB/s",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.243,
+  "text": "evaluation. An autoregressive loop that requires a downloaded to-",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.257,
+  "text": "ly, with compression speeds of 45, 268, and 612 MB/s. These are",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.272,
+  "text": "by several percent while leaving the message and byte counts un-",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.276,
+  "text": "Batching is not reply elimination. Both eager flush settings per-",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.288,
+  "text": "process was CPU-bound, with about 5.6 MB of outgoing payload",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.288,
+  "text": "Weight data dominate startup volume but compress poorly in this",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.289,
+  "text": "takes 0.663 ms. Graph shipping remains about 3.1x slower, while",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.307,
+  "text": "( 1 - 1/ q)/ beta. For the recorded weights this implies beta be-",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.309,
+  "text": "ting lowers median time from 51.56 to 45.42 ms, a ratio of about",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.337,
+  "text": "Whether any of this is worth deploying depends on which side is",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.34,
+  "text": "measurement on a different GPU: during eager training the client",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.35,
+  "text": "form one final wait and send 601 messages. The 64-message set-",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.36,
+  "text": "MB/s, compressing the 43.2 MB of weights costs about a second",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.382,
+  "text": "The historical record divides 70.9 MB of outgoing data into 43.2",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.4,
+  "text": "per ten steps. Compressing the operation stream would add work",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.409,
+  "text": "press only because eight bytes carry values below 65, which is a",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.425,
+  "text": "ment also does not isolate transport cost from metadata dispatch,",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.472,
+  "text": "count stays at one; this experiment does not separate client from",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.49,
+  "text": "a shared local host. It does show that observation frequency is a",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.49,
+  "text": "Graph shipping reduces per-operation work as well as bytes.",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.5,
+  "text": "thousands of times per iteration. The integer token batches com-",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.575,
+  "text": "The record draws four conclusions from these payloads, and we",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.604,
+  "text": "token. Graph shipping cannot remove such a dependency unless",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.615,
+  "text": "MB of initial float32 weights, 5.2 MB of integer token batches,",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.64,
+  "text": "case for a narrower wire dtype, not for compression; likewise a",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.644,
+  "text": "counterexample to any universal acceleration claim. The experi-",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.659,
+  "text": "those dependencies and constant RTT; it omits all compute and",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.682,
+  "text": "point tensor buffers should not be compressed: at 1.08x and 45",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.72,
+  "text": "tion into a round trip. Counts include lifetime management and",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.782,
+  "text": "so bandwidth was not the bottleneck. Section 6.9 adds a direct",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.806,
+  "text": "to that client. It would pay only on a link thin enough for the",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.811,
+  "text": "reduction. Outgoing protocol payload bytes fall from 45,273 to",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.845,
+  "text": "server work. No GPU kernel optimization is necessary for this",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.873,
+  "text": "server decoding and dispatch - can matter even when the wait",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.881,
+  "text": "effectively. Nevertheless, compression is useful only if transfer",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.882,
+  "text": "tial reply dependencies. The calculation assumes no overlap of",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.95,
+  "text": "default eager remoting is about 68x slower. This is a relevant",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 1.965,
+  "text": "work - client dispatch, metadata prediction, and encoding, and",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 2.075,
+  "text": "Host observations matter independently. Synchronizing after",
+  "code_only": false
+ },
+ {
+  "page": 8,
+  "gap": 2.249,
+  "text": "This calculation explains why logging, data-dependent control",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.002,
+  "text": "3.10.12, and torch 2.14.0+cu130; the WAN client ran macOS 26.5,",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.019,
+  "text": "warning about the wrapper lacking a stable hash for AOTAutograd",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.045,
+  "text": "samples). This is a different link and a different GPU from Section",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.046,
+  "text": "identical execution path, and part of the message count per step re-",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.06,
+  "text": "smaller value does not show how quickly the kernels finished. The",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.063,
+  "text": "calls on CPU tensors, median of five) was run on both: 1.23 us per",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.079,
+  "text": "seed, and all chain trials ran before all training trials. All seven tri-",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.098,
+  "text": "then selects its multi-tensor foreach implementation only if every",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.11,
+  "text": "loopback, sharing the host's AMD EPYC 9554, so no off-host link",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.11,
+  "text": "erence within rtol = atol = 1e-4. The losses agree to that tolerance,",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.116,
+  "text": "Placements. Native runs PyTorch on the L40S with rGPU absent.",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.117,
+  "text": "and fail that check: a local socket-free probe at the inspected com-",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.132,
+  "text": "onds. The completed-work number is the relevant comparison; the",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.147,
+  "text": "cal equivalence on CUDA, crash consistency, or real-GPU thread-",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.162,
+  "text": "ercised, and for a one-time bulk upload the better lever is the wire",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.167,
+  "text": "context correctness. Recovery time under realistic outage distribu-",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.177,
+  "text": "mit returned no fused and no foreach for them, so rGPU ran the",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.188,
+  "text": "reconnect behavior, complex tensors, and training. All 40 selected",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.192,
+  "text": "recovery paths. They do not prove all operator semantics, numeri-",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.194,
+  "text": "format. Any such change needs a negotiated protocol flag on both",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.195,
+  "text": "default. Native and rGPU therefore did not execute the same opti-",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.204,
+  "text": "GPU, which the historical and CPU experiments could not. It was",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.208,
+  "text": "with dropout 0 on a fixed batch was compared against a CPU ref-",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.216,
+  "text": "rGPU session; they are repeated blocks within a run, not indepen-",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.227,
+  "text": "nization, a 6.34x ratio. Submission-only timing was 0.2 microsec-",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.236,
+  "text": "not bitwise: 4.337957382 on the device in all three legs, against a",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.237,
+  "text": "and bracketed by a device barrier. On rGPU the barrier is torch.",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.238,
+  "text": "run on September 26, 2026 with gpu_ benchmark. py. It holds the",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.245,
+  "text": "tests passed in 42.54 s against a CPU server. The run emitted one",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.252,
+  "text": "Python 3.14.7, and torch 2.14.0. The PyTorch release matches, so",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.254,
+  "text": "record lacks repeated samples and a pinned benchmark build, and",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.257,
+  "text": "Colocated runs the rGPU client and server on the same host over",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.261,
+  "text": "one token batch uploaded before timing. Each timed block is pre-",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.266,
+  "text": "where the matched single-tensor baseline was 3% slower than the",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.283,
+  "text": "hold the client CPU, client software, or optimizer implementation",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.285,
+  "text": "caching. Tests include training through a connection drop, detect-",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.29,
+  "text": "supported device. rGPU parameters are a RemoteTensor subclass",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.321,
+  "text": "als of a leg share one client process and, for the remote legs, one",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.329,
+  "text": "6.2, and the two are not compared. Because the two rGPU place-",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.339,
+  "text": "slowdowns against native defaults and remain valid as such; they",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.358,
+  "text": "thing. WAN runs the client on an Apple M3 laptop, reaching the",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.382,
+  "text": "A separate older RTX 3090 loopback measurement reports 2,000",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.389,
+  "text": "ments use different client CPUs, a single-thread microbenchmark",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.394,
+  "text": "the CUDA result cannot be merged into the Python WAN result.",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.4,
+  "text": "dent deployment repetitions. The artifact holds 84 G samples: 14",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.438,
+  "text": "the laptop. Timed training uses dropout 0.2 and AdamW, and its",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.459,
+  "text": "benchmark. py (10.8M parameters, batch 64, block 256, dropout",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.46,
+  "text": "each workload were shuffled in each of seven trials with a fixed",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.48,
+  "text": "0.2, AdamW at learning rate 3e-3), 10 steps per timed block, on",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.489,
+  "text": "from a cloud provider; the host reported 256 cores, which is not",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.493,
+  "text": "colocated, then WAN. Within a placement, the configurations of",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.5,
+  "text": "complete command and output are included in the artifact. After",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.511,
+  "text": "rgpu. synchronize(), whose server handler calls torch. cuda.",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.52,
+  "text": "same server through an ssh tunnel, not bare TCP, at a measured",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.559,
+  "text": "same four modules pass with 43 tests; that run postdates the in-",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.561,
+  "text": "CPU reference of 4.337957859 on the host and 4.337956905 on",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.561,
+  "text": "evidence of 256 uncontended cores. The host ran Linux, Python",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.592,
+  "text": "These checks strengthen the evidence for specific execution and",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.594,
+  "text": "foreach path followed from reading the PyTorch source in this",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.603,
+  "text": "We ran four existing Python test modules covering compilation,",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.605,
+  "text": "ceded by two warmup chain calls or two warmup training steps",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.61,
+  "text": "mizer implementation. The training ratios below are user-visible",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.611,
+  "text": "Optimizer path. The benchmark constructs AdamW at learning",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.641,
+  "text": "session and was confirmed on a GPU in the next (Section 6.9),",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.642,
+  "text": "kernel launches: 20.3 microseconds per launch without batching",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.66,
+  "text": "48.8 ms median TCP round trip (min 46.3, max 60.6 over nine",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.661,
+  "text": "ward sanity check. It does not validate gradients, parameter up-",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.686,
+  "text": "parameter's exact type is torch.Tensor or nn.Parameter on a",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.696,
+  "text": "are not a measure of transport and metadata overhead under an",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.696,
+  "text": "unlike Section 6.2 there is no schema-version mismatch and no",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.743,
+  "text": "ing session loss after server restart, matching optimizer updates",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.783,
+  "text": "GPU, model, inputs, and numerical precision fixed. It does not",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.784,
+  "text": "Order and repetition. Placement order was fixed: native, then",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.906,
+  "text": "rate 3e-3 and leaves foreach and fused unspecified. PyTorch",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.922,
+  "text": "is involved; loopback transport and scheduling still cost some-",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.923,
+  "text": "This experiment compares rGPU with native execution on one",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 1.978,
+  "text": "the compiled-output metadata fix described in Section 4.3, the",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 2.008,
+  "text": "Numerical check. Before timing, one eval-mode forward pass",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 2.034,
+  "text": "Setup. One NVIDIA L40S (46 GB, driver 580.159.03) rented",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 2.086,
+  "text": "block; and a training step of the transformer defined in gpu_",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 2.103,
+  "text": "with CPU references, and checking conjugation behavior. The",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 2.18,
+  "text": "of ordinary PyTorch dispatch (20,000 one-element torch.add",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 2.236,
+  "text": "call on the EPYC, 0.53 us on the M3. It measures ordinary",
+  "code_only": false
+ },
+ {
+  "page": 9,
+  "gap": 2.819,
+  "text": "natively to match the server's default. Two workloads: the",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.004,
+  "text": "keeping. Graph shipping was not applied to the training step in this",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.006,
+  "text": "ent AdamW implementation. A training step generates about 6,500",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.015,
+  "text": "the same GPU, eager remoting of the training step was 9.2x slower",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.026,
+  "text": "chronizing chain took 1194.06 ms with 21 waits against 150.47 ms",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.048,
+  "text": "WAN placement: observations. Graph shipping of the chain took",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.06,
+  "text": "median by 0.77 ms (6400.36 against 6399.59 ms) while raising the",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.067,
+  "text": "clients (A on G); neither is a measured per-wait latency. The eager",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.099,
+  "text": "ordinary torch.add. The agreement is consistent with the hypoth-",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.101,
+  "text": "Graph shipping reduces the chain overhead. Shipping the chain",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.106,
+  "text": "back transport, scheduling, and the optimizer difference. It is not a",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.125,
+  "text": "Through the WAN tunnel, the same ten reads added 717 ms to the",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.128,
+  "text": "session. Eager training through the WAN tunnel took 3214.55 ms,",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.144,
+  "text": "per block and no off-host link. Part of that ratio reflects the differ-",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.154,
+  "text": "to 92.72 ms for 20 extra waits, about 1.8 ms per added wait (A on",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.155,
+  "text": "moting is 27.5x native, against 68x on CPU in Section 6.4. Native",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.159,
+  "text": "messages and the same median 5,569,105 outgoing payload bytes.",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.159,
+  "text": "108.70-202.57 ms range, against 55.74 ms colocated. The residual",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.161,
+  "text": "execution (2.02 against 0.66 ms); the two ratios come from differ-",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.175,
+  "text": "patch, and its roughly 1 us per call is two orders of magnitude be-",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.176,
+  "text": "That exceeds the measured median round trip by about 23 ms; the",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.194,
+  "text": "server and was careful to say that this compared deployments, not",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.217,
+  "text": "tion all change together with the link, and the legs ran at different",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.226,
+  "text": "Relation to the historical run. Section 6.2 reported 1.04 s per it-",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.227,
+  "text": "could not say which factor separates them; Section 6.9 was run to",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.238,
+  "text": "Eager remoting is much slower than native on the same GPU.",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.241,
+  "text": "include contention between the colocated client and server for the",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.249,
+  "text": "eration on a remote A40 at 116 ms against 3.04 s on a local MPS",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.249,
+  "text": "about half the colocated 6399.59 ms (2.0x), with the same 64,941",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.276,
+  "text": "Host observations cost time even on loopback. In the colocated",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.285,
+  "text": "overhead to the client: graph shipping also removes per-operation",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.291,
+  "text": "chain, synchronizing after each call raised the median from 55.74",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.295,
+  "text": "and that a faster client can absorb the added link cost. It does not",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.327,
+  "text": "Colocated eager training takes 9.2x the native time with one wait",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.337,
+  "text": "as a graph brings colocated time from 55.74 to 7.78 ms, 3.8x na-",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.339,
+  "text": "G). In colocated training, reading the loss every step changed the",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.349,
+  "text": "The dispatch microbenchmark puts the M3 at 2.3x the EPYC per",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.357,
+  "text": "GPU execution of the tiny chain is itself slower than native CPU",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.365,
+  "text": "host's CPUs, caches, or memory bandwidth; server-side decoding",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.409,
+  "text": "logical protocol messages. Dividing the excess elapsed time over",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.418,
+  "text": "native, about 570 ms per step, by those messages gives about 90",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.419,
+  "text": "CPU, operating system, Python version, and client/server coloca-",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.426,
+  "text": "times in different processes. Alternatives the data do not exclude",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.45,
+  "text": "establish that hypothesis. Between the two placements, the client",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.465,
+  "text": "with 1 wait, 52 ms per additional wait, also close to it. Both are",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.466,
+  "text": "differences of medians, the first across placements with different",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.505,
+  "text": "56.39 ms through the tunnel against 7.78 ms colocated, a differ-",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.538,
+  "text": "measured client dispatch time. On the chain, colocated eager re-",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.547,
+  "text": "prediction, and serialization, server decoding and dispatch, loop-",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.549,
+  "text": "consistent with the CPU result. It does not localize the removed",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.57,
+  "text": "variation, whose ranges span about 108 and 194 ms for the two",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.59,
+  "text": "tive rather than 27.5x, with 41 messages instead of 601. This is",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.627,
+  "text": "esis that client-side per-operation work dominates eager training",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.627,
+  "text": "median (3931.33 against 3214.55), about 72 ms each (A on G).",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.633,
+  "text": "WAN placement: the training result is not explained by this",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.684,
+  "text": "in the colocated placement and 4.6x slower in the WAN place-",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.729,
+  "text": "fects; Python runtime differences; and time-varying load on the",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.754,
+  "text": "NUMA placement, CPU frequency, or container CPU-quota ef-",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.76,
+  "text": "configurations, so it does not show that the reads cost nothing.",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.783,
+  "text": "and dispatch cost that changes when the client leaves the host;",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.783,
+  "text": "ment. Neither figure is a property of rGPU alone. This session",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 1.854,
+  "text": "shared host. The microbenchmark does not measure rGPU dis-",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 2.195,
+  "text": "server decoding, argument reconstruction, and identifier book-",
+  "code_only": false
+ },
+ {
+  "page": 10,
+  "gap": 3.436,
+  "text": "chain took 150.47 ms through the tunnel, with a wide",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.004,
+  "text": "was about 9x slower than native defaults with no off-host link. The",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.005,
+  "text": "was slow because client and server competed for the host, what the",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.009,
+  "text": "cpuset, but its CPU quota was 13.6 cores and the host's one-minute",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.013,
+  "text": "sides of the block. The workload is the training step of Section 6.8.",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.019,
+  "text": "and 10 ms the wall-time difference between the two configurations",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.022,
+  "text": "each direction, so a request and its reply see twice that delay; it de-",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.031,
+  "text": "3073 ms of client CPU time and 114 ms blocked. The laptop client",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.034,
+  "text": "pinned, eager training took 6463, 6166, and 6203 ms, and 6115 ms",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.035,
+  "text": "per wait (A on G), again one round trip plus about 4 ms. Wall time",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.053,
+  "text": "the individual conditions. Blocked time does follow the round trip:",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.061,
+  "text": "two results are compatible - a remote GPU can beat a weaker local",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.065,
+  "text": "5, 14, 57, and 121 ms at 0, 10, 50, and 116 ms, which is one round",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.075,
+  "text": "about 6 ms of it. With added delay the gap is the blocked time dis-",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.097,
+  "text": "client and server on disjoint cores, on the same four cores, and un-",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.13,
+  "text": "baseline ran the same optimizer, and whether training state match-",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.145,
+  "text": "als, configurations shuffled within each trial, two warmup training",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.161,
+  "text": "spread across placements is smaller than the drift between the two",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.162,
+  "text": "tions ran in the order direct, 50, 0, 116, and 10 ms of added round",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.172,
+  "text": "vice comparison on a different GPU: on the L40S, eager remoting",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.173,
+  "text": "client spends that time on: dispatch, metadata prediction, autograd",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.174,
+  "text": "trip plus about 5 ms. The final wait costs one round trip and noth-",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.176,
+  "text": "without added delay, the client process's CPU time is within 0.4%",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.179,
+  "text": "experiments. py, addresses them. It ran on a second rented L40S",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.183,
+  "text": "EPYC client for the same 64,941 messages. The laptop leg differs",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.189,
+  "text": "round trip. From 0 to 116 ms of added round trip, eager medians",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.237,
+  "text": "steps before each timed block of ten, and a device barrier on both",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.244,
+  "text": "time minus client CPU time blocked time: the part of the block in",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.247,
+  "text": "time and the server process's CPU time from /proc. We call wall",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.252,
+  "text": "pinned to cores 0-7, the client to cores 8-15, and a delay proxy to",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.254,
+  "text": "lie between 6356 and 6534 ms with no trend, inside the ranges of",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.277,
+  "text": "ing else in the block waits on the network. This holds for a client",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.297,
+  "text": "runs of one placement. The hypothesis of Section 6.8 that a colo-",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.318,
+  "text": "lays and does not throttle. It is a userspace program on loopback,",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.335,
+  "text": "py) forwards each chunk a fixed time after it arrived, in order, in",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.343,
+  "text": "client had none. This is a measurement of where the client's time",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.345,
+  "text": "OS, Python 3.14.7) as well as CPU, so the 2.05x is a property of",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.345,
+  "text": "Alongside wall time, each block records the client process's CPU",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.368,
+  "text": "cores 16-17, all on one NUMA node. The proxy (delay_ proxy.",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.376,
+  "text": "Section 6.8 left four questions open: whether the colocated result",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.383,
+  "text": "of wall time: 6439 of 6463 ms in the direct condition. The client",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.385,
+  "text": "read every step there are 11 waits per block, and blocked time is",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.404,
+  "text": "from the host legs in operating system and Python version (mac-",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.448,
+  "text": "not a network: there is no loss, jitter, or bandwidth limit. Condi-",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.456,
+  "text": "CPU in the same block, about half, so it had idle time while the",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.457,
+  "text": "M3 laptop through an ssh tunnel at a 46.3 ms median round trip",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.488,
+  "text": "bookkeeping, and encoding are not separated, and the client was",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.512,
+  "text": "trip, then shared cores, unpinned, and the direct condition again.",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.569,
+  "text": "With one wait per block, eager time does not depend on the",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.571,
+  "text": "The client is CPU-bound. In every eager condition on the host",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.595,
+  "text": "load average was between 9 and 14 throughout. The server was",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.598,
+  "text": "(driver 580.159.03, AMD EPYC 9554, two sockets of 64 cores,",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.636,
+  "text": "A host observation costs about one round trip. With the loss",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.671,
+  "text": "Setup. The container reported 128 cores with all of them in its",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.678,
+  "text": "that is slower than the link; a client fast enough to fill the link",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.707,
+  "text": "remoting overhead. The present experiment supplies a same-de-",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.709,
+  "text": "(43.8-48.9 over 15 samples), eager training took 3159 ms, with",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.75,
+  "text": "network costs when the client is held fixed, whether the native",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.752,
+  "text": "rises by less than blocked time does, because in these runs the",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.759,
+  "text": "was computing for essentially the whole block and blocked for",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.779,
+  "text": "c0318a3, which differs from the inspected commit only by the",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.783,
+  "text": "went, not an inference from counters. It does not say what the",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 1.882,
+  "text": "is CPU-bound too, and it needs 2.05x less CPU time than the",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 2.027,
+  "text": "loss-read client used less CPU time than the eager one (6175",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 2.207,
+  "text": "Linux, Python 3.10.12, torch 2.14.0+cu130), at rGPU commit",
+  "code_only": false
+ },
+ {
+  "page": 11,
+  "gap": 2.699,
+  "text": "es native. This session, on September 27, 2026 with gpu_",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.005,
+  "text": "at the start: the two warmup steps, which include tracing and regis-",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.008,
+  "text": "use and convergence are not characterized. Provenance for the first",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.049,
+  "text": "differs from the host client in operating system and Python version",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.069,
+  "text": "are large relative to the gradient differences because Adam divides",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.073,
+  "text": "implementations differ from each other. The parameter differences",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.092,
+  "text": "What this session does not establish. One GPU model, one mod-",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.096,
+  "text": "the CUDA path was not measured on a GPU; no head-to-head pri-",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.097,
+  "text": "tration, took 5950 ms against 1298 ms for eager. At these rates the",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.103,
+  "text": "mote training under one reported high-RTT deployment. The CPU",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.106,
+  "text": "that client as a whole. One laptop trial took 5090 ms against a me-",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.106,
+  "text": "through the rGPU backend and executed eagerly on the server, the",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.115,
+  "text": "tive training took 702.72 ms per block with the default and 724.72",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.117,
+  "text": "extra 4.65 s is recovered after about eleven further steps (A on G).",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.117,
+  "text": "report whose central number is unflattering and whose cause is lo-",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.124,
+  "text": "by the root of the second moment: where a gradient is near zero, a",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.125,
+  "text": "and one batch size, so the per-message cost has not been shown to",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.138,
+  "text": "The remaining threats to validity are: one GPU model, one model,",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.138,
+  "text": "closely as native's two optimizer implementations match each oth-",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.142,
+  "text": "The historical transformer run supports the feasibility of useful re-",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.146,
+  "text": "ment, load average, and raw RTT samples in followup/. The his-",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.171,
+  "text": "sessions supply what those could not. Eager remoting of the train-",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.185,
+  "text": "recorded, rgpu_commit is empty in colocated. json, and its raw",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.189,
+  "text": "untested, and the only real link is the laptop leg. Server CPU time",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.194,
+  "text": "RTT samples and env.txt are not in the artifact. The second ses-",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.199,
+  "text": "er. Together these support an implementation and characterization",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.199,
+  "text": "ported and not held to a tolerance. This check covers five steps of",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.214,
+  "text": "experiment demonstrates that flush batching, reply frequency, and",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.219,
+  "text": "therefore a real but minor part of the native ratio and a larger part",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.246,
+  "text": "rounding difference changes the sign of a step of size close to the",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.26,
+  "text": "on loopback, so bandwidth limits, loss, and jitter are untested and",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.264,
+  "text": "The optimizer path. On the GPU, PyTorch selects the multi-ten-",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.264,
+  "text": "archived initial state with dropout disabled and took five AdamW",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.266,
+  "text": "foreach=True on rGPU works: it reduced messages from 64,941",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.267,
+  "text": "baseline, eager rGPU is 8.9x slower from the host client and 4.4x",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.271,
+  "text": "gle-tensor path for rGPU parameters, confirming Section 6.8. Na-",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.272,
+  "text": "on the client, which is where the remaining messages come from.",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.276,
+  "text": "CPU time doubled in two proxy conditions for reasons we do not",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.292,
+  "text": "or-system measurements; and short blocks, so long-lived memory",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.292,
+  "text": "amortize at larger batches; what the client's CPU time is spent on",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.293,
+  "text": "stead of 5.57 MB. The optimizer still runs operation by operation",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.317,
+  "text": "was not profiled; the latency sweep used a userspace delay proxy",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.35,
+  "text": "The CUDA path was not run. Nothing here compares rGPU with",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.355,
+  "text": "rGPU differs from native by no more than native's two optimizer",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.36,
+  "text": "know why. Trials within a condition share a process and session.",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.378,
+  "text": "do not compare against any other system or between rGPU's two",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.392,
+  "text": "to 47,631 and time from 6463 to 5230 ms. The optimizer path is",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.423,
+  "text": "The client process was CPU-bound in every condition measured;",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.437,
+  "text": "one model without dropout. It does not cover stochastic training,",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.437,
+  "text": "know; the correctness comparison covers five dropout-free steps;",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.44,
+  "text": "placing client and server on the same or different cores made no",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.505,
+  "text": "difference; and with client CPU held fixed, the round trip added",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.509,
+  "text": "sages per step, and graph shipping the step brought that to 3.0x.",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.512,
+  "text": "sion records package and script hashes, CPU quota, core assign-",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.54,
+  "text": "was about 7300 ms in the 10 ms and 116 ms conditions against",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.55,
+  "text": "sion, and the two sessions ran on separately rented hosts; server",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.59,
+  "text": "about one round trip of blocked time per wait and nothing else.",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.616,
+  "text": "20,931 messages instead of 64,941 and 1.86 MB of payload in-",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.644,
+  "text": "sor foreach AdamW for native CUDA parameters and the sin-",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.674,
+  "text": "with the single-tensor optimizer, the largest absolute differences",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.721,
+  "text": "from the laptop; graph-shipped rGPU is 3.0x and 1.8x. Forcing",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.728,
+  "text": "steps at learning rate 3e-3 on one batch. Against native CUDA",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.743,
+  "text": "Training state matches native. Every variant started from one",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.749,
+  "text": "ing step was 8.9x slower than native with a matched optimizer",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.795,
+  "text": "userspace on loopback, so bandwidth limits, loss, and jitter are",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.865,
+  "text": "graph shipping change different quantities. The two same-GPU",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.905,
+  "text": "cated: per-operation work in the client. They do not support a",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 1.961,
+  "text": "session is incomplete: the hash of the server package was not",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 2.073,
+  "text": "Graph shipping the training step. With the model compiled",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 2.104,
+  "text": "block took 2190 ms against 6463 ms eager, 3.0x faster, with",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 2.116,
+  "text": "el, one batch size, and short blocks. The delay is injected in",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 2.146,
+  "text": "Training state after five deterministic steps matched native as",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 2.194,
+  "text": "ms with foreach=False, fused=False (ranges 698-716 and",
+  "code_only": false
+ },
+ {
+  "page": 12,
+  "gap": 2.262,
+  "text": "717-726), a 3% difference. Against the matched single-tensor",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.003,
+  "text": "tion report. The implication for the design is that the next gain is in",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.005,
+  "text": "istic comparison of training state. What they leave open is a profile",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.006,
+  "text": "rGPU illustrates how the remoting boundary changes both compat-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.009,
+  "text": "fails clearly. Validate non-idempotent updates, deferred errors, and",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.015,
+  "text": "titions across placements; a client fast enough that the server or the",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.025,
+  "text": "time through a real link. Graph shipping the step reduced the slow-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.026,
+  "text": "resource release under each case. Multi-client concurrency, memo-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.044,
+  "text": "the client's per-operation path, not in the transport. The next evalu-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.046,
+  "text": "terface; it was not evaluated on a GPU here. PyTorch operation re-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.062,
+  "text": "tion 6.8, and autoregressive generation with stated sampling place-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.063,
+  "text": "bandwidth sweep and a lossy link; independent process-level repe-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.076,
+  "text": "ibility and performance. CUDA interception is designed to accom-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.083,
+  "text": "is required, because it could obtain much of the granularity benefit",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.09,
+  "text": "ues exist, while graph shipping amortizes repeated dispatch. These",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.103,
+  "text": "moting baseline on the same hardware. Report incompatibilities as",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.119,
+  "text": "bandwidth sweep, and larger batch sizes. Whole-program SSH ex-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.129,
+  "text": "same workload on the same GPU through CUDA interception, ea-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.141,
+  "text": "modate existing supported binaries but inherits a broad stateful in-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.143,
+  "text": "and a forward-loss sanity check against a CPU reference; Sections",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.146,
+  "text": "steps. An RTT sweep and a bandwidth sweep should be varied in-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.16,
+  "text": "p99 latency claim. Randomize experiment order and track thermal",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.167,
+  "text": "dependently. A graph break-even experiment must include compi-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.174,
+  "text": "precision, software versions, and GPU across: native execution on",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.192,
+  "text": "versus Inductor; and scalar observations every step versus every k",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.197,
+  "text": "compare the two boundaries and a coarse RPC on the same work-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.203,
+  "text": "with less transparency. So is a matched boundary comparison: the",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.243,
+  "text": "one round trip per wait, and a client with a faster CPU halved the",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.265,
+  "text": "moting uses metadata to return useful tensor identities before val-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.302,
+  "text": "ger ATen remoting, shipped graphs, and that coarse RPC, includ-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.327,
+  "text": "ry accounting, and isolation require their own experiments before",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.343,
+  "text": "mechanisms depend on explicit ordering, deferred-error handling,",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.363,
+  "text": "A submission should first compare the exact same model, inputs,",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.376,
+  "text": "trolled LAN; and rGPU over selected WAN conditions. The arti-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.396,
+  "text": "coarse-grained RPC baseline that executes a whole step remotely",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.397,
+  "text": "The available evidence supports a qualified result: remote execu-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.397,
+  "text": "batch receipt, after operation execution but before reply delivery,",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.414,
+  "text": "substantially for a repeated computation. On one L40S, eager re-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.428,
+  "text": "tion can be useful when enough work stays remote between host",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.43,
+  "text": "the server was idle about half the time; the round trip cost about",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.437,
+  "text": "and across the replay-memory threshold. It should separately kill",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.459,
+  "text": "Section 6.4 and on a training step of the transformer, with barri-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.465,
+  "text": "matched optimizer, and the client process was CPU-bound while",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.466,
+  "text": "colocated, and WAN configurations on the elementwise chain of",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.466,
+  "text": "inference and training, the transformer training workload of Sec-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.506,
+  "text": "Section 6.9 ran three experiments the previous draft listed as re-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.511,
+  "text": "For each configuration, archive independent process-level repeti-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.547,
+  "text": "lation and enough iterations to estimate steady-state savings, not",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.548,
+  "text": "and bounded session recovery, whose implemented contracts are",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.549,
+  "text": "to-end performance. This is an implementation and characteriza-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.55,
+  "text": "shapes and frequent scalar reads. Measure startup, first iteration,",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.55,
+  "text": "the server and expire sessions, checking that unrecoverable state",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.554,
+  "text": "ing startup, compilation, and warm costs. Without it, the paper's",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.56,
+  "text": "quantities; use enough individual requests to support any p95 or",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.56,
+  "text": "ation must profile that path, vary batch size and bandwidth, and",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.562,
+  "text": "quired: a bottleneck experiment with pinned cores and a latency",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.562,
+  "text": "er-bracketed timing, TF32 disabled natively to match the server,",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.578,
+  "text": "down to 3.0x at the cost of a slower start. Neither low message",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.586,
+  "text": "of the client's per-operation work, which is where the time is; a",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.596,
+  "text": "6.8 and 6.9 report two sessions. Still missing are a real LAN, a",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.606,
+  "text": "the server; rGPU client and server colocated; rGPU over a con-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.617,
+  "text": "abled; Python flush size with identical observation points; eager",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.635,
+  "text": "swers a separate deployment question and should retain its own",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.643,
+  "text": "Recovery evaluation should disconnect before send, after partial",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.675,
+  "text": "ment. Include failure-prone cases such as data-dependent output",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.703,
+  "text": "versus graph shipping with server eager execution; server eager",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.721,
+  "text": "count nor asynchronous submission alone establishes good end-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.739,
+  "text": "practical alternatives. A local laptop accelerator comparison an-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.785,
+  "text": "The essential ablations are CUDA batching enabled versus dis-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.818,
+  "text": "against Cricket and rCUDA or another maintainable CUDA-re-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.834,
+  "text": "observations, and graph shipping can reduce software overhead",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.835,
+  "text": "Where compatible versions and artifacts are available, compare",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.897,
+  "text": "compilation, warmed throughput, and host-visible latency sepa-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.909,
+  "text": "central question about the interception boundary is argued, not",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.913,
+  "text": "throughput measurements, model seeds, and the precise bench-",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.958,
+  "text": "fact now includes gpu_ benchmark. py, which runs the native,",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 2.055,
+  "text": "moting of a training step was 8.9x slower than native with a",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 2.055,
+  "text": "mark commit. Report medians and uncertainty for steady-state",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 2.119,
+  "text": "compatibility outcomes, not performance victories. An explicit",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 2.228,
+  "text": "tions, raw samples, GPU clocks and utilization, memory use,",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 2.933,
+  "text": "framework/driver versions, client CPU utilization, RTT and",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.036,
+  "text": "Reproduce the selected semantic checks from an equivalent check-",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.045,
+  "text": "benchmark.py was re-run unchanged on the same machine, which",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.055,
+  "text": "[S6] python/ rgpu/ server/ session. py and server/ _ _ main_ _ .",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.062,
+  "text": "2026. Earlier notes were used only to locate relevant material; cur-",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.072,
+  "text": "and wait counts of 1, 1, 21, 1, and 0 across the five configurations.",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.094,
+  "text": "6.4: counter-based claims are stable, timing ratios on a shared host",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.13,
+  "text": "render.py checks against. The lesson is the one drawn in Section",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.138,
+  "text": "ed in this manuscript are derived quantities, not new trials. Claims",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.146,
+  "text": "are not, and the manuscript quotes the latter to two significant fig-",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.149,
+  "text": "The timings did not: the eager flush-64 median moved from 45.42",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.158,
+  "text": "host record in followup/ (175 timed samples, two correctness re-",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.16,
+  "text": "descriptions were checked against that checkout on September 25,",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.176,
+  "text": "commit 7a8ba43ffd46edb7efa77c93593221f813a8b712. Source",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.178,
+  "text": "was under additional load at the time. The deterministic quantities",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.193,
+  "text": "scribe supported interfaces, deployment, and compatibility bound-",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.202,
+  "text": "ated sources: generation policy and the distinction between gener-",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.24,
+  "text": "in the original notes about future compilation payoff or negligible",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.263,
+  "text": "docs/ cuda-shim. mdx, training.mdx, and operations. mdx de-",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.269,
+  "text": "content/ docs/ performance. mdx. Tables 2 and 3 and the trans-",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.308,
+  "text": "results.json retains the original samples; the re-run is reported",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.323,
+  "text": "[S7] client/ rpc. cpp, common/ wire. h, server/ main. cpp, and",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.326,
+  "text": "Reproduction of the CPU experiment. On September 26, 2026,",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.339,
+  "text": "The source snapshot for this paper is the clean rGPU checkout at",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.353,
+  "text": "here rather than substituted, because the reported values are what",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.381,
+  "text": "batched no-reply calls, request/thread identities, reconnect behav-",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.406,
+  "text": "pression, cached replies, attach generations, session grace period,",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.429,
+  "text": "[S2] Historical performance record, read together with website/",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.502,
+  "text": "code-before-queue behavior, flush thresholds, sequence numbers,",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.508,
+  "text": "py: tensor and graph tables, deferred failure state, duplicate sup-",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.509,
+  "text": "TAutograd integration, graph serialization, supported nodes, fall-",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.529,
+  "text": "gpu_ host. sh, run_ followup_ part2. sh, and their outputs and",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.531,
+  "text": "Reproduce the mechanism experiment with an environment con-",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.542,
+  "text": "to 55.24 ms and the graph median from 2.07 to 2.61 ms, so the",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.561,
+  "text": "reproduced exactly: message counts of 601, 601, 621, 41, and 0",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.565,
+  "text": "The accompanying artifact contains benchmark.py, all 35 timed",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.573,
+  "text": "[S1] rGPU repository snapshot: README.md, website/ content/",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.591,
+  "text": "tal), the host script run_ on_ gpu_ host. sh, the second session's",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.643,
+  "text": "[S5] python/ rgpu/ compile. py and server/ graphs. py: AO-",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.701,
+  "text": "[S3] python/ rgpu/ dispatch. py and tensor.py: meta execu-",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.749,
+  "text": "tion, synchronous fallback, alias handling, metadata restrictions,",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.757,
+  "text": "output, the manuscript source, figures, and the rendering script.",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.768,
+  "text": "acknowledgements, replay limits, reconnect budget, and version",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.826,
+  "text": "gpu_ experiments. py, delay_ proxy. py, run_ followup_ on_",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.84,
+  "text": "ports, raw RTT samples), the dispatch microbenchmark and its",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.898,
+  "text": "samples in results.json, selected test output in checks.txt,",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 2.075,
+  "text": "[S4] python/ rgpu/ session. py: one process connection, en-",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 2.138,
+  "text": "output wrappers, layout restoration, finalization, conjugate and",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 2.294,
+  "text": "server/ client_ threads. h: the independent C++ transport,",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 3.302,
+  "text": "gpu_ benchmark. py with its three outputs native.json,",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 3.642,
+  "text": "graph-versus-eager time ratio moved from 22.0 to 21.2.",
+  "code_only": false
+ },
+ {
+  "page": 15,
+  "gap": 1.069,
+  "text": "colocated. json records an empty rgpu_commit, and the commit",
+  "code_only": false
+ },
+ {
+  "page": 15,
+  "gap": 1.175,
+  "text": "produced byte-for-byte from this artifact alone because their exact",
+  "code_only": false
+ },
+ {
+  "page": 15,
+  "gap": 1.289,
+  "text": "age. The host's env.txt, the raw RTT samples and the command",
+  "code_only": false
+ },
+ {
+  "page": 15,
+  "gap": 1.292,
+  "text": "L40S on September 26, 2026 with run_ on_ gpu_ host. sh for the",
+  "code_only": false
+ },
+ {
+  "page": 15,
+  "gap": 1.293,
+  "text": "native and colocated legs and RGPU_ OPSERVER=127. 0. 0. 1:9720",
+  "code_only": false
+ },
+ {
+  "page": 15,
+  "gap": 1.306,
+  "text": "ples are not in the artifact. Historical measurements cannot be re-",
+  "code_only": false
+ },
+ {
+  "page": 15,
+  "gap": 1.327,
+  "text": "in wan.json identifies the laptop's checkout, not the server pack-",
+  "code_only": false
+ },
+ {
+  "page": 15,
+  "gap": 1.35,
+  "text": "an ssh tunnel; the pod was released afterwards, so those numbers",
+  "code_only": false
+ },
+ {
+  "page": 15,
+  "gap": 1.516,
+  "text": "modified training script and raw trial logs were not preserved in",
+  "code_only": false
+ },
+ {
+  "page": 15,
+  "gap": 1.611,
+  "text": "that produced them, and the raw dispatch-microbenchmark sam-",
+  "code_only": false
+ },
+ {
+  "page": 15,
+  "gap": 1.623,
+  "text": "Provenance for that run is incomplete. The host imported rGPU",
+  "code_only": false
+ },
+ {
+  "page": 15,
+  "gap": 1.794,
+  "text": "The same-GPU experiment of Section 6.8 was run on a rented",
+  "code_only": false
+ },
+ {
+  "page": 15,
+  "gap": 1.882,
+  "text": "are reproducible in method but not on the same physical host.",
+  "code_only": false
+ },
+ {
+  "page": 15,
+  "gap": 3.008,
+  "text": "from an uploaded package whose hash was not recorded;",
+  "code_only": false
+ }
+]

@@ -1,0 +1,5 @@
+# Single-thread PyTorch dispatch cost on the two client CPUs used in the
+# same-GPU experiment (dispatch_bench.py: 20,000 x torch.add on 1-element CPU
+# tensors, median of 5, torch.set_num_threads(1)). Measured 2026-09-26.
+pod   AMD EPYC 9554 (colocated client)  torch 2.14.0+cu130  torch.add 1.23 us/op  python loop 0.036 us/iter
+mac   Apple M3      (WAN client)        torch 2.14.0        torch.add 0.53 us/op  python loop 0.014 us/iter

@@ -1,0 +1,3 @@
+# TCP connect time from the laptop to the pod's ssh port, ms, 2026-09-27
+48.4 44.0 46.3 46.4 44.9 48.6 44.5 43.8 47.3 45.0 48.3 46.1 45.9 47.8 48.9
+median 46.3 min 43.8 max 48.9 n 15

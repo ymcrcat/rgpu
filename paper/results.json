@@ -1,0 +1,387 @@
+{
+  "environment": {
+    "platform": "macOS-26.5-arm64-arm-64bit-Mach-O",
+    "python": "3.14.7 (main, Aug  5 2026, 10:29:49) [Clang 21.0.0 (clang-2100.1.1.101)]",
+    "torch": "2.14.0",
+    "source": "/Users/yan/Documents/LlmGames/rgpu",
+    "commit": "7a8ba43ffd46edb7efa77c93593221f813a8b712",
+    "cuda_available": false,
+    "mps_available": false,
+    "client_torch_threads": 1
+  },
+  "method": {
+    "trials": 7,
+    "warmup_calls_per_case": 2,
+    "timed_calls": 20,
+    "ops_per_call": 20,
+    "elements": 1024,
+    "dtype": "float32",
+    "server": "separate CPU process over TCP loopback",
+    "graph_compiler": "eager; no kernel fusion",
+    "seed_for_case_order": 0
+  },
+  "summary": {
+    "native_cpu": {
+      "median_ms": 0.663459,
+      "min_ms": 0.584417,
+      "max_ms": 1.353792,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    "eager_flush1": {
+      "median_ms": 51.560458,
+      "min_ms": 42.23225,
+      "max_ms": 168.917417,
+      "messages": 601,
+      "waits": 1,
+      "bytes_out": 47228,
+      "bytes_in": 24
+    },
+    "eager_flush64": {
+      "median_ms": 45.421166,
+      "min_ms": 38.362417,
+      "max_ms": 62.47425,
+      "messages": 601,
+      "waits": 1,
+      "bytes_out": 45273,
+      "bytes_in": 24
+    },
+    "eager_sync_each_call": {
+      "median_ms": 68.554084,
+      "min_ms": 50.223041,
+      "max_ms": 129.562083,
+      "messages": 621,
+      "waits": 21,
+      "bytes_out": 45788,
+      "bytes_in": 504
+    },
+    "graph_eager": {
+      "median_ms": 2.065208,
+      "min_ms": 1.859709,
+      "max_ms": 31.8405,
+      "messages": 41,
+      "waits": 1,
+      "bytes_out": 1968,
+      "bytes_in": 24
+    }
+  },
+  "samples": [
+    {
+      "case": "eager_flush64",
+      "trial": 0,
+      "elapsed_ms": 44.171083,
+      "messages": 601,
+      "waits": 1,
+      "bytes_out": 45273,
+      "bytes_in": 24
+    },
+    {
+      "case": "eager_flush1",
+      "trial": 0,
+      "elapsed_ms": 42.23225,
+      "messages": 601,
+      "waits": 1,
+      "bytes_out": 47228,
+      "bytes_in": 24
+    },
+    {
+      "case": "native_cpu",
+      "trial": 0,
+      "elapsed_ms": 0.608333,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    {
+      "case": "graph_eager",
+      "trial": 0,
+      "elapsed_ms": 1.954208,
+      "messages": 41,
+      "waits": 1,
+      "bytes_out": 1968,
+      "bytes_in": 24
+    },
+    {
+      "case": "eager_sync_each_call",
+      "trial": 0,
+      "elapsed_ms": 68.554084,
+      "messages": 621,
+      "waits": 21,
+      "bytes_out": 45788,
+      "bytes_in": 504
+    },
+    {
+      "case": "native_cpu",
+      "trial": 1,
+      "elapsed_ms": 0.669584,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    {
+      "case": "eager_flush64",
+      "trial": 1,
+      "elapsed_ms": 45.421166,
+      "messages": 601,
+      "waits": 1,
+      "bytes_out": 45273,
+      "bytes_in": 24
+    },
+    {
+      "case": "eager_flush1",
+      "trial": 1,
+      "elapsed_ms": 51.560458,
+      "messages": 601,
+      "waits": 1,
+      "bytes_out": 47228,
+      "bytes_in": 24
+    },
+    {
+      "case": "eager_sync_each_call",
+      "trial": 1,
+      "elapsed_ms": 50.223041,
+      "messages": 621,
+      "waits": 21,
+      "bytes_out": 45788,
+      "bytes_in": 504
+    },
+    {
+      "case": "graph_eager",
+      "trial": 1,
+      "elapsed_ms": 1.859709,
+      "messages": 41,
+      "waits": 1,
+      "bytes_out": 1968,
+      "bytes_in": 24
+    },
+    {
+      "case": "eager_flush1",
+      "trial": 2,
+      "elapsed_ms": 78.237542,
+      "messages": 601,
+      "waits": 1,
+      "bytes_out": 47228,
+      "bytes_in": 24
+    },
+    {
+      "case": "native_cpu",
+      "trial": 2,
+      "elapsed_ms": 0.663459,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    {
+      "case": "graph_eager",
+      "trial": 2,
+      "elapsed_ms": 2.299,
+      "messages": 41,
+      "waits": 1,
+      "bytes_out": 1968,
+      "bytes_in": 24
+    },
+    {
+      "case": "eager_flush64",
+      "trial": 2,
+      "elapsed_ms": 50.627125,
+      "messages": 601,
+      "waits": 1,
+      "bytes_out": 45273,
+      "bytes_in": 24
+    },
+    {
+      "case": "eager_sync_each_call",
+      "trial": 2,
+      "elapsed_ms": 78.374792,
+      "messages": 621,
+      "waits": 21,
+      "bytes_out": 45788,
+      "bytes_in": 504
+    },
+    {
+      "case": "eager_flush64",
+      "trial": 3,
+      "elapsed_ms": 62.47425,
+      "messages": 601,
+      "waits": 1,
+      "bytes_out": 45273,
+      "bytes_in": 24
+    },
+    {
+      "case": "native_cpu",
+      "trial": 3,
+      "elapsed_ms": 0.669125,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    {
+      "case": "eager_sync_each_call",
+      "trial": 3,
+      "elapsed_ms": 73.417542,
+      "messages": 621,
+      "waits": 21,
+      "bytes_out": 45788,
+      "bytes_in": 504
+    },
+    {
+      "case": "eager_flush1",
+      "trial": 3,
+      "elapsed_ms": 75.354875,
+      "messages": 601,
+      "waits": 1,
+      "bytes_out": 47228,
+      "bytes_in": 24
+    },
+    {
+      "case": "graph_eager",
+      "trial": 3,
+      "elapsed_ms": 2.248,
+      "messages": 41,
+      "waits": 1,
+      "bytes_out": 1968,
+      "bytes_in": 24
+    },
+    {
+      "case": "eager_flush1",
+      "trial": 4,
+      "elapsed_ms": 168.917417,
+      "messages": 601,
+      "waits": 1,
+      "bytes_out": 47228,
+      "bytes_in": 24
+    },
+    {
+      "case": "graph_eager",
+      "trial": 4,
+      "elapsed_ms": 31.8405,
+      "messages": 41,
+      "waits": 1,
+      "bytes_out": 1968,
+      "bytes_in": 24
+    },
+    {
+      "case": "eager_sync_each_call",
+      "trial": 4,
+      "elapsed_ms": 129.562083,
+      "messages": 621,
+      "waits": 21,
+      "bytes_out": 45788,
+      "bytes_in": 504
+    },
+    {
+      "case": "eager_flush64",
+      "trial": 4,
+      "elapsed_ms": 46.06525,
+      "messages": 601,
+      "waits": 1,
+      "bytes_out": 45273,
+      "bytes_in": 24
+    },
+    {
+      "case": "native_cpu",
+      "trial": 4,
+      "elapsed_ms": 0.616833,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    {
+      "case": "eager_flush1",
+      "trial": 5,
+      "elapsed_ms": 44.023792,
+      "messages": 601,
+      "waits": 1,
+      "bytes_out": 47228,
+      "bytes_in": 24
+    },
+    {
+      "case": "eager_sync_each_call",
+      "trial": 5,
+      "elapsed_ms": 54.804166,
+      "messages": 621,
+      "waits": 21,
+      "bytes_out": 45788,
+      "bytes_in": 504
+    },
+    {
+      "case": "graph_eager",
+      "trial": 5,
+      "elapsed_ms": 1.861541,
+      "messages": 41,
+      "waits": 1,
+      "bytes_out": 1968,
+      "bytes_in": 24
+    },
+    {
+      "case": "native_cpu",
+      "trial": 5,
+      "elapsed_ms": 0.584417,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    {
+      "case": "eager_flush64",
+      "trial": 5,
+      "elapsed_ms": 38.362417,
+      "messages": 601,
+      "waits": 1,
+      "bytes_out": 45273,
+      "bytes_in": 24
+    },
+    {
+      "case": "eager_flush1",
+      "trial": 6,
+      "elapsed_ms": 42.581709,
+      "messages": 601,
+      "waits": 1,
+      "bytes_out": 47228,
+      "bytes_in": 24
+    },
+    {
+      "case": "native_cpu",
+      "trial": 6,
+      "elapsed_ms": 1.353792,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    {
+      "case": "graph_eager",
+      "trial": 6,
+      "elapsed_ms": 2.065208,
+      "messages": 41,
+      "waits": 1,
+      "bytes_out": 1968,
+      "bytes_in": 24
+    },
+    {
+      "case": "eager_sync_each_call",
+      "trial": 6,
+      "elapsed_ms": 51.047791,
+      "messages": 621,
+      "waits": 21,
+      "bytes_out": 45788,
+      "bytes_in": 504
+    },
+    {
+      "case": "eager_flush64",
+      "trial": 6,
+      "elapsed_ms": 38.57825,
+      "messages": 601,
+      "waits": 1,
+      "bytes_out": 45273,
+      "bytes_in": 24
+    }
+  ]
+}

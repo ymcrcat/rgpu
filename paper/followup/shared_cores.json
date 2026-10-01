@@ -1,0 +1,130 @@
+{
+  "environment": {
+    "exp": "train",
+    "label": "client and server on the same 4 cores",
+    "device": "cuda",
+    "server": "127.0.0.1:9720",
+    "platform": "Linux-6.17.0-29-generic-x86_64-with-glibc2.35",
+    "python": "3.10.12",
+    "torch": "2.14.0+cu130",
+    "cuda": "13.0",
+    "torch_threads": 4,
+    "affinity": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "gpu": "NVIDIA L40S",
+    "trials": 7,
+    "train_steps": 10,
+    "smoke": false
+  },
+  "summary": {
+    "eager": {
+      "median_ms": 6165.566156,
+      "min_ms": 6148.284366,
+      "max_ms": 6237.826067,
+      "warmup_2_steps_ms": 1264.680624,
+      "client_cpu_ms": 6160.2713079999985,
+      "server_cpu_ms": 3560.0,
+      "messages": 64941,
+      "waits": 1,
+      "bytes_out": 5569105,
+      "bytes_in": 24
+    }
+  },
+  "samples": [
+    {
+      "case": "eager",
+      "trial": 0,
+      "elapsed_ms": 6171.640328,
+      "warmup_2_steps_ms": 1276.35435,
+      "final_loss": 4.18950080871582,
+      "client_cpu_ms": 6165.940332,
+      "server_cpu_ms": 3560.0,
+      "messages": 64941,
+      "waits": 1,
+      "bytes_out": 5565964,
+      "bytes_in": 24
+    },
+    {
+      "case": "eager",
+      "trial": 1,
+      "elapsed_ms": 6237.826067,
+      "warmup_2_steps_ms": 1260.049601,
+      "final_loss": 4.18950080871582,
+      "client_cpu_ms": 6172.676165000001,
+      "server_cpu_ms": 3670.0,
+      "messages": 64941,
+      "waits": 1,
+      "bytes_out": 5569105,
+      "bytes_in": 24
+    },
+    {
+      "case": "eager",
+      "trial": 2,
+      "elapsed_ms": 6154.656948,
+      "warmup_2_steps_ms": 1264.680624,
+      "final_loss": 4.18950080871582,
+      "client_cpu_ms": 6149.295108999997,
+      "server_cpu_ms": 3520.0,
+      "messages": 64941,
+      "waits": 1,
+      "bytes_out": 5569105,
+      "bytes_in": 24
+    },
+    {
+      "case": "eager",
+      "trial": 3,
+      "elapsed_ms": 6192.376654,
+      "warmup_2_steps_ms": 1270.490777,
+      "final_loss": 4.18950080871582,
+      "client_cpu_ms": 6181.643314999998,
+      "server_cpu_ms": 3560.0,
+      "messages": 64941,
+      "waits": 1,
+      "bytes_out": 5569105,
+      "bytes_in": 24
+    },
+    {
+      "case": "eager",
+      "trial": 4,
+      "elapsed_ms": 6158.288192,
+      "warmup_2_steps_ms": 1263.576475,
+      "final_loss": 4.1895012855529785,
+      "client_cpu_ms": 6153.605466000002,
+      "server_cpu_ms": 3630.0,
+      "messages": 64941,
+      "waits": 1,
+      "bytes_out": 5569105,
+      "bytes_in": 24
+    },
+    {
+      "case": "eager",
+      "trial": 5,
+      "elapsed_ms": 6148.284366,
+      "warmup_2_steps_ms": 1263.226998,
+      "final_loss": 4.18950080871582,
+      "client_cpu_ms": 6140.528865,
+      "server_cpu_ms": 3520.0,
+      "messages": 64941,
+      "waits": 1,
+      "bytes_out": 5569105,
+      "bytes_in": 24
+    },
+    {
+      "case": "eager",
+      "trial": 6,
+      "elapsed_ms": 6165.566156,
+      "warmup_2_steps_ms": 1266.920411,
+      "final_loss": 4.18950080871582,
+      "client_cpu_ms": 6160.2713079999985,
+      "server_cpu_ms": 3540.0,
+      "messages": 64941,
+      "waits": 1,
+      "bytes_out": 5569105,
+      "bytes_in": 24
+    }
+  ]
+}

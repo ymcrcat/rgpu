@@ -1,0 +1,195 @@
+{
+  "environment": {
+    "mode": "native",
+    "device": "cuda",
+    "platform": "Linux-6.17.0-29-generic-x86_64-with-glibc2.35",
+    "python": "3.10.12",
+    "torch": "2.14.0+cu130",
+    "cuda": "13.0",
+    "gpu": "NVIDIA L40S",
+    "server": null,
+    "numerical_check": {
+      "cpu_ref_loss": 4.337957859039307,
+      "device_loss": 4.337957382202148
+    },
+    "trials": 7,
+    "train_steps": 10,
+    "tf32": false
+  },
+  "summary": {
+    "chain/native": {
+      "median_ms": 2.024261,
+      "min_ms": 1.99151,
+      "max_ms": 2.070752,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    "train/native": {
+      "median_ms": 698.983318,
+      "min_ms": 688.634143,
+      "max_ms": 700.832646,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    }
+  },
+  "samples": [
+    {
+      "workload": "chain",
+      "case": "native",
+      "trial": 0,
+      "elapsed_ms": 2.035751,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    {
+      "workload": "chain",
+      "case": "native",
+      "trial": 1,
+      "elapsed_ms": 2.070752,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    {
+      "workload": "chain",
+      "case": "native",
+      "trial": 2,
+      "elapsed_ms": 1.99642,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    {
+      "workload": "chain",
+      "case": "native",
+      "trial": 3,
+      "elapsed_ms": 2.03147,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    {
+      "workload": "chain",
+      "case": "native",
+      "trial": 4,
+      "elapsed_ms": 1.99151,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    {
+      "workload": "chain",
+      "case": "native",
+      "trial": 5,
+      "elapsed_ms": 2.024261,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    {
+      "workload": "chain",
+      "case": "native",
+      "trial": 6,
+      "elapsed_ms": 2.02403,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    {
+      "workload": "train",
+      "case": "native",
+      "trial": 0,
+      "elapsed_ms": 688.634143,
+      "steps": 10,
+      "final_loss": 4.18950080871582,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    {
+      "workload": "train",
+      "case": "native",
+      "trial": 1,
+      "elapsed_ms": 698.601892,
+      "steps": 10,
+      "final_loss": 4.18950080871582,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    {
+      "workload": "train",
+      "case": "native",
+      "trial": 2,
+      "elapsed_ms": 699.410085,
+      "steps": 10,
+      "final_loss": 4.18950080871582,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    {
+      "workload": "train",
+      "case": "native",
+      "trial": 3,
+      "elapsed_ms": 698.983318,
+      "steps": 10,
+      "final_loss": 4.18950080871582,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    {
+      "workload": "train",
+      "case": "native",
+      "trial": 4,
+      "elapsed_ms": 699.469256,
+      "steps": 10,
+      "final_loss": 4.189500331878662,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    {
+      "workload": "train",
+      "case": "native",
+      "trial": 5,
+      "elapsed_ms": 700.832646,
+      "steps": 10,
+      "final_loss": 4.18950080871582,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    },
+    {
+      "workload": "train",
+      "case": "native",
+      "trial": 6,
+      "elapsed_ms": 691.439235,
+      "steps": 10,
+      "final_loss": 4.18950080871582,
+      "messages": 0,
+      "waits": 0,
+      "bytes_out": 0,
+      "bytes_in": 0
+    }
+  ]
+}

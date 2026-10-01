@@ -1,0 +1,78 @@
+{
+  "environment": {
+    "exp": "correctness",
+    "label": "",
+    "device": "cuda",
+    "server": "127.0.0.1:9720",
+    "platform": "Linux-6.17.0-29-generic-x86_64-with-glibc2.35",
+    "python": "3.10.12",
+    "torch": "2.14.0+cu130",
+    "cuda": "13.0",
+    "torch_threads": 8,
+    "affinity": [
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+    ],
+    "gpu": "NVIDIA L40S",
+    "trials": 7,
+    "train_steps": 10,
+    "smoke": false
+  },
+  "result": {
+    "reference": "native_single (loaded)",
+    "steps": 5,
+    "tolerance": 0.001,
+    "reference_max_abs_first_grad": 0.007769736927002668,
+    "reference_max_abs_param_change": 0.01509779691696167,
+    "variants": {
+      "cpu_single": {
+        "losses": [
+          4.337957859039307,
+          4.887452602386475,
+          4.605742931365967,
+          4.405906677246094,
+          4.365759372711182
+        ],
+        "max_abs_loss_diff": 1.1444091796875e-05,
+        "max_abs_first_grad_diff": 2.4505607143510133e-06,
+        "max_abs_param_diff": 0.017033298267051578,
+        "max_abs_exp_avg_diff": 7.000984624028206e-06,
+        "max_abs_exp_avg_sq_diff": 1.7005277186399326e-08
+      },
+      "rgpu_eager": {
+        "losses": [
+          4.337957382202148,
+          4.887454509735107,
+          4.605746269226074,
+          4.405918121337891,
+          4.365769386291504
+        ],
+        "max_abs_loss_diff": 9.5367431640625e-07,
+        "max_abs_first_grad_diff": 2.1827872842550278e-11,
+        "max_abs_param_diff": 0.0004755672998726368,
+        "max_abs_exp_avg_diff": 2.0051447791047394e-07,
+        "max_abs_exp_avg_sq_diff": 2.3101165425032377e-10
+      },
+      "rgpu_graph": {
+        "losses": [
+          4.337957382202148,
+          4.887454986572266,
+          4.605746269226074,
+          4.405917644500732,
+          4.365769863128662
+        ],
+        "max_abs_loss_diff": 4.76837158203125e-07,
+        "max_abs_first_grad_diff": 2.1827872842550278e-11,
+        "max_abs_param_diff": 0.00047404970973730087,
+        "max_abs_exp_avg_diff": 2.0057450456079096e-07,
+        "max_abs_exp_avg_sq_diff": 1.9826984498649836e-10
+      }
+    }
+  }
+}

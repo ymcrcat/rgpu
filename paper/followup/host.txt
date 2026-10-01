@@ -1,0 +1,31 @@
+date 2026-09-27T03:36:29Z
+package_sha256 2a65764613a1789be87b11529c3591f9db1ce245d8e076d87db850bda16b7dc6
+sha256 gpu_experiments.py 302d2ee6648ab2b9f8c7fc796a644b761cc28f78385647b4ec073884f6e8720c
+sha256 gpu_benchmark.py 3591f7494bd0a0f9f8c41892158e4f3377c8b762f9170be57329de2d758ee5cf
+sha256 delay_proxy.py 7c454954aa6fb2c258434bb524e4bb804293862b70ba76df305ac7365b6a01ae
+sha256 run_followup_on_gpu_host.sh 13e94fc463cf30a8dcca4e00017ba8931881925ba25a88e79f80deddb09c7317
+python 3.10.12 torch 2.14.0+cu130 cuda 13.0 gpu NVIDIA L40S
+driver 580.159.03
+nproc 128
+cgroup_cpu_max 1360000 100000
+cpuset 0-127
+cores server=0,1,2,3,4,5,6,7 client=8,9,10,11,12,13,14,15 proxy=16,17 shared=0,1,2,3
+Model name:                              AMD EPYC 9554 64-Core Processor
+Thread(s) per core:                      1
+Core(s) per socket:                      64
+Socket(s):                               2
+NUMA node0 CPU(s):                       0-63
+NUMA node1 CPU(s):                       64-127
+loadavg 10.13 17.19 21.24 13/10239 351
+loadavg after pinned_direct: 10.97 13.61 18.82 8/7672 440
+loadavg after proxy_oneway_25ms: 10.53 12.32 17.36 18/6460 526
+loadavg after proxy_oneway_0ms: 13.60 12.30 16.48 14/6472 593
+loadavg after proxy_oneway_58ms: 12.62 12.02 15.55 13/6474 659
+loadavg after proxy_oneway_5ms: 9.39 9.99 12.47 10/6312 868
+loadavg after shared_cores: 11.22 10.46 12.46 19/6463 917
+loadavg after unpinned: 9.88 10.48 12.10 9/6501 1238
+loadavg after pinned_direct_repeat: 11.82 10.82 12.10 17/6469 1299
+sha256 gpu_experiments.py (part 2) 9bb08b96495fbc42a4fec71f5aa9a733fbaff99f853e7f93e91235b929263158
+loadavg after part 2: 11.82 10.92 12.00 11/6470 1492
+sha256 gpu_experiments.py (correctness) f839aa1c6611a576b9ff4a336debfd9554caf77065fb267c716e8af906d3b050
+sha256 gpu_experiments.py (correctness) 70a03bb6d97d7b6c44e4ef7ad95cd7159fe6fc73e376fb1ef34529186ad21319
