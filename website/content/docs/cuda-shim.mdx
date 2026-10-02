@@ -71,7 +71,7 @@ to `LD_PRELOAD` if it uses those libraries. The server then needs the real
 ones; see `RGPU_CUBLAS`, `RGPU_CUBLASLT` and `RGPU_CUDNN` in the
 [configuration reference](/docs/configuration/).
 
-The program has to meet three conditions:
+The program has to meet four conditions:
 
 - **It must load the CUDA runtime as a shared library.** `nvcc` links the runtime
   statically by default, and the static runtime cannot run on a remote driver.
@@ -80,17 +80,25 @@ The program has to meet three conditions:
   `libcublas.so.12` and `libcudnn.so.9`.
 - **It must use only shimmed libraries.** cuFFT, cuSPARSE, cuRAND and NCCL
   have no stand-ins and have not been tried.
+- **It must use only the calls PyTorch makes.** The cuBLAS stand-ins forward
+  the GEMM calls (`cublasSgemm`, `cublasGemmEx`, `cublasLtMatmul` and their
+  setup), and the cuDNN stand-in forwards the backend graph API and batch
+  normalisation. Any other call returns `NOT_SUPPORTED` and logs its name.
 
 What has been checked:
 
 | Program | Real GPU | Fake driver (CI) |
 | --- | --- | --- |
 | Driver-API programs (`tests/cuda/vecadd.cpp`, `tests/hw/`) | Yes | Yes |
-| Runtime-API calls, including `<<<>>>` kernel launches | Through PyTorch only | Yes (`tests/cudart_smoke.cpp`) |
-| cuBLAS, cuBLASLt and cuDNN | Through PyTorch only | Yes |
+| Runtime-API calls, including `<<<>>>` kernel launches | Yes (`tests/hw/cublas_check.cu`) | Yes (`tests/cudart_smoke.cpp`) |
+| cuBLAS and cuBLASLt GEMMs | Yes (`tests/hw/cublas_check.cu`) | Yes |
+| cuDNN backend-graph convolution and batch normalisation | Yes (`tests/hw/cudnn_check.cu`) | Yes |
 | PyTorch, up to ResNet-18 inference | Yes | Not applicable |
 
-TensorFlow, CuPy and standalone inference engines have not been tried. JAX
+`tests/hw/math_check.sh` runs the two standalone checks on a GPU host, once
+against the real libraries and once through the shims, and compares every
+result with a CPU reference. TensorFlow, CuPy and standalone inference engines
+have not been tried. JAX
 does not run through this path; GPU `jax.jit` fails in the separate experiment
 under `jax/` in the repository.
 
