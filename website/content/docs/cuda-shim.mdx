@@ -44,6 +44,56 @@ In another client terminal:
 LD_LIBRARY_PATH=build RGPU_SERVER=127.0.0.1:9713 ./build/rpc_smoke
 ```
 
+## Run any CUDA program
+
+The shim does not depend on Python or PyTorch. It stands in for the CUDA
+libraries themselves, so a Linux program that loads them as shared libraries
+can use the remote GPU unchanged. This includes C and C++ programs,
+other frameworks and inference engines.
+
+The repository's driver-API example shows the whole loop.
+`scripts/deploy_server.sh` builds its kernel on the GPU host as
+`build/vecadd.fatbin` and copies it back. With the tunnel above running:
+
+```sh
+LD_LIBRARY_PATH=build RGPU_SERVER=127.0.0.1:9713 ./build/vecadd build/vecadd.fatbin
+```
+
+For your own program, preload the stand-ins for the libraries it uses:
+
+```sh
+LD_PRELOAD=$PWD/build/libcudart.so.12:$PWD/build/libcuda.so.1 \
+RGPU_SERVER=127.0.0.1:9713 ./your-program
+```
+
+Add `build/libcublas.so.12`, `build/libcublasLt.so.12` or `build/libcudnn.so.9`
+to `LD_PRELOAD` if it uses those libraries. The server then needs the real
+ones; see `RGPU_CUBLAS`, `RGPU_CUBLASLT` and `RGPU_CUDNN` in the
+[configuration reference](/docs/configuration/).
+
+The program has to meet three conditions:
+
+- **It must load the CUDA runtime as a shared library.** `nvcc` links the runtime
+  statically by default, and the static runtime cannot run on a remote driver.
+  Build with `nvcc -cudart shared`.
+- **It must be built against CUDA 12.** The stand-ins are `libcudart.so.12`,
+  `libcublas.so.12` and `libcudnn.so.9`.
+- **It must use only shimmed libraries.** cuFFT, cuSPARSE, cuRAND and NCCL
+  have no stand-ins and have not been tried.
+
+What has been checked:
+
+| Program | Real GPU | Fake driver (CI) |
+| --- | --- | --- |
+| Driver-API programs (`tests/cuda/vecadd.cpp`, `tests/hw/`) | Yes | Yes |
+| Runtime-API calls, including `<<<>>>` kernel launches | Through PyTorch only | Yes (`tests/cudart_smoke.cpp`) |
+| cuBLAS, cuBLASLt and cuDNN | Through PyTorch only | Yes |
+| PyTorch, up to ResNet-18 inference | Yes | Not applicable |
+
+TensorFlow, CuPy and standalone inference engines have not been tried. JAX
+does not run through this path; GPU `jax.jit` fails in the separate experiment
+under `jax/` in the repository.
+
 ## Run PyTorch
 
 For a GPU-free client, `scripts/run_torch.sh` builds and runs the container path. It downloads PyTorch and CUDA libraries, which require several gigabytes of disk space.
