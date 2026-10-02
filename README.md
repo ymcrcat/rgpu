@@ -30,8 +30,9 @@ Engineering records and experiments are indexed in [`docs/README.md`](docs/READM
 
 ## Quick start: PyTorch device
 
-Follow the [quickstart](website/content/docs/quickstart.mdx) to install rGPU
-and deploy the server. Save this as `smoke.py` in your workload directory:
+Install rGPU with `pip install rgpu`, or `pip install -e ./python` from this
+checkout, then follow the [quickstart](website/content/docs/quickstart.mdx) to
+deploy the server. Save this as `smoke.py` in your workload directory:
 
 ```python
 import torch

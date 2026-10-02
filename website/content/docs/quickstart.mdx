@@ -15,14 +15,20 @@ and server. The package currently requires `torch>=2.14`.
 
 ## 1. Install rGPU in the workload environment
 
-Activate the environment that will run your program, then install the local
-rGPU package. For example, from a sibling project:
+Activate the environment that will run your program, then install rGPU from
+PyPI:
 
 ```sh
 cd /path/to/workload
 source venv/bin/activate
-python -m pip install -e /path/to/rgpu/python
+python -m pip install rgpu
 python -c 'import torch, rgpu; print(torch.__version__)'
+```
+
+To run unreleased changes instead, install your checkout in editable mode:
+
+```sh
+python -m pip install -e /path/to/rgpu/python
 ```
 
 Importing `rgpu` registers the device. Every program that uses
