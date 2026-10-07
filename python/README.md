@@ -12,4 +12,4 @@ The GPU host runs `rgpu-opserver`; the laptop runs your script through
 authentication, so keep the server on localhost and reach it through an SSH
 tunnel.
 
-Documentation: https://rgpu.pages.dev/docs/
+Documentation: https://rgpu.dev/docs/

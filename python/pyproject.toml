@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rgpu"
-version = "0.1.0"
+version = "0.1.1"
 description = "A PyTorch device whose tensors live on a remote GPU"
 readme = "README.md"
 license = "Apache-2.0"
@@ -19,7 +19,7 @@ requires-python = ">=3.10"
 dependencies = ["torch>=2.14"]
 
 [project.urls]
-Documentation = "https://rgpu.pages.dev/docs/"
+Documentation = "https://rgpu.dev/docs/"
 Source = "https://github.com/ymcrcat/rgpu"
 
 [project.optional-dependencies]
