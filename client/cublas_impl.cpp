@@ -377,4 +377,40 @@ cublasStatus_t cublasSgemmStridedBatched(
   return send(rgpu::API_cublasSgemmStridedBatched, req, &rsp);
 }
 
+// Status text is a pure function of the code, so it is answered here. Both
+// return a pointer the caller keeps, which rules out the generated stubs: a
+// caller that links these and finds them missing fails to load at all, which
+// is how llama.cpp's CUDA backend found the gap.
+const char* cublasGetStatusName(cublasStatus_t status) {
+  switch (status) {
+    case CUBLAS_STATUS_SUCCESS: return "CUBLAS_STATUS_SUCCESS";
+    case CUBLAS_STATUS_NOT_INITIALIZED: return "CUBLAS_STATUS_NOT_INITIALIZED";
+    case CUBLAS_STATUS_ALLOC_FAILED: return "CUBLAS_STATUS_ALLOC_FAILED";
+    case CUBLAS_STATUS_INVALID_VALUE: return "CUBLAS_STATUS_INVALID_VALUE";
+    case CUBLAS_STATUS_ARCH_MISMATCH: return "CUBLAS_STATUS_ARCH_MISMATCH";
+    case CUBLAS_STATUS_MAPPING_ERROR: return "CUBLAS_STATUS_MAPPING_ERROR";
+    case CUBLAS_STATUS_EXECUTION_FAILED: return "CUBLAS_STATUS_EXECUTION_FAILED";
+    case CUBLAS_STATUS_INTERNAL_ERROR: return "CUBLAS_STATUS_INTERNAL_ERROR";
+    case CUBLAS_STATUS_NOT_SUPPORTED: return "CUBLAS_STATUS_NOT_SUPPORTED";
+    case CUBLAS_STATUS_LICENSE_ERROR: return "CUBLAS_STATUS_LICENSE_ERROR";
+  }
+  return "unknown cuBLAS status";
+}
+
+const char* cublasGetStatusString(cublasStatus_t status) {
+  switch (status) {
+    case CUBLAS_STATUS_SUCCESS: return "success";
+    case CUBLAS_STATUS_NOT_INITIALIZED: return "the library was not initialized";
+    case CUBLAS_STATUS_ALLOC_FAILED: return "the resource allocation failed";
+    case CUBLAS_STATUS_INVALID_VALUE: return "an invalid numerical value was used as an argument";
+    case CUBLAS_STATUS_ARCH_MISMATCH: return "an absent device architectural feature is required";
+    case CUBLAS_STATUS_MAPPING_ERROR: return "an access to GPU memory space failed";
+    case CUBLAS_STATUS_EXECUTION_FAILED: return "the GPU program failed to execute";
+    case CUBLAS_STATUS_INTERNAL_ERROR: return "an internal operation failed";
+    case CUBLAS_STATUS_NOT_SUPPORTED: return "the feature required is not supported";
+    case CUBLAS_STATUS_LICENSE_ERROR: return "the functionality requested requires a license";
+  }
+  return "unknown cuBLAS status";
+}
+
 }  // extern "C"

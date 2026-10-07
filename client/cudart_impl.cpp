@@ -417,6 +417,25 @@ cudaError_t cudaDeviceGetAttribute(int* value, cudaDeviceAttr attr, int device) 
       value, static_cast<CUdevice_attribute>(attr), dev));
 }
 
+// The id is the server's, as "domain:bus:device.function". It is built from
+// three attributes that already cross the wire rather than a call of its own.
+cudaError_t cudaDeviceGetPCIBusId(char* pciBusId, int len, int device) {
+  if (!pciBusId || len <= 0) return record(cudaErrorInvalidValue);
+  CUresult r = ensure_init();
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  CUdevice dev;
+  r = cuDeviceGet(&dev, device);
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  int domain = 0, bus = 0, slot = 0;
+  if ((r = cuDeviceGetAttribute(&domain, CU_DEVICE_ATTRIBUTE_PCI_DOMAIN_ID, dev)) != CUDA_SUCCESS ||
+      (r = cuDeviceGetAttribute(&bus, CU_DEVICE_ATTRIBUTE_PCI_BUS_ID, dev)) != CUDA_SUCCESS ||
+      (r = cuDeviceGetAttribute(&slot, CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID, dev)) != CUDA_SUCCESS)
+    return record_cu(r);
+  int n = std::snprintf(pciBusId, len, "%04x:%02x:%02x.0", domain, bus, slot);
+  if (n < 0 || n >= len) return record(cudaErrorInvalidValue);
+  return record(cudaSuccess);
+}
+
 cudaError_t cudaGetDeviceProperties_v2(cudaDeviceProp* prop, int device) {
   if (!prop) return record(cudaErrorInvalidValue);
   CUresult r = ensure_init();
