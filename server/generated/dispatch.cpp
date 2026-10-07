@@ -1650,6 +1650,21 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
     *out = r_; return true;
   }
 
+  case rgpu::API_cuMemCreate: {
+    uint8_t has_handle{}; if (!req.get(&has_handle)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUmemGenericAllocationHandle v_handle{};
+    size_t v_size{}; if (!req.get(&v_size)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint8_t has_prop{}; if (!req.get(&has_prop)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUmemAllocationProp v_prop{};
+    if (has_prop) { const uint8_t* b_; if (!req.get_bytes(sizeof(v_prop), &b_)) { *out = CUDA_ERROR_INVALID_VALUE; return true; } memcpy(&v_prop, b_, sizeof(v_prop)); }
+    unsigned long long v_flags{}; if (!req.get(&v_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    static auto fn_ = reinterpret_cast<decltype(&::cuMemCreate)>(rgpu::driver_sym("cuMemCreate"));
+    if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
+    CUresult r_ = fn_(has_handle ? &v_handle : nullptr, v_size, has_prop ? &v_prop : nullptr, v_flags);
+    if (has_handle) rsp->put(v_handle);
+    *out = r_; return true;
+  }
+
   case rgpu::API_cuMemFreeAsync: {
     CUdeviceptr v_dptr{}; if (!req.get(&v_dptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     uint64_t u_hStream{}; if (!req.get(&u_hStream)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
@@ -1668,6 +1683,20 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
     *out = r_; return true;
   }
 
+  case rgpu::API_cuMemGetAccess: {
+    uint8_t has_flags{}; if (!req.get(&has_flags)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    unsigned long long v_flags{};
+    uint8_t has_location{}; if (!req.get(&has_location)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUmemLocation v_location{};
+    if (has_location) { const uint8_t* b_; if (!req.get_bytes(sizeof(v_location), &b_)) { *out = CUDA_ERROR_INVALID_VALUE; return true; } memcpy(&v_location, b_, sizeof(v_location)); }
+    CUdeviceptr v_ptr{}; if (!req.get(&v_ptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    static auto fn_ = reinterpret_cast<decltype(&::cuMemGetAccess)>(rgpu::driver_sym("cuMemGetAccess"));
+    if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
+    CUresult r_ = fn_(has_flags ? &v_flags : nullptr, has_location ? &v_location : nullptr, v_ptr);
+    if (has_flags) rsp->put(v_flags);
+    *out = r_; return true;
+  }
+
   case rgpu::API_cuMemGetAddressRange_v2: {
     uint8_t has_pbase{}; if (!req.get(&has_pbase)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
     CUdeviceptr v_pbase{};
@@ -1679,6 +1708,31 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
     CUresult r_ = fn_(has_pbase ? &v_pbase : nullptr, has_psize ? &v_psize : nullptr, v_dptr);
     if (has_pbase) rsp->put(v_pbase);
     if (has_psize) rsp->put(v_psize);
+    *out = r_; return true;
+  }
+
+  case rgpu::API_cuMemGetAllocationGranularity: {
+    uint8_t has_granularity{}; if (!req.get(&has_granularity)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_granularity{};
+    uint8_t has_prop{}; if (!req.get(&has_prop)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUmemAllocationProp v_prop{};
+    if (has_prop) { const uint8_t* b_; if (!req.get_bytes(sizeof(v_prop), &b_)) { *out = CUDA_ERROR_INVALID_VALUE; return true; } memcpy(&v_prop, b_, sizeof(v_prop)); }
+    CUmemAllocationGranularity_flags v_option{}; if (!req.get(&v_option)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    static auto fn_ = reinterpret_cast<decltype(&::cuMemGetAllocationGranularity)>(rgpu::driver_sym("cuMemGetAllocationGranularity"));
+    if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
+    CUresult r_ = fn_(has_granularity ? &v_granularity : nullptr, has_prop ? &v_prop : nullptr, v_option);
+    if (has_granularity) rsp->put(v_granularity);
+    *out = r_; return true;
+  }
+
+  case rgpu::API_cuMemGetAllocationPropertiesFromHandle: {
+    uint8_t has_prop{}; if (!req.get(&has_prop)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    CUmemAllocationProp v_prop{};
+    CUmemGenericAllocationHandle v_handle{}; if (!req.get(&v_handle)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    static auto fn_ = reinterpret_cast<decltype(&::cuMemGetAllocationPropertiesFromHandle)>(rgpu::driver_sym("cuMemGetAllocationPropertiesFromHandle"));
+    if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
+    CUresult r_ = fn_(has_prop ? &v_prop : nullptr, v_handle);
+    if (has_prop) rsp->put_sized(&v_prop, sizeof(v_prop));
     *out = r_; return true;
   }
 
@@ -1743,6 +1797,20 @@ bool dispatch_generated(uint32_t id, Buffer& req, Buffer* rsp,
     static auto fn_ = reinterpret_cast<decltype(&::cuMemRelease)>(rgpu::driver_sym("cuMemRelease"));
     if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
     CUresult r_ = fn_(v_handle);
+    *out = r_; return true;
+  }
+
+  case rgpu::API_cuMemSetAccess: {
+    CUdeviceptr v_ptr{}; if (!req.get(&v_ptr)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_size{}; if (!req.get(&v_size)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    uint8_t has_desc{}; if (!req.get(&has_desc)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    const uint8_t* b_desc = nullptr; size_t n_desc = 0;
+    if (has_desc && !req.get_sized(&b_desc, &n_desc)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    size_t v_count{}; if (!req.get(&v_count)) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    if (has_desc && (size_t)(rgpu::array_bytes(v_count, sizeof(CUmemAccessDesc))) != n_desc) { *out = CUDA_ERROR_INVALID_VALUE; return true; }
+    static auto fn_ = reinterpret_cast<decltype(&::cuMemSetAccess)>(rgpu::driver_sym("cuMemSetAccess"));
+    if (!fn_) { *out = CUDA_ERROR_NOT_SUPPORTED; return true; }
+    CUresult r_ = fn_(v_ptr, v_size, has_desc ? (const CUmemAccessDesc *)b_desc : nullptr, v_count);
     *out = r_; return true;
   }
 

@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstdio>
 
+#include "common/sizes.h"
 #include "common/wire.h"
 
 using rgpu::Buffer;
@@ -104,6 +105,14 @@ int main() {
   assert(rgpu::req_at_or_before(0, 1) && rgpu::req_at_or_before(0, 0xFFFFFFFFu));
   assert(!rgpu::req_at_or_before(1, 0) && !rgpu::req_at_or_before(0xFFFFFFFFu, 0));
   assert(rgpu::req_at_or_before(0, 0));
+
+  // The byte length of an array whose element count came off the wire. A
+  // count chosen so the product wraps to a plausible length must not come out
+  // as that length: 2^62 + 1 twelve-byte elements wraps to exactly 12.
+  assert(rgpu::array_bytes(3, 12) == 36);
+  assert(rgpu::array_bytes(0, 12) == 0);
+  assert(rgpu::array_bytes((size_t(1) << 62) + 1, 12) == SIZE_MAX);
+  assert(rgpu::array_bytes(SIZE_MAX, 2) == SIZE_MAX);
 
   std::printf("wire round-trip OK\n");
   return 0;

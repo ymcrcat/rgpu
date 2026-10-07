@@ -23,6 +23,53 @@ done
 rc=0
 LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$PORT" "$BUILD/rpc_smoke" || rc=1
 
+if [[ -x "$BUILD/vmm_smoke" ]]; then
+  echo
+  LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$PORT" \
+    "$BUILD/vmm_smoke" || rc=1
+
+  # A client that dies with virtual memory mapped. The memory belongs to no
+  # context and its handle is already released, so the mapping is all that
+  # holds it and unmapping is all that gives it back: the session's expiry has
+  # to do that, then free the address ranges. Its own server, for the grace
+  # period and the fake's counts.
+  echo
+  VMM_PORT=$((PORT + 40))
+  VMM_STATS=$(mktemp "${TMPDIR:-/tmp}/rgpu-stats.XXXXXX")
+  VMM_LOG=$(mktemp "${TMPDIR:-/tmp}/rgpu-vmm-log.XXXXXX")
+  RGPU_SESSION_GRACE=1 RGPU_FAKE_STATS="$VMM_STATS" \
+    "$BUILD/rgpu-server-fake" "$VMM_PORT" >"$VMM_LOG" 2>&1 &
+  VMM_SRV=$!
+  for _ in $(seq 1 50); do
+    if (exec 3<>/dev/tcp/127.0.0.1/"$VMM_PORT") 2>/dev/null; then
+      exec 3<&- 3>&-
+      break
+    fi
+    sleep 0.1
+  done
+  LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$VMM_PORT" \
+    "$BUILD/vmm_smoke" die || rc=1
+  if ! grep -q "vmm=2 vmmranges=2" "$VMM_STATS"; then
+    echo "FAIL: vmm_smoke die should have left two mapped ranges behind"
+    echo "     found: $(cat "$VMM_STATS" 2>/dev/null)"
+    rc=1
+  fi
+  for _ in $(seq 1 100); do
+    grep -q " expired;" "$VMM_LOG" && break
+    sleep 0.1
+  done
+  if grep -q "vmm=0 vmmranges=0 overreleases=0 stale=0" "$VMM_STATS"; then
+    grep "expired" "$VMM_LOG" | sed 's/^/  /'
+  else
+    echo "FAIL: a client that died with virtual memory mapped left it behind"
+    echo "     found: $(cat "$VMM_STATS" 2>/dev/null)"
+    grep "session cleanup\|expired" "$VMM_LOG" | sed 's/^/  /'
+    rc=1
+  fi
+  kill $VMM_SRV 2>/dev/null
+  rm -f "$VMM_STATS" "$VMM_STATS.tmp" "$VMM_LOG"
+fi
+
 if [[ -x "$BUILD/launch_smoke" ]]; then
   echo
   LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$PORT" \
@@ -532,7 +579,7 @@ if [[ -x "$BUILD/expiry_smoke" ]]; then
     done
     local want="allocs=0 retains=0 contexts=0 modules=0 streams=0 events=0"
     want="$want graphs=0 execs=0 cublas=0 cublaslt=0 cudnn=0 captures=0"
-    want="$want libraries=0 overreleases=0 stale=0"
+    want="$want libraries=0 vmm=0 vmmranges=0 overreleases=0 stale=0"
     local got
     # The call counters at the end of the line count calls, not resources, so
     # they are not part of what has to come back to zero.

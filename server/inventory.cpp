@@ -710,6 +710,81 @@ CUresult w_cuLibraryUnload(CUlibrary library) {
   return r;
 }
 
+// --- virtual memory management ----------------------------------------------
+//
+// Recorded with no context, as a library is: the driver documents none of
+// these as bound to one. A range or a mapping is recorded by its start with
+// its length beside it, because that pair is what gives it back.
+
+void note_sized(Inventory::Sized Inventory::*which, uint64_t start,
+                uint64_t bytes) {
+  Inventory* inv = t_inv;
+  if (!inv || !start) return;
+  std::lock_guard<std::mutex> lk(inv->mu);
+  (inv->*which)[start] = bytes;
+}
+
+void forget_sized(Inventory::Sized Inventory::*which, uint64_t start) {
+  Inventory* inv = t_inv;
+  if (!inv) return;
+  std::lock_guard<std::mutex> lk(inv->mu);
+  (inv->*which).erase(start);
+}
+
+CUresult w_cuMemAddressReserve(CUdeviceptr* ptr, size_t size, size_t alignment,
+                               CUdeviceptr addr, unsigned long long flags) {
+  REAL("cuMemAddressReserve", CUdeviceptr*, size_t, size_t, CUdeviceptr,
+       unsigned long long);
+  CUresult r = fn(ptr, size, alignment, addr, flags);
+  if (r == CUDA_SUCCESS && ptr) note_sized(&Inventory::vmm_ranges, *ptr, size);
+  return r;
+}
+
+CUresult w_cuMemAddressFree(CUdeviceptr ptr, size_t size) {
+  REAL("cuMemAddressFree", CUdeviceptr, size_t);
+  CUresult r = fn(ptr, size);
+  if (r == CUDA_SUCCESS) forget_sized(&Inventory::vmm_ranges, ptr);
+  return r;
+}
+
+CUresult w_cuMemCreate(CUmemGenericAllocationHandle* handle, size_t size,
+                       const CUmemAllocationProp* prop,
+                       unsigned long long flags) {
+  REAL("cuMemCreate", CUmemGenericAllocationHandle*, size_t,
+       const CUmemAllocationProp*, unsigned long long);
+  CUresult r = fn(handle, size, prop, flags);
+  if (r == CUDA_SUCCESS && handle) {
+    note(&Inventory::vmm_handles, static_cast<uint64_t>(*handle), Stamp{});
+  }
+  return r;
+}
+
+CUresult w_cuMemRelease(CUmemGenericAllocationHandle handle) {
+  REAL("cuMemRelease", CUmemGenericAllocationHandle);
+  CUresult r = fn(handle);
+  if (r == CUDA_SUCCESS) {
+    forget(&Inventory::vmm_handles, static_cast<uint64_t>(handle));
+  }
+  return r;
+}
+
+CUresult w_cuMemMap(CUdeviceptr ptr, size_t size, size_t offset,
+                    CUmemGenericAllocationHandle handle,
+                    unsigned long long flags) {
+  REAL("cuMemMap", CUdeviceptr, size_t, size_t, CUmemGenericAllocationHandle,
+       unsigned long long);
+  CUresult r = fn(ptr, size, offset, handle, flags);
+  if (r == CUDA_SUCCESS) note_sized(&Inventory::vmm_maps, ptr, size);
+  return r;
+}
+
+CUresult w_cuMemUnmap(CUdeviceptr ptr, size_t size) {
+  REAL("cuMemUnmap", CUdeviceptr, size_t);
+  CUresult r = fn(ptr, size);
+  if (r == CUDA_SUCCESS) forget_sized(&Inventory::vmm_maps, ptr);
+  return r;
+}
+
 CUresult w_cuStreamCreate(CUstream* stream, unsigned int flags) {
   REAL("cuStreamCreate", CUstream*, unsigned int);
   const Stamp st = stamp();
@@ -904,6 +979,12 @@ const NamedFn kWrappedCalls[] = {
     {"cuLibraryLoadFromFile",
      reinterpret_cast<void*>(&w_cuLibraryLoadFromFile)},
     {"cuLibraryUnload", reinterpret_cast<void*>(&w_cuLibraryUnload)},
+    {"cuMemAddressReserve", reinterpret_cast<void*>(&w_cuMemAddressReserve)},
+    {"cuMemAddressFree", reinterpret_cast<void*>(&w_cuMemAddressFree)},
+    {"cuMemCreate", reinterpret_cast<void*>(&w_cuMemCreate)},
+    {"cuMemRelease", reinterpret_cast<void*>(&w_cuMemRelease)},
+    {"cuMemMap", reinterpret_cast<void*>(&w_cuMemMap)},
+    {"cuMemUnmap", reinterpret_cast<void*>(&w_cuMemUnmap)},
     {"cuStreamCreate", reinterpret_cast<void*>(&w_cuStreamCreate)},
     {"cuStreamCreateWithPriority",
      reinterpret_cast<void*>(&w_cuStreamCreateWithPriority)},
@@ -934,6 +1015,18 @@ CUresult destroy_module(uint64_t h) {
 CUresult destroy_library(uint64_t h) {
   REAL("cuLibraryUnload", CUlibrary);
   return fn(reinterpret_cast<CUlibrary>(h));
+}
+CUresult destroy_vmm_handle(uint64_t h) {
+  REAL("cuMemRelease", CUmemGenericAllocationHandle);
+  return fn(static_cast<CUmemGenericAllocationHandle>(h));
+}
+CUresult unmap_vmm(uint64_t start, uint64_t bytes) {
+  REAL("cuMemUnmap", CUdeviceptr, size_t);
+  return fn(static_cast<CUdeviceptr>(start), static_cast<size_t>(bytes));
+}
+CUresult free_vmm_range(uint64_t start, uint64_t bytes) {
+  REAL("cuMemAddressFree", CUdeviceptr, size_t);
+  return fn(static_cast<CUdeviceptr>(start), static_cast<size_t>(bytes));
 }
 CUresult destroy_stream(uint64_t h) {
   REAL("cuStreamDestroy_v2", CUstream);
@@ -1128,7 +1221,8 @@ std::string release_inventory(Inventory& inv) {
   // that somehow arrives afterwards is recorded against an empty list rather
   // than freed twice.
   Inventory::Items allocs, contexts, modules, streams, events, graphs, execs;
-  Inventory::Items libraries;
+  Inventory::Items libraries, vmm_handles;
+  Inventory::Sized vmm_maps, vmm_ranges;
   std::unordered_map<uint64_t, Inventory::LibHandle> handles;
   std::unordered_map<int, int> retains;
   std::vector<Inventory::OpenCapture> captures;
@@ -1143,6 +1237,9 @@ std::string release_inventory(Inventory& inv) {
     graphs.swap(inv.graphs);
     execs.swap(inv.graph_execs);
     libraries.swap(inv.libraries);
+    vmm_handles.swap(inv.vmm_handles);
+    vmm_maps.swap(inv.vmm_maps);
+    vmm_ranges.swap(inv.vmm_ranges);
     handles.swap(inv.handles);
     retains.swap(inv.primary_retains);
     // The maps are gone; the reverse index into them goes too. Release works
@@ -1250,6 +1347,37 @@ std::string release_inventory(Inventory& inv) {
       release_items(libraries, "loaded library", destroy_library, &current,
                     &failed, &skipped);
 
+  // Virtual memory, which belongs to no context either. The order is the
+  // driver's: a mapping first, since memory whose handle the client already
+  // released is held by its mapping alone and comes back when that goes; then
+  // any handle still unreleased; then the address ranges, which the driver
+  // will not free while anything is mapped inside them.
+  const auto release_sized = [&failed](Inventory::Sized& items,
+                                       const char* what,
+                                       CUresult (*give_back)(uint64_t,
+                                                             uint64_t)) {
+    unsigned released = 0;
+    for (const auto& entry : items) {
+      const CUresult r = give_back(entry.first, entry.second);
+      if (r == CUDA_SUCCESS) {
+        released++;
+      } else {
+        failed++;
+        logf("session cleanup: %s at %llx (%llu bytes) was not released (%d)",
+             what, (unsigned long long)entry.first,
+             (unsigned long long)entry.second, r);
+      }
+    }
+    return released;
+  };
+  const unsigned vmm_unmapped =
+      release_sized(vmm_maps, "memory mapping", unmap_vmm);
+  const unsigned vmm_handles_released =
+      release_items(vmm_handles, "memory handle", destroy_vmm_handle, &current,
+                    &failed, &skipped);
+  const unsigned vmm_ranges_freed =
+      release_sized(vmm_ranges, "address range", free_vmm_range);
+
   const unsigned execs_released =
       release_items(execs, "graph exec", destroy_graph_exec, &current, &failed,
                     &skipped);
@@ -1323,6 +1451,13 @@ std::string release_inventory(Inventory& inv) {
     parts.push_back(std::to_string(libraries_released) +
                     (libraries_released == 1 ? " loaded library"
                                              : " loaded libraries"));
+  }
+  if (vmm_unmapped) parts.push_back(plural(vmm_unmapped, "memory mapping"));
+  if (vmm_handles_released) {
+    parts.push_back(plural(vmm_handles_released, "memory handle"));
+  }
+  if (vmm_ranges_freed) {
+    parts.push_back(plural(vmm_ranges_freed, "address range"));
   }
   if (modules_released) parts.push_back(plural(modules_released, "module"));
   if (streams_released) parts.push_back(plural(streams_released, "stream"));

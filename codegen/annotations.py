@@ -141,6 +141,27 @@ ANNOTATIONS = {
         "params": {"data": "out_buffer(rgpu::pointer_attr_size(attribute))"},
     },
 
+    # ---- virtual memory management ---------------------------------------
+    # The addresses and handles are the server's and already travel as plain
+    # values; what was missing is the small structs four of these take by
+    # pointer. Each is fixed in size and holds no pointer the server could
+    # follow: CUmemAllocationProp's one pointer field is Windows-only and has
+    # to be zero everywhere else, which the driver checks for itself.
+    # cuMemExportToShareableHandle and cuMemRetainAllocationHandle stay
+    # unforwarded: they share memory between processes on one machine.
+    "cuMemGetAllocationGranularity": {"params": {"prop": "pod_in"}},
+    "cuMemCreate": {"params": {"prop": "pod_in"}, "record": True},
+    "cuMemGetAllocationPropertiesFromHandle": {"params": {"prop": "pod_out"}},
+    "cuMemGetAccess": {"params": {"location": "pod_in"}},
+    # An array of descriptors, one per location whose access is being set.
+    # array_bytes, not a bare product: the count is the client's claim, and one
+    # that overflows must not wrap to the length of the buffer it sent.
+    "cuMemSetAccess": {
+        "params": {"desc": "in_buffer(rgpu::array_bytes(count, sizeof(CUmemAccessDesc)))"},
+    },
+    "cuMemAddressReserve": {"record": True},
+    "cuMemMap": {"record": True},
+
     # ---- modules and kernels --------------------------------------------
     "cuModuleLoadData": {"params": {"image": "fatbin"}, "record": True},
     "cuModuleLoadFatBinary": {"params": {"fatCubin": "fatbin"}, "record": True},

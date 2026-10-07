@@ -244,6 +244,30 @@ Objects g_modules, g_streams, g_events, g_graphs, g_graph_execs;
 // graph objects. Only cuLibraryUnload gives it back.
 Objects g_libraries;
 
+// Virtual memory management: an address range is reserved, device memory is
+// created separately, and the one is mapped onto the other. None of the three
+// belongs to a context. The memory is given back when its handle has been
+// released and nothing maps it any more, in either order, which is how the
+// driver documents it; a caller usually releases the handle straight after
+// mapping and lets the unmap free the memory.
+constexpr size_t kVmmGranularity = size_t(2) << 20;
+struct VmmMemory {
+  size_t size;
+  CUmemAllocationProp prop;
+  void* host;
+  int maps = 0;
+  bool released = false;
+};
+struct VmmMapping {
+  size_t size;
+  unsigned long long handle;
+  unsigned long long access = CU_MEM_ACCESS_FLAGS_PROT_NONE;
+};
+std::map<unsigned long long, VmmMemory> g_vmm_memory;
+std::map<CUdeviceptr, size_t> g_vmm_ranges;
+std::map<CUdeviceptr, VmmMapping> g_vmm_maps;
+unsigned long long g_next_vmm_handle = 0x7e0000001000ull;
+
 // Hands out a distinct token per creation, tagged so a value that turns up in
 // the wrong place is recognisable in a log, and records it in `ctx`. Called
 // with g_mu held.
@@ -354,7 +378,23 @@ CUresult range_locked(CUdeviceptr p, size_t n, void** host) {
   CUresult r = enter_locked(&ctx);
   if (r != CUDA_SUCCESS) return r;
   auto it = containing_locked(p);
-  if (it == g_allocs.end()) return CUDA_ERROR_INVALID_VALUE;
+  if (it == g_allocs.end()) {
+    // Mapped virtual memory. It has no context, so nothing here is counted as
+    // cross-context use, and it is only readable once access has been granted,
+    // where the driver would fault.
+    auto m = g_vmm_maps.upper_bound(p);
+    if (m == g_vmm_maps.begin()) return CUDA_ERROR_INVALID_VALUE;
+    --m;
+    const size_t off = static_cast<size_t>(p - m->first);
+    if (off >= m->second.size || n > m->second.size - off) {
+      return CUDA_ERROR_INVALID_VALUE;
+    }
+    if (m->second.access != CU_MEM_ACCESS_FLAGS_PROT_READWRITE) {
+      return CUDA_ERROR_INVALID_VALUE;
+    }
+    *host = static_cast<char*>(g_vmm_memory[m->second.handle].host) + off;
+    return CUDA_SUCCESS;
+  }
   const Alloc& a = it->second;
   const size_t off = static_cast<size_t>(p - it->first);
   if (n > a.size - off) return CUDA_ERROR_INVALID_VALUE;
@@ -802,6 +842,204 @@ CUresult cuMemFree_v2(CUdeviceptr dptr) {
   if (r != CUDA_SUCCESS) return r;
   std::free(host);
   rgpu_fake::count(rgpu_fake::kAlloc, -1);
+  return CUDA_SUCCESS;
+}
+
+// --- virtual memory management ----------------------------------------------
+//
+// Strict about every argument, because what these exist to catch is a struct
+// that crossed the wire wrong: a field the client set and the server did not
+// see reads here as a property the fake refuses.
+
+namespace {
+
+// The one kind of allocation the fake makes: pinned device memory on a device
+// that exists, with nothing asked for that it does not model.
+bool vmm_prop_ok(const CUmemAllocationProp* prop) {
+  return prop && prop->type == CU_MEM_ALLOCATION_TYPE_PINNED &&
+         prop->requestedHandleTypes == 0 &&
+         prop->location.type == CU_MEM_LOCATION_TYPE_DEVICE &&
+         valid_device(prop->location.id) &&
+         prop->win32HandleMetaData == nullptr;
+}
+
+// Called with g_mu held. Gives the memory back once nothing holds it.
+void vmm_settle_locked(unsigned long long handle) {
+  auto it = g_vmm_memory.find(handle);
+  if (it == g_vmm_memory.end()) return;
+  if (!it->second.released || it->second.maps > 0) return;
+  std::free(it->second.host);
+  g_vmm_memory.erase(it);
+  rgpu_fake::count(rgpu_fake::kVmmMemory, -1);
+}
+
+}  // namespace
+
+CUresult cuMemGetAllocationGranularity(size_t* granularity,
+                                       const CUmemAllocationProp* prop,
+                                       CUmemAllocationGranularity_flags option) {
+  if (!granularity || !vmm_prop_ok(prop)) return CUDA_ERROR_INVALID_VALUE;
+  if (option != CU_MEM_ALLOC_GRANULARITY_MINIMUM &&
+      option != CU_MEM_ALLOC_GRANULARITY_RECOMMENDED) {
+    return CUDA_ERROR_INVALID_VALUE;
+  }
+  *granularity = kVmmGranularity;
+  return CUDA_SUCCESS;
+}
+
+CUresult cuMemAddressReserve(CUdeviceptr* ptr, size_t size, size_t alignment,
+                             CUdeviceptr addr, unsigned long long flags) {
+  if (!ptr || size == 0 || size % kVmmGranularity || addr || flags) {
+    return CUDA_ERROR_INVALID_VALUE;
+  }
+  if (alignment && alignment % kVmmGranularity) return CUDA_ERROR_INVALID_VALUE;
+  {
+    std::lock_guard<std::mutex> lk(g_mu);
+    g_next_ptr = (g_next_ptr + kVmmGranularity - 1) / kVmmGranularity *
+                 kVmmGranularity;
+    *ptr = g_next_ptr;
+    g_next_ptr += size + kVmmGranularity;
+    g_vmm_ranges[*ptr] = size;
+  }
+  rgpu_fake::count(rgpu_fake::kVmmRange, 1);
+  return CUDA_SUCCESS;
+}
+
+CUresult cuMemAddressFree(CUdeviceptr ptr, size_t size) {
+  {
+    std::lock_guard<std::mutex> lk(g_mu);
+    auto it = g_vmm_ranges.find(ptr);
+    if (it == g_vmm_ranges.end() || it->second != size) {
+      rgpu_fake::count(rgpu_fake::kStale, 1);
+      return CUDA_ERROR_INVALID_VALUE;
+    }
+    // Still mapped: the driver refuses to free the range under a mapping.
+    auto m = g_vmm_maps.lower_bound(ptr);
+    if (m != g_vmm_maps.end() && m->first < ptr + size) {
+      return CUDA_ERROR_INVALID_VALUE;
+    }
+    g_vmm_ranges.erase(it);
+  }
+  rgpu_fake::count(rgpu_fake::kVmmRange, -1);
+  return CUDA_SUCCESS;
+}
+
+CUresult cuMemCreate(CUmemGenericAllocationHandle* handle, size_t size,
+                     const CUmemAllocationProp* prop, unsigned long long flags) {
+  if (!handle || size == 0 || size % kVmmGranularity || flags ||
+      !vmm_prop_ok(prop)) {
+    return CUDA_ERROR_INVALID_VALUE;
+  }
+  void* host = std::calloc(1, size);
+  if (!host) return CUDA_ERROR_OUT_OF_MEMORY;
+  {
+    std::lock_guard<std::mutex> lk(g_mu);
+    *handle = g_next_vmm_handle++;
+    g_vmm_memory[*handle] = VmmMemory{size, *prop, host};
+  }
+  rgpu_fake::count(rgpu_fake::kVmmMemory, 1);
+  return CUDA_SUCCESS;
+}
+
+CUresult cuMemRelease(CUmemGenericAllocationHandle handle) {
+  std::lock_guard<std::mutex> lk(g_mu);
+  auto it = g_vmm_memory.find(handle);
+  if (it == g_vmm_memory.end() || it->second.released) {
+    rgpu_fake::count(rgpu_fake::kStale, 1);
+    return CUDA_ERROR_INVALID_VALUE;
+  }
+  it->second.released = true;
+  vmm_settle_locked(handle);
+  return CUDA_SUCCESS;
+}
+
+CUresult cuMemGetAllocationPropertiesFromHandle(
+    CUmemAllocationProp* prop, CUmemGenericAllocationHandle handle) {
+  if (!prop) return CUDA_ERROR_INVALID_VALUE;
+  std::lock_guard<std::mutex> lk(g_mu);
+  auto it = g_vmm_memory.find(handle);
+  if (it == g_vmm_memory.end() || it->second.released) {
+    return CUDA_ERROR_INVALID_VALUE;
+  }
+  *prop = it->second.prop;
+  return CUDA_SUCCESS;
+}
+
+CUresult cuMemMap(CUdeviceptr ptr, size_t size, size_t offset,
+                  CUmemGenericAllocationHandle handle,
+                  unsigned long long flags) {
+  if (offset || flags) return CUDA_ERROR_INVALID_VALUE;
+  std::lock_guard<std::mutex> lk(g_mu);
+  auto mem = g_vmm_memory.find(handle);
+  if (mem == g_vmm_memory.end() || mem->second.released ||
+      mem->second.size != size) {
+    return CUDA_ERROR_INVALID_VALUE;
+  }
+  // Inside one reserved range, and over nothing already mapped.
+  auto range = g_vmm_ranges.upper_bound(ptr);
+  if (range == g_vmm_ranges.begin()) return CUDA_ERROR_INVALID_VALUE;
+  --range;
+  const size_t off = static_cast<size_t>(ptr - range->first);
+  if (off >= range->second || size > range->second - off) {
+    return CUDA_ERROR_INVALID_VALUE;
+  }
+  for (const auto& m : g_vmm_maps) {
+    if (m.first < ptr + size && ptr < m.first + m.second.size) {
+      return CUDA_ERROR_INVALID_VALUE;
+    }
+  }
+  g_vmm_maps[ptr] = VmmMapping{size, handle};
+  mem->second.maps++;
+  return CUDA_SUCCESS;
+}
+
+CUresult cuMemUnmap(CUdeviceptr ptr, size_t size) {
+  std::lock_guard<std::mutex> lk(g_mu);
+  // The whole of one mapping, as the driver requires: never part of one.
+  auto it = g_vmm_maps.find(ptr);
+  if (it == g_vmm_maps.end() || it->second.size != size) {
+    rgpu_fake::count(rgpu_fake::kStale, 1);
+    return CUDA_ERROR_INVALID_VALUE;
+  }
+  const unsigned long long handle = it->second.handle;
+  g_vmm_maps.erase(it);
+  g_vmm_memory[handle].maps--;
+  vmm_settle_locked(handle);
+  return CUDA_SUCCESS;
+}
+
+CUresult cuMemSetAccess(CUdeviceptr ptr, size_t size,
+                        const CUmemAccessDesc* desc, size_t count) {
+  if (!desc || count != 1) return CUDA_ERROR_INVALID_VALUE;
+  if (desc->location.type != CU_MEM_LOCATION_TYPE_DEVICE ||
+      !valid_device(desc->location.id)) {
+    return CUDA_ERROR_INVALID_VALUE;
+  }
+  if (desc->flags != CU_MEM_ACCESS_FLAGS_PROT_NONE &&
+      desc->flags != CU_MEM_ACCESS_FLAGS_PROT_READ &&
+      desc->flags != CU_MEM_ACCESS_FLAGS_PROT_READWRITE) {
+    return CUDA_ERROR_INVALID_VALUE;
+  }
+  std::lock_guard<std::mutex> lk(g_mu);
+  auto it = g_vmm_maps.find(ptr);
+  if (it == g_vmm_maps.end() || it->second.size != size) {
+    return CUDA_ERROR_INVALID_VALUE;
+  }
+  it->second.access = desc->flags;
+  return CUDA_SUCCESS;
+}
+
+CUresult cuMemGetAccess(unsigned long long* flags,
+                        const CUmemLocation* location, CUdeviceptr ptr) {
+  if (!flags || !location) return CUDA_ERROR_INVALID_VALUE;
+  if (location->type != CU_MEM_LOCATION_TYPE_DEVICE ||
+      !valid_device(location->id)) {
+    return CUDA_ERROR_INVALID_VALUE;
+  }
+  std::lock_guard<std::mutex> lk(g_mu);
+  auto it = g_vmm_maps.find(ptr);
+  if (it == g_vmm_maps.end()) return CUDA_ERROR_INVALID_VALUE;
+  *flags = it->second.access;
   return CUDA_SUCCESS;
 }
 

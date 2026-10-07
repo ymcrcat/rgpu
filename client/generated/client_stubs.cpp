@@ -1951,7 +1951,17 @@ extern "C" CUresult cuMemBatchDecompressAsync(CUmemDecompressParams *paramsArray
 }
 
 extern "C" CUresult cuMemCreate(CUmemGenericAllocationHandle *handle, size_t size, const CUmemAllocationProp *prop, unsigned long long flags) {
-  return rgpu::unimplemented("cuMemCreate", "struct-pointer:const struct CUmemAllocationProp_st");
+  rgpu::Buffer req;
+  req.put<uint8_t>(handle ? 1 : 0);
+  req.put<size_t>(size);
+  req.put<uint8_t>(prop ? 1 : 0);
+  if (prop) req.put_bytes(prop, sizeof(*prop));
+  req.put<unsigned long long>(flags);
+  rgpu::Buffer rsp;
+  CUresult r_ = rgpu::call(rgpu::API_cuMemCreate, req, &rsp);
+  if (r_ != CUDA_SUCCESS) return r_;
+  if (handle && !rsp.get(handle)) return CUDA_ERROR_UNKNOWN;
+  return r_;
 }
 
 extern "C" CUresult cuMemExportToShareableHandle(void *shareableHandle, CUmemGenericAllocationHandle handle, CUmemAllocationHandleType handleType, unsigned long long flags) {
@@ -1969,7 +1979,16 @@ extern "C" CUresult cuMemFreeAsync(CUdeviceptr dptr, CUstream hStream) {
 }
 
 extern "C" CUresult cuMemGetAccess(unsigned long long *flags, const CUmemLocation *location, CUdeviceptr ptr) {
-  return rgpu::unimplemented("cuMemGetAccess", "struct-pointer:const struct CUmemLocation_st");
+  rgpu::Buffer req;
+  req.put<uint8_t>(flags ? 1 : 0);
+  req.put<uint8_t>(location ? 1 : 0);
+  if (location) req.put_bytes(location, sizeof(*location));
+  req.put<CUdeviceptr>(ptr);
+  rgpu::Buffer rsp;
+  CUresult r_ = rgpu::call(rgpu::API_cuMemGetAccess, req, &rsp);
+  if (r_ != CUDA_SUCCESS) return r_;
+  if (flags && !rsp.get(flags)) return CUDA_ERROR_UNKNOWN;
+  return r_;
 }
 
 extern "C" CUresult cuMemGetAddressRange_v2(CUdeviceptr *pbase, size_t *psize, CUdeviceptr dptr) {
@@ -1986,11 +2005,29 @@ extern "C" CUresult cuMemGetAddressRange_v2(CUdeviceptr *pbase, size_t *psize, C
 }
 
 extern "C" CUresult cuMemGetAllocationGranularity(size_t *granularity, const CUmemAllocationProp *prop, CUmemAllocationGranularity_flags option) {
-  return rgpu::unimplemented("cuMemGetAllocationGranularity", "struct-pointer:const struct CUmemAllocationProp_st");
+  rgpu::Buffer req;
+  req.put<uint8_t>(granularity ? 1 : 0);
+  req.put<uint8_t>(prop ? 1 : 0);
+  if (prop) req.put_bytes(prop, sizeof(*prop));
+  req.put<CUmemAllocationGranularity_flags>(option);
+  rgpu::Buffer rsp;
+  CUresult r_ = rgpu::call(rgpu::API_cuMemGetAllocationGranularity, req, &rsp);
+  if (r_ != CUDA_SUCCESS) return r_;
+  if (granularity && !rsp.get(granularity)) return CUDA_ERROR_UNKNOWN;
+  return r_;
 }
 
 extern "C" CUresult cuMemGetAllocationPropertiesFromHandle(CUmemAllocationProp *prop, CUmemGenericAllocationHandle handle) {
-  return rgpu::unimplemented("cuMemGetAllocationPropertiesFromHandle", "struct-pointer:struct CUmemAllocationProp_st");
+  rgpu::Buffer req;
+  req.put<uint8_t>(prop ? 1 : 0);
+  req.put<CUmemGenericAllocationHandle>(handle);
+  rgpu::Buffer rsp;
+  CUresult r_ = rgpu::call(rgpu::API_cuMemGetAllocationPropertiesFromHandle, req, &rsp);
+  if (r_ != CUDA_SUCCESS) return r_;
+  if (prop) { const uint8_t* b_; size_t n_;
+            if (!rsp.get_sized(&b_, &n_) || n_ != sizeof(*prop)) return CUDA_ERROR_UNKNOWN;
+            memcpy(prop, b_, n_); }
+  return r_;
 }
 
 extern "C" CUresult cuMemGetHandleForAddressRange(void *handle, CUdeviceptr dptr, size_t size, CUmemRangeHandleType handleType, unsigned long long flags) {
@@ -2131,7 +2168,16 @@ extern "C" CUresult cuMemRetainAllocationHandle(CUmemGenericAllocationHandle *ha
 }
 
 extern "C" CUresult cuMemSetAccess(CUdeviceptr ptr, size_t size, const CUmemAccessDesc *desc, size_t count) {
-  return rgpu::unimplemented("cuMemSetAccess", "struct-pointer:const struct CUmemAccessDesc_st");
+  rgpu::Buffer req;
+  req.put<CUdeviceptr>(ptr);
+  req.put<size_t>(size);
+  req.put<uint8_t>(desc ? 1 : 0);
+  if (desc) req.put_sized(desc, (size_t)(rgpu::array_bytes(count, sizeof(CUmemAccessDesc))));
+  req.put<size_t>(count);
+  rgpu::Buffer rsp;
+  CUresult r_ = rgpu::call(rgpu::API_cuMemSetAccess, req, &rsp);
+  if (r_ != CUDA_SUCCESS) return r_;
+  return r_;
 }
 
 extern "C" CUresult cuMemUnmap(CUdeviceptr ptr, size_t size) {

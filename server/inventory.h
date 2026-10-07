@@ -91,6 +91,18 @@ struct Inventory {
   // device or generation (Item's defaults), a context teardown never forgets
   // them, and expiry unloads each unconditionally with cuLibraryUnload.
   Items libraries;
+  // Virtual memory management (cuMemAddressReserve / cuMemCreate / cuMemMap).
+  // Like a library, none of it belongs to a context, so a teardown never
+  // forgets it and expiry gives it back unconditionally. There are three
+  // things to give back and they are not one handle each: an address range
+  // and a mapping are named by where they start and how long they are, and
+  // the memory behind a mapping is freed only once its handle is released
+  // and it is unmapped. A client commonly releases the handle as soon as it
+  // has mapped, so the mapping is then all that holds the memory - which is
+  // why the mappings are kept, and unmapped first at expiry.
+  using Sized = std::unordered_map<uint64_t, uint64_t>;  // start -> bytes
+  Items vmm_handles;
+  Sized vmm_maps, vmm_ranges;
   std::vector<OpenCapture> captures;
   std::unordered_map<uint64_t, LibHandle> handles;
 

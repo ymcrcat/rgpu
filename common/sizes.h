@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 #include <cuda.h>
 
@@ -43,6 +44,18 @@ inline size_t pointer_attr_size(unsigned int attribute) {
       // fail rather than move a wrong number of bytes.
       return 0;
   }
+}
+
+// The byte length of `count` elements of `element` bytes, for an array whose
+// count arrives as a parameter. A count that makes the product overflow gives
+// SIZE_MAX, which no buffer is ever as long as: without that, a count chosen
+// to wrap to the length of the buffer actually sent would pass the server's
+// size check, and the driver would be told to read that many elements out of
+// a buffer holding one.
+inline size_t array_bytes(size_t count, size_t element) {
+  size_t bytes = 0;
+  if (__builtin_mul_overflow(count, element, &bytes)) return SIZE_MAX;
+  return bytes;
 }
 
 }  // namespace rgpu

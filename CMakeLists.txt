@@ -208,6 +208,11 @@ add_test(NAME remoting
 add_executable(rpc_smoke tests/rpc_smoke.cpp)
 target_link_libraries(rpc_smoke PRIVATE rgpu_client)
 
+# The virtual memory management calls, whose struct arguments are the part
+# worth checking, and what becomes of mapped memory when its client dies.
+add_executable(vmm_smoke tests/vmm_smoke.cpp)
+target_link_libraries(vmm_smoke PRIVATE rgpu_client)
+
 # Checks the kernel launch path: parameter layout lookup, argument packing and
 # the extra[] handoff.
 add_executable(launch_smoke tests/launch_smoke.cpp)

@@ -35,6 +35,13 @@ enum Kind {
   // context and outlives any context's destruction - so, unlike a module, it is
   // never taken by a context teardown and only cuLibraryUnload gives it back.
   kLibrary,
+  // Device memory made with cuMemCreate and not yet given back, and address
+  // ranges reserved with cuMemAddressReserve and not yet freed. Neither
+  // belongs to a context. The memory goes back only when its handle has been
+  // released and every mapping of it unmapped, in either order, so a client
+  // that dies with it mapped leaves it behind unless the server unmaps it.
+  kVmmMemory,
+  kVmmRange,
   // Releases of a primary context that nobody had retained. Not a resource:
   // a mistake, and the one a test cannot otherwise see, because the fake
   // refuses the call and the count it would have corrupted stays right.
