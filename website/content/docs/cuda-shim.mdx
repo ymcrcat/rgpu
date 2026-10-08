@@ -80,7 +80,7 @@ The program has to meet four conditions:
   `libcublas.so.12` and `libcudnn.so.9`.
 - **It must use only shimmed libraries.** cuFFT, cuSPARSE, cuRAND and NCCL
   have no stand-ins and have not been tried.
-- **It must use only the calls PyTorch makes.** The cuBLAS stand-ins forward
+- **It must use only the calls PyTorch and llama.cpp make.** The cuBLAS stand-ins forward
   the GEMM calls (`cublasSgemm`, `cublasGemmEx`, `cublasLtMatmul` and their
   setup), and the cuDNN stand-in forwards the backend graph API and batch
   normalisation. Any other call returns `NOT_SUPPORTED` and logs its name.
@@ -94,13 +94,74 @@ What has been checked:
 | cuBLAS and cuBLASLt GEMMs | Yes (`tests/hw/cublas_check.cu`) | Yes |
 | cuDNN backend-graph convolution and batch normalisation | Yes (`tests/hw/cudnn_check.cu`) | Yes |
 | PyTorch, up to ResNet-18 inference | Yes | Not applicable |
+| llama.cpp and Ollama, one small model | Yes, output identical to native | Not applicable |
 
 `tests/hw/math_check.sh` runs the two standalone checks on a GPU host, once
 against the real libraries and once through the shims, and compares every
-result with a CPU reference. TensorFlow, CuPy and standalone inference engines
-have not been tried. JAX
+result with a CPU reference. TensorFlow and CuPy have not been tried. JAX
 does not run through this path; GPU `jax.jit` fails in the separate experiment
 under `jax/` in the repository.
+
+## Run Ollama and llama.cpp
+
+Ollama runs models with llama.cpp, whose CUDA backend loads the CUDA runtime
+and cuBLAS as shared libraries. Replacing those with the stand-ins sends its
+GPU work to `rgpu-server`.
+
+This was checked with Ollama 0.40.0 and `qwen2.5:0.5b`, with Ollama on the
+same Linux x86_64 machine as the server. A client on another machine, a Mac in
+a container, and larger models have not been tried.
+
+If the goal is only to use Ollama with a remote GPU, run Ollama on the GPU host
+and point `OLLAMA_HOST` at it. That is full speed and needs none of this. The
+steps below exercise the shim.
+
+Ollama loads its CUDA libraries from its own directory, so copy the
+installation and swap them there. `LD_PRELOAD` on `ollama serve` is not enough,
+because the libraries are loaded by a subprocess from a fixed path.
+
+```sh
+REAL=/usr/local/lib/ollama/cuda_v12          # Ollama's own CUDA 12 libraries
+mkdir -p ~/ollama-rgpu/bin ~/ollama-rgpu/lib
+cp /usr/local/bin/ollama ~/ollama-rgpu/bin/
+cp -a /usr/local/lib/ollama ~/ollama-rgpu/lib/ollama
+rm -rf ~/ollama-rgpu/lib/ollama/cuda_v13 ~/ollama-rgpu/lib/ollama/vulkan
+cd ~/ollama-rgpu/lib/ollama/cuda_v12
+rm -f libcudart.so.12* libcublas.so.12* libcublasLt.so.12*
+cp ~/rgpu/build/libcudart.so.12 ~/rgpu/build/libcublas.so.12 \
+   ~/rgpu/build/libcublasLt.so.12 ~/rgpu/build/libcuda.so.1 .
+```
+
+Start the server with the real cuBLAS libraries, then Ollama from the copy:
+
+```sh
+RGPU_CUBLAS=$REAL/libcublas.so.12 RGPU_CUBLASLT=$REAL/libcublasLt.so.12 \
+LD_LIBRARY_PATH=$REAL ~/rgpu/build/rgpu-server &
+
+GGML_CUDA_DISABLE_GRAPHS=1 RGPU_SERVER=127.0.0.1:9713 \
+  ~/ollama-rgpu/bin/ollama serve
+```
+
+`GGML_CUDA_DISABLE_GRAPHS=1` is required. llama.cpp otherwise uses CUDA graph
+capture, and the shim does not implement `cudaGraphExecUpdate`.
+
+Ollama's log should name the GPU under `inference compute`, with
+`library=CUDA`. If it says `library=cpu`, a stand-in failed to load and Ollama
+fell back to the CPU without an error.
+
+What to expect:
+
+- **Results.** With llama.cpp's server run directly at temperature 0, 320
+  generated tokens matched the native run exactly.
+- **Round trips.** One per generated token, the download of the result.
+  Without the default [`RGPU_LAZY_SYNC`](/docs/configuration/) rule it is 21.
+- **Speed.** On the one host measured, an RTX 4090, 43 to 48 tokens per second
+  against 154 native, about 3.4 times slower, with client and server on the
+  same machine. The gap is per-call work on the client, which has not been
+  profiled, and it varied between hosts in earlier builds. Over a network, add
+  about one round trip of latency per token.
+- **Cleanup.** A client killed mid-run has its GPU memory released when its
+  session expires.
 
 ## Run PyTorch
 
