@@ -562,6 +562,20 @@ CUresult cuDeviceGetAttribute(int* pi, CUdevice_attribute attrib, CUdevice dev) 
     case CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT: *pi = 58; break;
     case CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK: *pi = 1024; break;
     case CU_DEVICE_ATTRIBUTE_WARP_SIZE: *pi = 32; break;
+    // Each different from the others and from zero, so a field of
+    // cudaDeviceProp filled from the wrong attribute, or not filled, shows.
+    case CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN: *pi = 101376; break;
+    case CU_DEVICE_ATTRIBUTE_RESERVED_SHARED_MEMORY_PER_BLOCK: *pi = 1024; break;
+    case CU_DEVICE_ATTRIBUTE_MAX_REGISTERS_PER_MULTIPROCESSOR: *pi = 65536; break;
+    case CU_DEVICE_ATTRIBUTE_MAX_PITCH: *pi = 2147483647; break;
+    case CU_DEVICE_ATTRIBUTE_TEXTURE_ALIGNMENT: *pi = 512; break;
+    case CU_DEVICE_ATTRIBUTE_ASYNC_ENGINE_COUNT: *pi = 2; break;
+    case CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_WIDTH: *pi = 131072; break;
+    case CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_HEIGHT: *pi = 65536; break;
+    case CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE3D_DEPTH: *pi = 16384; break;
+    case CU_DEVICE_ATTRIBUTE_MAX_PERSISTING_L2_CACHE_SIZE: *pi = 51904512; break;
+    // True of the GPU, and not something a client on another machine can use.
+    case CU_DEVICE_ATTRIBUTE_CAN_USE_HOST_POINTER_FOR_REGISTERED_MEM: *pi = 1; break;
     default: *pi = 0; break;
   }
   return CUDA_SUCCESS;
@@ -1314,6 +1328,19 @@ CUresult cuModuleGetFunction(CUfunction* hfunc, CUmodule hmod,
   if (r != CUDA_SUCCESS) return r;
   if (std::strcmp(name, kCheckedKernel) != 0) return CUDA_ERROR_NOT_FOUND;
   *hfunc = reinterpret_cast<CUfunction>(h | kFunctionMark);
+  return CUDA_SUCCESS;
+}
+
+// How many blocks of a kernel fit on a multiprocessor: a function of the
+// kernel and the launch shape and of nothing that changes, which is what lets
+// a client remember the answer.
+CUresult cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
+    int* numBlocks, CUfunction func, int blockSize, size_t dynamicSMemSize,
+    unsigned int flags) {
+  if (!numBlocks || blockSize <= 0 || flags) return CUDA_ERROR_INVALID_VALUE;
+  const auto v = reinterpret_cast<unsigned long long>(func);
+  if ((v & kFunctionMark) != kFunctionMark) return CUDA_ERROR_INVALID_HANDLE;
+  *numBlocks = 4096 / blockSize - (dynamicSMemSize ? 1 : 0);
   return CUDA_SUCCESS;
 }
 

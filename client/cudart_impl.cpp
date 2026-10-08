@@ -14,10 +14,12 @@
 // client/generated/cudart_stubs.cpp.
 
 #include <atomic>
+#include <cstddef>
 #include <cstring>
 #include <map>
 #include <mutex>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include <cuda.h>
@@ -235,6 +237,12 @@ struct Kernel {
   Module* module = nullptr;
   std::string device_name;
   CUfunction fn = nullptr;
+  // Answers to cudaOccupancyMaxActiveBlocksPerMultiprocessor, by device, block
+  // size, dynamic shared memory and flags. The answer is a property of the
+  // kernel and those and of nothing that changes, and llama.cpp asks before
+  // nearly every launch: 24 round trips per generated token. Kept here so it
+  // goes when the kernel does.
+  std::map<std::tuple<int, int, size_t, unsigned int>, int> occupancy;
 };
 
 auto& g_reg_mu = *new std::mutex();
@@ -436,74 +444,186 @@ cudaError_t cudaDeviceGetPCIBusId(char* pciBusId, int len, int device) {
   return record(cudaSuccess);
 }
 
+// --- device properties ------------------------------------------------------
+//
+// cudaDeviceProp is the driver's device attributes laid out as a struct, so it
+// is built from a table: which attribute fills which field. Every field the
+// driver can answer is in it. Leaving one out is not harmless: a caller reads
+// zero as the device's answer and acts on it. llama.cpp chooses how its
+// quantized matrix multiplies run from sharedMemPerBlockOptin, and with that
+// reported as zero it took a different path and produced different numbers
+// from the same GPU.
+//
+// What is left at zero on purpose is what describes the GPU's host rather than
+// the GPU. The server's GPU can use a host pointer for registered memory, read
+// pageable host memory, or share an event with another process, but the host
+// in question is the server and the caller's memory is here. Advertising those
+// would invite calls this library refuses. managedMemory, canMapHostMemory and
+// cooperativeLaunch were passed on before this table existed and still are.
+struct PropField {
+  CUdevice_attribute attr;
+  size_t offset;
+  bool wide;  // a size_t field; every other one is an int
+};
+#define RGPU_INT(attr, field) \
+  {CU_DEVICE_ATTRIBUTE_##attr, offsetof(cudaDeviceProp, field), false}
+#define RGPU_SIZE(attr, field) \
+  {CU_DEVICE_ATTRIBUTE_##attr, offsetof(cudaDeviceProp, field), true}
+const PropField kPropFields[] = {
+    RGPU_SIZE(MAX_SHARED_MEMORY_PER_BLOCK, sharedMemPerBlock),
+    RGPU_INT(MAX_REGISTERS_PER_BLOCK, regsPerBlock),
+    RGPU_INT(WARP_SIZE, warpSize),
+    RGPU_SIZE(MAX_PITCH, memPitch),
+    RGPU_INT(MAX_THREADS_PER_BLOCK, maxThreadsPerBlock),
+    RGPU_INT(MAX_BLOCK_DIM_X, maxThreadsDim[0]),
+    RGPU_INT(MAX_BLOCK_DIM_Y, maxThreadsDim[1]),
+    RGPU_INT(MAX_BLOCK_DIM_Z, maxThreadsDim[2]),
+    RGPU_INT(MAX_GRID_DIM_X, maxGridSize[0]),
+    RGPU_INT(MAX_GRID_DIM_Y, maxGridSize[1]),
+    RGPU_INT(MAX_GRID_DIM_Z, maxGridSize[2]),
+    RGPU_INT(CLOCK_RATE, clockRate),
+    RGPU_SIZE(TOTAL_CONSTANT_MEMORY, totalConstMem),
+    RGPU_INT(COMPUTE_CAPABILITY_MAJOR, major),
+    RGPU_INT(COMPUTE_CAPABILITY_MINOR, minor),
+    RGPU_SIZE(TEXTURE_ALIGNMENT, textureAlignment),
+    RGPU_SIZE(TEXTURE_PITCH_ALIGNMENT, texturePitchAlignment),
+    RGPU_INT(GPU_OVERLAP, deviceOverlap),
+    RGPU_INT(MULTIPROCESSOR_COUNT, multiProcessorCount),
+    RGPU_INT(KERNEL_EXEC_TIMEOUT, kernelExecTimeoutEnabled),
+    RGPU_INT(INTEGRATED, integrated),
+    RGPU_INT(CAN_MAP_HOST_MEMORY, canMapHostMemory),
+    RGPU_INT(COMPUTE_MODE, computeMode),
+    RGPU_INT(MAXIMUM_TEXTURE1D_WIDTH, maxTexture1D),
+    RGPU_INT(MAXIMUM_TEXTURE1D_MIPMAPPED_WIDTH, maxTexture1DMipmap),
+    RGPU_INT(MAXIMUM_TEXTURE1D_LINEAR_WIDTH, maxTexture1DLinear),
+    RGPU_INT(MAXIMUM_TEXTURE2D_WIDTH, maxTexture2D[0]),
+    RGPU_INT(MAXIMUM_TEXTURE2D_HEIGHT, maxTexture2D[1]),
+    RGPU_INT(MAXIMUM_TEXTURE2D_MIPMAPPED_WIDTH, maxTexture2DMipmap[0]),
+    RGPU_INT(MAXIMUM_TEXTURE2D_MIPMAPPED_HEIGHT, maxTexture2DMipmap[1]),
+    RGPU_INT(MAXIMUM_TEXTURE2D_LINEAR_WIDTH, maxTexture2DLinear[0]),
+    RGPU_INT(MAXIMUM_TEXTURE2D_LINEAR_HEIGHT, maxTexture2DLinear[1]),
+    RGPU_INT(MAXIMUM_TEXTURE2D_LINEAR_PITCH, maxTexture2DLinear[2]),
+    RGPU_INT(MAXIMUM_TEXTURE2D_GATHER_WIDTH, maxTexture2DGather[0]),
+    RGPU_INT(MAXIMUM_TEXTURE2D_GATHER_HEIGHT, maxTexture2DGather[1]),
+    RGPU_INT(MAXIMUM_TEXTURE3D_WIDTH, maxTexture3D[0]),
+    RGPU_INT(MAXIMUM_TEXTURE3D_HEIGHT, maxTexture3D[1]),
+    RGPU_INT(MAXIMUM_TEXTURE3D_DEPTH, maxTexture3D[2]),
+    RGPU_INT(MAXIMUM_TEXTURE3D_WIDTH_ALTERNATE, maxTexture3DAlt[0]),
+    RGPU_INT(MAXIMUM_TEXTURE3D_HEIGHT_ALTERNATE, maxTexture3DAlt[1]),
+    RGPU_INT(MAXIMUM_TEXTURE3D_DEPTH_ALTERNATE, maxTexture3DAlt[2]),
+    RGPU_INT(MAXIMUM_TEXTURECUBEMAP_WIDTH, maxTextureCubemap),
+    RGPU_INT(MAXIMUM_TEXTURE1D_LAYERED_WIDTH, maxTexture1DLayered[0]),
+    RGPU_INT(MAXIMUM_TEXTURE1D_LAYERED_LAYERS, maxTexture1DLayered[1]),
+    RGPU_INT(MAXIMUM_TEXTURE2D_LAYERED_WIDTH, maxTexture2DLayered[0]),
+    RGPU_INT(MAXIMUM_TEXTURE2D_LAYERED_HEIGHT, maxTexture2DLayered[1]),
+    RGPU_INT(MAXIMUM_TEXTURE2D_LAYERED_LAYERS, maxTexture2DLayered[2]),
+    RGPU_INT(MAXIMUM_TEXTURECUBEMAP_LAYERED_WIDTH, maxTextureCubemapLayered[0]),
+    RGPU_INT(MAXIMUM_TEXTURECUBEMAP_LAYERED_LAYERS, maxTextureCubemapLayered[1]),
+    RGPU_INT(MAXIMUM_SURFACE1D_WIDTH, maxSurface1D),
+    RGPU_INT(MAXIMUM_SURFACE2D_WIDTH, maxSurface2D[0]),
+    RGPU_INT(MAXIMUM_SURFACE2D_HEIGHT, maxSurface2D[1]),
+    RGPU_INT(MAXIMUM_SURFACE3D_WIDTH, maxSurface3D[0]),
+    RGPU_INT(MAXIMUM_SURFACE3D_HEIGHT, maxSurface3D[1]),
+    RGPU_INT(MAXIMUM_SURFACE3D_DEPTH, maxSurface3D[2]),
+    RGPU_INT(MAXIMUM_SURFACE1D_LAYERED_WIDTH, maxSurface1DLayered[0]),
+    RGPU_INT(MAXIMUM_SURFACE1D_LAYERED_LAYERS, maxSurface1DLayered[1]),
+    RGPU_INT(MAXIMUM_SURFACE2D_LAYERED_WIDTH, maxSurface2DLayered[0]),
+    RGPU_INT(MAXIMUM_SURFACE2D_LAYERED_HEIGHT, maxSurface2DLayered[1]),
+    RGPU_INT(MAXIMUM_SURFACE2D_LAYERED_LAYERS, maxSurface2DLayered[2]),
+    RGPU_INT(MAXIMUM_SURFACECUBEMAP_WIDTH, maxSurfaceCubemap),
+    RGPU_INT(MAXIMUM_SURFACECUBEMAP_LAYERED_WIDTH, maxSurfaceCubemapLayered[0]),
+    RGPU_INT(MAXIMUM_SURFACECUBEMAP_LAYERED_LAYERS, maxSurfaceCubemapLayered[1]),
+    RGPU_SIZE(SURFACE_ALIGNMENT, surfaceAlignment),
+    RGPU_INT(CONCURRENT_KERNELS, concurrentKernels),
+    RGPU_INT(ECC_ENABLED, ECCEnabled),
+    RGPU_INT(PCI_BUS_ID, pciBusID),
+    RGPU_INT(PCI_DEVICE_ID, pciDeviceID),
+    RGPU_INT(PCI_DOMAIN_ID, pciDomainID),
+    RGPU_INT(TCC_DRIVER, tccDriver),
+    RGPU_INT(ASYNC_ENGINE_COUNT, asyncEngineCount),
+    RGPU_INT(UNIFIED_ADDRESSING, unifiedAddressing),
+    RGPU_INT(MEMORY_CLOCK_RATE, memoryClockRate),
+    RGPU_INT(GLOBAL_MEMORY_BUS_WIDTH, memoryBusWidth),
+    RGPU_INT(L2_CACHE_SIZE, l2CacheSize),
+    RGPU_INT(MAX_PERSISTING_L2_CACHE_SIZE, persistingL2CacheMaxSize),
+    RGPU_INT(MAX_THREADS_PER_MULTIPROCESSOR, maxThreadsPerMultiProcessor),
+    RGPU_INT(STREAM_PRIORITIES_SUPPORTED, streamPrioritiesSupported),
+    RGPU_INT(GLOBAL_L1_CACHE_SUPPORTED, globalL1CacheSupported),
+    RGPU_INT(LOCAL_L1_CACHE_SUPPORTED, localL1CacheSupported),
+    RGPU_SIZE(MAX_SHARED_MEMORY_PER_MULTIPROCESSOR, sharedMemPerMultiprocessor),
+    RGPU_INT(MAX_REGISTERS_PER_MULTIPROCESSOR, regsPerMultiprocessor),
+    RGPU_INT(MANAGED_MEMORY, managedMemory),
+    RGPU_INT(MULTI_GPU_BOARD, isMultiGpuBoard),
+    RGPU_INT(MULTI_GPU_BOARD_GROUP_ID, multiGpuBoardGroupID),
+    RGPU_INT(SINGLE_TO_DOUBLE_PRECISION_PERF_RATIO,
+             singleToDoublePrecisionPerfRatio),
+    RGPU_INT(COMPUTE_PREEMPTION_SUPPORTED, computePreemptionSupported),
+    RGPU_INT(COOPERATIVE_LAUNCH, cooperativeLaunch),
+    RGPU_SIZE(MAX_SHARED_MEMORY_PER_BLOCK_OPTIN, sharedMemPerBlockOptin),
+    RGPU_INT(MAX_BLOCKS_PER_MULTIPROCESSOR, maxBlocksPerMultiProcessor),
+    RGPU_INT(MAX_ACCESS_POLICY_WINDOW_SIZE, accessPolicyMaxWindowSize),
+    RGPU_SIZE(RESERVED_SHARED_MEMORY_PER_BLOCK, reservedSharedMemPerBlock),
+    RGPU_INT(SPARSE_CUDA_ARRAY_SUPPORTED, sparseCudaArraySupported),
+    RGPU_INT(TIMELINE_SEMAPHORE_INTEROP_SUPPORTED,
+             timelineSemaphoreInteropSupported),
+    RGPU_INT(MEMORY_POOLS_SUPPORTED, memoryPoolsSupported),
+    RGPU_INT(DEFERRED_MAPPING_CUDA_ARRAY_SUPPORTED,
+             deferredMappingCudaArraySupported),
+    RGPU_INT(CLUSTER_LAUNCH, clusterLaunch),
+    RGPU_INT(UNIFIED_FUNCTION_POINTERS, unifiedFunctionPointers),
+};
+#undef RGPU_INT
+#undef RGPU_SIZE
+
+// A device's properties do not change, and reading them is a round trip per
+// field, so they are read once per device. llama.cpp asks for them some
+// thirty-six times while loading a model.
+auto& g_props_mu = *new std::mutex();
+auto& g_props = *new std::map<int, cudaDeviceProp>();
+
 cudaError_t cudaGetDeviceProperties_v2(cudaDeviceProp* prop, int device) {
   if (!prop) return record(cudaErrorInvalidValue);
+  {
+    std::lock_guard<std::mutex> lk(g_props_mu);
+    auto it = g_props.find(device);
+    if (it != g_props.end()) {
+      *prop = it->second;
+      return record(cudaSuccess);
+    }
+  }
   CUresult r = ensure_init();
   if (r != CUDA_SUCCESS) return record_cu(r);
   CUdevice dev;
   r = cuDeviceGet(&dev, device);
   if (r != CUDA_SUCCESS) return record_cu(r);
 
-  std::memset(prop, 0, sizeof(*prop));
-  cuDeviceGetName(prop->name, sizeof(prop->name), dev);
+  cudaDeviceProp built;
+  std::memset(&built, 0, sizeof(built));
+  cuDeviceGetName(built.name, sizeof(built.name), dev);
   size_t total = 0;
   cuDeviceTotalMem(&total, dev);
-  prop->totalGlobalMem = total;
-  cuDeviceGetUuid(reinterpret_cast<CUuuid*>(&prop->uuid), dev);
+  built.totalGlobalMem = total;
+  cuDeviceGetUuid(reinterpret_cast<CUuuid*>(&built.uuid), dev);
 
-  // Fetch one attribute into a struct field, ignoring failures so a single
-  // unsupported attribute cannot fail the whole query.
-  auto attr = [&](CUdevice_attribute a, int* dst) {
+  // One attribute the driver does not know leaves its field at zero rather
+  // than failing the whole query.
+  for (const PropField& f : kPropFields) {
     int v = 0;
-    if (cuDeviceGetAttribute(&v, a, dev) == CUDA_SUCCESS) *dst = v;
-  };
-  attr(CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, &prop->major);
-  attr(CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, &prop->minor);
-  attr(CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, &prop->multiProcessorCount);
-  attr(CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK, &prop->maxThreadsPerBlock);
-  attr(CU_DEVICE_ATTRIBUTE_WARP_SIZE, &prop->warpSize);
-  attr(CU_DEVICE_ATTRIBUTE_CLOCK_RATE, &prop->clockRate);
-  attr(CU_DEVICE_ATTRIBUTE_MEMORY_CLOCK_RATE, &prop->memoryClockRate);
-  attr(CU_DEVICE_ATTRIBUTE_GLOBAL_MEMORY_BUS_WIDTH, &prop->memoryBusWidth);
-  attr(CU_DEVICE_ATTRIBUTE_L2_CACHE_SIZE, &prop->l2CacheSize);
-  attr(CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR,
-       &prop->maxThreadsPerMultiProcessor);
-  attr(CU_DEVICE_ATTRIBUTE_MAX_REGISTERS_PER_BLOCK, &prop->regsPerBlock);
-  attr(CU_DEVICE_ATTRIBUTE_INTEGRATED, &prop->integrated);
-  attr(CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY, &prop->canMapHostMemory);
-  attr(CU_DEVICE_ATTRIBUTE_COMPUTE_MODE, &prop->computeMode);
-  attr(CU_DEVICE_ATTRIBUTE_CONCURRENT_KERNELS, &prop->concurrentKernels);
-  attr(CU_DEVICE_ATTRIBUTE_ECC_ENABLED, &prop->ECCEnabled);
-  attr(CU_DEVICE_ATTRIBUTE_PCI_BUS_ID, &prop->pciBusID);
-  attr(CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID, &prop->pciDeviceID);
-  attr(CU_DEVICE_ATTRIBUTE_PCI_DOMAIN_ID, &prop->pciDomainID);
-  attr(CU_DEVICE_ATTRIBUTE_UNIFIED_ADDRESSING, &prop->unifiedAddressing);
-  attr(CU_DEVICE_ATTRIBUTE_MANAGED_MEMORY, &prop->managedMemory);
-  attr(CU_DEVICE_ATTRIBUTE_COOPERATIVE_LAUNCH, &prop->cooperativeLaunch);
-  attr(CU_DEVICE_ATTRIBUTE_MAX_BLOCKS_PER_MULTIPROCESSOR,
-       &prop->maxBlocksPerMultiProcessor);
-
-  int v = 0;
-  if (cuDeviceGetAttribute(&v, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK,
-                           dev) == CUDA_SUCCESS) {
-    prop->sharedMemPerBlock = static_cast<size_t>(v);
+    if (cuDeviceGetAttribute(&v, f.attr, dev) != CUDA_SUCCESS) continue;
+    char* at = reinterpret_cast<char*>(&built) + f.offset;
+    if (f.wide) {
+      const size_t wide = static_cast<size_t>(v);
+      std::memcpy(at, &wide, sizeof(wide));
+    } else {
+      std::memcpy(at, &v, sizeof(v));
+    }
   }
-  if (cuDeviceGetAttribute(
-          &v, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_MULTIPROCESSOR, dev) ==
-      CUDA_SUCCESS) {
-    prop->sharedMemPerMultiprocessor = static_cast<size_t>(v);
+  {
+    std::lock_guard<std::mutex> lk(g_props_mu);
+    g_props[device] = built;
   }
-  if (cuDeviceGetAttribute(&v, CU_DEVICE_ATTRIBUTE_TOTAL_CONSTANT_MEMORY, dev) ==
-      CUDA_SUCCESS) {
-    prop->totalConstMem = static_cast<size_t>(v);
-  }
-  attr(CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X, &prop->maxThreadsDim[0]);
-  attr(CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y, &prop->maxThreadsDim[1]);
-  attr(CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z, &prop->maxThreadsDim[2]);
-  attr(CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X, &prop->maxGridSize[0]);
-  attr(CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y, &prop->maxGridSize[1]);
-  attr(CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Z, &prop->maxGridSize[2]);
-  return cudaSuccess;
+  *prop = built;
+  return record(cudaSuccess);
 }
 
 cudaError_t cudaDeviceSynchronize(void) {
@@ -995,13 +1115,36 @@ cudaError_t cudaFuncSetAttribute(const void* func, enum cudaFuncAttribute attr,
 cudaError_t cudaOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
     int* numBlocks, const void* func, int blockSize, size_t dynamicSMemSize,
     unsigned int flags) {
+  if (!numBlocks) return record(cudaErrorInvalidValue);
+  const auto key = std::make_tuple(t_device, blockSize, dynamicSMemSize, flags);
+  {
+    std::lock_guard<std::mutex> lk(g_reg_mu);
+    auto k = g_kernels.find(func);
+    if (k != g_kernels.end()) {
+      auto seen = k->second.occupancy.find(key);
+      if (seen != k->second.occupancy.end()) {
+        *numBlocks = seen->second;
+        return record(cudaSuccess);
+      }
+    }
+  }
   CUresult r = ensure_context();
   if (r != CUDA_SUCCESS) return record_cu(r);
   CUfunction fn = nullptr;
   r = resolve_kernel(func, &fn);
   if (r != CUDA_SUCCESS) return record_cu(r);
-  return record_cu(cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
-      numBlocks, fn, blockSize, dynamicSMemSize, flags));
+  int blocks = 0;
+  r = cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
+      &blocks, fn, blockSize, dynamicSMemSize, flags);
+  if (r != CUDA_SUCCESS) return record_cu(r);
+  {
+    // Looked up again: the kernel may have been unregistered meanwhile.
+    std::lock_guard<std::mutex> lk(g_reg_mu);
+    auto k = g_kernels.find(func);
+    if (k != g_kernels.end()) k->second.occupancy[key] = blocks;
+  }
+  *numBlocks = blocks;
+  return record(cudaSuccess);
 }
 
 cudaError_t cudaOccupancyMaxActiveBlocksPerMultiprocessor(

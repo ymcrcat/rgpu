@@ -3077,15 +3077,6 @@ extern "C" CUresult cuStreamSetAttribute(CUstream hStream, CUstreamAttrID attr, 
   return rgpu::unimplemented("cuStreamSetAttribute", "struct-pointer:const union CUlaunchAttributeValue_union");
 }
 
-extern "C" CUresult cuStreamSynchronize(CUstream hStream) {
-  rgpu::Buffer req;
-  req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
-  rgpu::Buffer rsp;
-  CUresult r_ = rgpu::call(rgpu::API_cuStreamSynchronize, req, &rsp);
-  if (r_ != CUDA_SUCCESS) return r_;
-  return r_;
-}
-
 extern "C" CUresult cuStreamUpdateCaptureDependencies(CUstream hStream, CUgraphNode *dependencies, size_t numDependencies, unsigned int flags) {
   return rgpu::unimplemented("cuStreamUpdateCaptureDependencies", "array:dependencies is numDependencies elements, not one");
 }

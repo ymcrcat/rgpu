@@ -30,6 +30,11 @@ CUresult call(uint32_t api_id, const Buffer& req, Buffer* rsp);
 // for anything that has to return data.
 CUresult call_async(uint32_t api_id, const Buffer& req);
 
+// Whether a stream synchronize is queued rather than waited for:
+// RGPU_LAZY_SYNC=1. Off unless asked for, because it changes what a caller can
+// conclude when cuStreamSynchronize returns. See its definition in shim.cpp.
+bool lazy_sync();
+
 // Logs the first occurrence of an unimplemented entry point and returns
 // CUDA_ERROR_NOT_SUPPORTED. The log is the worklist for filling the API out.
 CUresult unimplemented(const char* name, const char* why);

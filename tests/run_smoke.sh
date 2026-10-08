@@ -70,6 +70,34 @@ if [[ -x "$BUILD/vmm_smoke" ]]; then
   rm -f "$VMM_STATS" "$VMM_STATS.tmp" "$VMM_LOG"
 fi
 
+if [[ -x "$BUILD/sync_smoke" ]]; then
+  # Eleven stream synchronizes each way. Waiting, every one is a round trip;
+  # queued, none is, and the result and the reported failure are the same.
+  sync_round_trips() {
+    awk '$1 == "[rgpu]" && $3 == "cuStreamSynchronize" {print $2; found=1}
+         END {if (!found) print 0}'
+  }
+  echo
+  wait_out=$(LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$PORT" \
+    RGPU_STATS=1 "$BUILD/sync_smoke" wait 2>&1) || rc=1
+  printf '%s\n' "$wait_out" | grep "PASS\|FAIL"
+  lazy_out=$(LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$PORT" \
+    RGPU_STATS=1 RGPU_LAZY_SYNC=1 "$BUILD/sync_smoke" lazy 2>&1) || rc=1
+  printf '%s\n' "$lazy_out" | grep "PASS\|FAIL"
+  waited=$(printf '%s\n' "$wait_out" | sync_round_trips)
+  queued=$(printf '%s\n' "$lazy_out" | sync_round_trips)
+  if (( waited != 11 )); then
+    echo "FAIL: by default 11 stream synchronizes should be 11 round trips,"
+    echo "      found $waited"
+    rc=1
+  fi
+  if (( queued != 0 )); then
+    echo "FAIL: with RGPU_LAZY_SYNC=1 a stream synchronize should cost no"
+    echo "      round trip, found $queued"
+    rc=1
+  fi
+fi
+
 if [[ -x "$BUILD/launch_smoke" ]]; then
   echo
   LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$PORT" \
@@ -739,7 +767,28 @@ fi
 # loader picks it over any stock one.
 if [[ -x "$BUILD/cudart_smoke" ]]; then
   echo
-  LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$PORT" \
-    "$BUILD/cudart_smoke" 2>&1 | grep -v "no version information" || rc=1
+  cudart_out=$(LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$PORT" \
+    RGPU_STATS=1 "$BUILD/cudart_smoke" 2>&1) || rc=1
+  printf '%s\n' "$cudart_out" | grep -v "no version information"
+  # What the repeated questions cost. The test asks for the device properties
+  # nine times and for two occupancies eight times each: answered from memory,
+  # that is one pass over the attributes and two occupancy queries.
+  round_trips() {
+    printf '%s\n' "$cudart_out" |
+      awk -v name="$1" '$1 == "[rgpu]" && $3 == name {print $2; found=1}
+                        END {if (!found) print 0}'
+  }
+  attrs=$(round_trips cuDeviceGetAttribute)
+  occupancy=$(round_trips cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags)
+  if (( attrs > 150 )); then
+    echo "FAIL: cudaGetDeviceProperties asked the server $attrs times for"
+    echo "      attributes; a device's properties should be read once"
+    rc=1
+  fi
+  if (( occupancy != 2 )); then
+    echo "FAIL: two distinct occupancy questions reached the server $occupancy"
+    echo "      times; each should be asked once and remembered"
+    rc=1
+  fi
 fi
 exit $rc

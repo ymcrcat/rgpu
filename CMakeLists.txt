@@ -213,6 +213,10 @@ target_link_libraries(rpc_smoke PRIVATE rgpu_client)
 add_executable(vmm_smoke tests/vmm_smoke.cpp)
 target_link_libraries(vmm_smoke PRIVATE rgpu_client)
 
+# What queueing a stream synchronize (RGPU_LAZY_SYNC=1) changes and must not.
+add_executable(sync_smoke tests/sync_smoke.cpp)
+target_link_libraries(sync_smoke PRIVATE rgpu_client)
+
 # Checks the kernel launch path: parameter layout lookup, argument packing and
 # the extra[] handoff.
 add_executable(launch_smoke tests/launch_smoke.cpp)

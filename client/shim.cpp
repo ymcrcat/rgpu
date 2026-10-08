@@ -524,6 +524,35 @@ CUresult cuDevicePrimaryCtxSetFlags_v2(CUdevice dev, unsigned int flags) {
   return r;
 }
 
+// Waits for everything issued to a stream - unless RGPU_LAZY_SYNC=1, when it
+// is queued like the work it follows and returns at once.
+//
+// Waiting is one round trip, which is nothing next to a kernel and everything
+// to a program that synchronizes after each small upload: llama.cpp does so
+// about twenty times per generated token, and over a 50 ms link that is a
+// second per token spent waiting for work that was already in order.
+//
+// Queued, the server still runs the synchronize where it was issued, and a
+// read of device memory is still a round trip that sees everything before it,
+// so results do not change. What changes is what the caller may conclude from
+// the return:
+//   - a failure in the queued work is not reported here, which has no reply
+//     to carry it, but by the next call that waits;
+//   - the work has not necessarily finished, so timing a launch by the
+//     synchronize after it measures nothing, and a loop that synchronizes to
+//     stay in step with the GPU no longer is.
+// cuCtxSynchronize, cuEventSynchronize and every call that returns data still
+// wait, so a program can always ask for the real thing.
+CUresult cuStreamSynchronize(CUstream hStream) {
+  rgpu::Buffer req;
+  req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  if (rgpu::lazy_sync()) {
+    return rgpu::call_async(rgpu::API_cuStreamSynchronize, req);
+  }
+  rgpu::Buffer rsp;
+  return rgpu::call(rgpu::API_cuStreamSynchronize, req, &rsp);
+}
+
 CUresult cuDevicePrimaryCtxGetState(CUdevice dev, unsigned int* flags,
                                     int* active) {
   {

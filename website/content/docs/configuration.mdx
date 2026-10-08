@@ -59,6 +59,7 @@ keep the default unless a valid encoded operation exceeds it.
 | `RGPU_VERBOSE` | Shim | Log forwarded calls |
 | `RGPU_STATS` | Client | When set, print round trips, one-way calls, transferred bytes and the busiest replying APIs at process exit |
 | `RGPU_BATCH` | Client | Batching enabled; set `0` for synchronous debugging |
+| `RGPU_LAZY_SYNC` | Client | Off; set `1` to queue stream synchronizes instead of waiting for each |
 | `RGPU_CUBLAS`, `RGPU_CUBLASLT`, `RGPU_CUDNN` | Server | Override paths to real math libraries |
 | `RGPU_SESSION_GRACE` | Server | `120` seconds |
 | `RGPU_MAX_SESSIONS` | Server | `64`, including sessions in their grace period |
@@ -69,6 +70,21 @@ keep the default unless a valid encoded operation exceeds it.
 | `RGPU_MAX_CONTEXT_STACK` | Server | `64` entries per client thread |
 
 `RGPU_BATCH` belongs to the CUDA path. Do not assume it controls Python opserver batching.
+
+`RGPU_LAZY_SYNC=1` makes `cuStreamSynchronize` and `cudaStreamSynchronize`
+return at once: the synchronize is queued behind the work it follows, and the
+server still runs it in order. A program that synchronizes after every small
+upload stops paying the link's latency each time. llama.cpp does so about
+twenty times per generated token. Results do not change, because reading device memory
+still waits for everything before it. Two things do:
+
+- A failure in queued work is reported by the next call that waits, not by
+  the synchronize.
+- The work may not have finished when the synchronize returns, so code that
+  times a kernel by the synchronize after it measures nothing.
+
+`cuCtxSynchronize` and `cudaDeviceSynchronize` always wait. Leave the setting
+off for a program whose behavior depends on either point.
 
 The handshake timeout and pending-handshake limit bound connections before they
 become sessions. They protect the unauthenticated listener from peers that

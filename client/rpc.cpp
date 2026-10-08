@@ -582,7 +582,28 @@ bool flush_locked() {
   return ok;
 }
 
+bool lazy_sync() {
+  static bool v = env_int("RGPU_LAZY_SYNC", 0) != 0;
+  return v;
+}
+
+// Sends whatever is still queued when the process exits. A queued call has an
+// effect even though nobody waits for it, and a program whose last act is a
+// queued synchronize - which RGPU_LAZY_SYNC=1 makes possible - would otherwise
+// leave with its last work unsent. Tried, not waited for: a thread still
+// inside a call holds the lock, and exiting must not hang on it.
+void arm_exit_flush() {
+  static std::once_flag once;
+  std::call_once(once, [] {
+    std::atexit([] {
+      std::unique_lock<std::mutex> lk(g_mu, std::try_to_lock);
+      if (lk.owns_lock() && g_fd >= 0) flush_locked();
+    });
+  });
+}
+
 CUresult call_async(uint32_t api_id, const Buffer& req) {
+  arm_exit_flush();
   if (!batching()) {
     // Wait for the reply, so a failure surfaces at the call that caused it.
     Buffer rsp;

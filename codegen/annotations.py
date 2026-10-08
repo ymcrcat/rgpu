@@ -87,6 +87,9 @@ HANDWRITTEN_CLIENT = {
     "cuDevicePrimaryCtxRelease_v2",
     "cuDevicePrimaryCtxReset_v2",
     "cuDevicePrimaryCtxSetFlags_v2",
+    # A round trip by default, queued with RGPU_LAZY_SYNC=1. The choice is the
+    # caller's to make, so it cannot be fixed in the generated code.
+    "cuStreamSynchronize",
 }
 
 # Explicitly refused, with the reason surfaced in the log. These cannot work
