@@ -20,12 +20,14 @@
 #include <atomic>
 #include <initializer_list>
 #include <cstring>
+#include <map>
 #include <mutex>
 #include <unordered_map>
 #include <vector>
 
 #include <cudnn.h>
 
+#include "client/pending.h"
 #include "client/rpc.h"
 #include "common/cudnn_ids.h"
 #include "common/cudnn_sizes.h"
@@ -130,6 +132,23 @@ size_t scalar_width(const void* desc) {
              : sizeof(float);
 }
 
+// The stream each handle computes on, so that executing a graph or a batch
+// normalisation counts as work on it: a stream synchronize after one has to
+// wait (client/pending.h). A handle not seen here computes on the default
+// stream. Never destroyed, like every global a caller can reach during exit.
+auto& g_streams_mu = *new std::mutex();
+auto& g_streams = *new std::map<cudnnHandle_t, uint64_t>();
+
+void computes(cudnnHandle_t handle) {
+  uint64_t stream = 0;
+  {
+    std::lock_guard<std::mutex> lk(g_streams_mu);
+    auto it = g_streams.find(handle);
+    if (it != g_streams.end()) stream = it->second;
+  }
+  rgpu::work_on(stream);
+}
+
 }  // namespace
 
 extern "C" {
@@ -148,6 +167,10 @@ cudnnStatus_t cudnnCreate(cudnnHandle_t* handle) {
 cudnnStatus_t cudnnDestroy(cudnnHandle_t handle) {
   rgpu::Buffer req, rsp;
   put_ptr(req, handle);
+  {
+    std::lock_guard<std::mutex> lk(g_streams_mu);
+    g_streams.erase(handle);
+  }
   return send(rgpu::API_cudnnDestroy, req, &rsp);
 }
 
@@ -155,6 +178,10 @@ cudnnStatus_t cudnnSetStream(cudnnHandle_t handle, cudaStream_t streamId) {
   rgpu::Buffer req, rsp;
   put_ptr(req, handle);
   put_ptr(req, streamId);
+  {
+    std::lock_guard<std::mutex> lk(g_streams_mu);
+    g_streams[handle] = reinterpret_cast<uint64_t>(streamId);
+  }
   return send_async(rgpu::API_cudnnSetStream, req);
 }
 
@@ -342,6 +369,7 @@ cudnnStatus_t cudnnBackendGetAttribute(cudnnBackendDescriptor_t descriptor,
 cudnnStatus_t cudnnBackendExecute(cudnnHandle_t handle,
                                   cudnnBackendDescriptor_t executionPlan,
                                   cudnnBackendDescriptor_t variantPack) {
+  computes(handle);
   rgpu::Buffer req, rsp;
   put_ptr(req, handle);
   put_ptr(req, executionPlan);
@@ -444,6 +472,7 @@ cudnnStatus_t cudnnBatchNormalizationForwardInference(
     const cudnnTensorDescriptor_t bnScaleBiasMeanVarDesc, const void* bnScale,
     const void* bnBias, const void* estimatedMean,
     const void* estimatedVariance, double epsilon) {
+  computes(handle);
   if (!alpha || !beta) return CUDNN_STATUS_BAD_PARAM;
   const size_t width = scalar_width(yDesc);
   rgpu::Buffer req, rsp;
@@ -579,6 +608,7 @@ cudnnStatus_t cudnnBatchNormalizationForwardTrainingEx(
     void* saveInvVariance, const cudnnActivationDescriptor_t activationDesc,
     void* workspace, size_t workSpaceSizeInBytes, void* reserveSpace,
     size_t reserveSpaceSizeInBytes) {
+  computes(handle);
   if (!alpha || !beta) return CUDNN_STATUS_BAD_PARAM;
   const size_t width = scalar_width(yDesc);
   rgpu::Buffer req;
@@ -621,6 +651,7 @@ cudnnStatus_t cudnnBatchNormalizationBackwardEx(
     const cudnnActivationDescriptor_t activationDesc, void* workspace,
     size_t workSpaceSizeInBytes, void* reserveSpace,
     size_t reserveSpaceSizeInBytes) {
+  computes(handle);
   if (!alphaDataDiff || !betaDataDiff || !alphaParamDiff || !betaParamDiff) {
     return CUDNN_STATUS_BAD_PARAM;
   }

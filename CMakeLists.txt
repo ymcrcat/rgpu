@@ -34,6 +34,7 @@ endif()
 add_library(rgpu_client SHARED
   client/shim.cpp
   client/rpc.cpp
+  client/pending.cpp
   ${GEN_CLIENT}
   ${GEN_NAMES}
 )
@@ -187,6 +188,10 @@ endif()
 enable_testing()
 add_executable(test_wire tests/test_wire.cpp)
 add_test(NAME wire COMMAND test_wire)
+
+# The record that decides whether a stream synchronize has to wait, on its own.
+add_executable(test_pending tests/test_pending.cpp client/pending.cpp)
+add_test(NAME pending COMMAND test_pending)
 
 # The fake driver on its own, driven from several OS threads on two devices.
 # Everything else reaches the fake through the server, where one thread serves

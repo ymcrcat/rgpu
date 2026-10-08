@@ -71,31 +71,30 @@ if [[ -x "$BUILD/vmm_smoke" ]]; then
 fi
 
 if [[ -x "$BUILD/sync_smoke" ]]; then
-  # Eleven stream synchronizes each way. Waiting, every one is a round trip;
-  # queued, none is, and the result and the reported failure are the same.
-  sync_round_trips() {
-    awk '$1 == "[rgpu]" && $3 == "cuStreamSynchronize" {print $2; found=1}
-         END {if (!found) print 0}'
-  }
+  # The same 24 stream synchronizes in each mode: ten after uploads, ten after
+  # memsets, two across two streams, and one each after a failing memset and a
+  # failing upload. Waiting, all 24 are round trips. By default the ten after
+  # uploads, the one on the idle stream and the one after the failing upload
+  # are queued, leaving 12. With every one queued, none is a round trip.
   echo
-  wait_out=$(LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$PORT" \
-    RGPU_STATS=1 "$BUILD/sync_smoke" wait 2>&1) || rc=1
-  printf '%s\n' "$wait_out" | grep "PASS\|FAIL"
-  lazy_out=$(LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$PORT" \
-    RGPU_STATS=1 RGPU_LAZY_SYNC=1 "$BUILD/sync_smoke" lazy 2>&1) || rc=1
-  printf '%s\n' "$lazy_out" | grep "PASS\|FAIL"
-  waited=$(printf '%s\n' "$wait_out" | sync_round_trips)
-  queued=$(printf '%s\n' "$lazy_out" | sync_round_trips)
-  if (( waited != 11 )); then
-    echo "FAIL: by default 11 stream synchronizes should be 11 round trips,"
-    echo "      found $waited"
-    rc=1
-  fi
-  if (( queued != 0 )); then
-    echo "FAIL: with RGPU_LAZY_SYNC=1 a stream synchronize should cost no"
-    echo "      round trip, found $queued"
-    rc=1
-  fi
+  sync_mode() {  # sync_mode MODE EXPECTED [VAR=value]
+    local mode=$1 want=$2 out got
+    shift 2
+    out=$(env "$@" LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$PORT" \
+      RGPU_STATS=1 "$BUILD/sync_smoke" "$mode" 2>&1) || rc=1
+    printf '%s\n' "$out" | grep "PASS\|FAIL"
+    got=$(printf '%s\n' "$out" |
+      awk '$1 == "[rgpu]" && $3 == "cuStreamSynchronize" {print $2; found=1}
+           END {if (!found) print 0}')
+    if (( got != want )); then
+      echo "FAIL: sync_smoke $mode should have waited for $want of its stream"
+      echo "      synchronizes, and waited for $got"
+      rc=1
+    fi
+  }
+  sync_mode wait 24 RGPU_LAZY_SYNC=0
+  sync_mode uploads 12
+  sync_mode lazy 0 RGPU_LAZY_SYNC=1
 fi
 
 if [[ -x "$BUILD/launch_smoke" ]]; then

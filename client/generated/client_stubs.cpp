@@ -4,6 +4,7 @@
 #include <cstring>
 #include <cuda.h>
 
+#include "client/pending.h"
 #include "client/rpc.h"
 #include "common/generated/api_ids.h"
 
@@ -382,6 +383,7 @@ extern "C" CUresult cuCtxSynchronize(void) {
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuCtxSynchronize, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
+  rgpu::settled_all();
   return r_;
 }
 
@@ -743,6 +745,7 @@ extern "C" CUresult cuEventRecord(CUevent hEvent, CUstream hStream) {
   rgpu::Buffer req;
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hEvent));
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   return rgpu::call_async(rgpu::API_cuEventRecord, req);
 }
 
@@ -751,6 +754,7 @@ extern "C" CUresult cuEventRecordWithFlags(CUevent hEvent, CUstream hStream, uns
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hEvent));
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
   req.put<unsigned int>(flags);
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuEventRecordWithFlags, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
@@ -1283,6 +1287,7 @@ extern "C" CUresult cuGraphLaunch(CUgraphExec hGraphExec, CUstream hStream) {
   rgpu::Buffer req;
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hGraphExec));
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuGraphLaunch, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
@@ -1422,6 +1427,7 @@ extern "C" CUresult cuGraphUpload(CUgraphExec hGraphExec, CUstream hStream) {
   rgpu::Buffer req;
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hGraphExec));
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuGraphUpload, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
@@ -1433,6 +1439,7 @@ extern "C" CUresult cuGraphicsMapResources(unsigned int count, CUgraphicsResourc
   req.put<unsigned int>(count);
   req.put<uint8_t>(resources ? 1 : 0);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuGraphicsMapResources, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
@@ -1495,6 +1502,7 @@ extern "C" CUresult cuGraphicsUnmapResources(unsigned int count, CUgraphicsResou
   req.put<unsigned int>(count);
   req.put<uint8_t>(resources ? 1 : 0);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuGraphicsUnmapResources, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
@@ -1696,6 +1704,7 @@ extern "C" CUresult cuKernelSetCacheConfig(CUkernel kernel, CUfunc_cache config,
 extern "C" CUresult cuLaunch(CUfunction f) {
   rgpu::Buffer req;
   req.put<uint64_t>(reinterpret_cast<uint64_t>(f));
+  rgpu::work_somewhere();
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuLaunch, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
@@ -1711,6 +1720,7 @@ extern "C" CUresult cuLaunchGrid(CUfunction f, int grid_width, int grid_height) 
   req.put<uint64_t>(reinterpret_cast<uint64_t>(f));
   req.put<int>(grid_width);
   req.put<int>(grid_height);
+  rgpu::work_somewhere();
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuLaunchGrid, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
@@ -1723,6 +1733,7 @@ extern "C" CUresult cuLaunchGridAsync(CUfunction f, int grid_width, int grid_hei
   req.put<int>(grid_width);
   req.put<int>(grid_height);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuLaunchGridAsync, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
@@ -1907,6 +1918,7 @@ extern "C" CUresult cuMemAllocAsync(CUdeviceptr *dptr, size_t bytesize, CUstream
   req.put<uint8_t>(dptr ? 1 : 0);
   req.put<size_t>(bytesize);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuMemAllocAsync, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
@@ -1920,6 +1932,7 @@ extern "C" CUresult cuMemAllocFromPoolAsync(CUdeviceptr *dptr, size_t bytesize, 
   req.put<size_t>(bytesize);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(pool));
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuMemAllocFromPoolAsync, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
@@ -1972,6 +1985,7 @@ extern "C" CUresult cuMemFreeAsync(CUdeviceptr dptr, CUstream hStream) {
   rgpu::Buffer req;
   req.put<CUdeviceptr>(dptr);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuMemFreeAsync, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
@@ -2136,6 +2150,7 @@ extern "C" CUresult cuMemPrefetchAsync(CUdeviceptr devPtr, size_t count, CUdevic
   req.put<size_t>(count);
   req.put<CUdevice>(dstDevice);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuMemPrefetchAsync, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
@@ -2239,6 +2254,7 @@ extern "C" CUresult cuMemcpyAsync(CUdeviceptr dst, CUdeviceptr src, size_t ByteC
   req.put<CUdeviceptr>(src);
   req.put<size_t>(ByteCount);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuMemcpyAsync, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
@@ -2300,6 +2316,7 @@ extern "C" CUresult cuMemcpyDtoDAsync_v2(CUdeviceptr dstDevice, CUdeviceptr srcD
   req.put<CUdeviceptr>(srcDevice);
   req.put<size_t>(ByteCount);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuMemcpyDtoDAsync_v2, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
@@ -2330,6 +2347,7 @@ extern "C" CUresult cuMemcpyDtoHAsync_v2(void *dstHost, CUdeviceptr srcDevice, s
   if (dstHost) { const uint8_t* b_; size_t n_;
             if (!rsp.get_sized(&b_, &n_)) return CUDA_ERROR_UNKNOWN;
             memcpy(dstHost, b_, n_); }
+  rgpu::settled(reinterpret_cast<uint64_t>(hStream));
   return r_;
 }
 
@@ -2399,6 +2417,7 @@ extern "C" CUresult cuMemcpyPeerAsync(CUdeviceptr dstDevice, CUcontext dstContex
   req.put<uint64_t>(reinterpret_cast<uint64_t>(srcContext));
   req.put<size_t>(ByteCount);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuMemcpyPeerAsync, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
@@ -2411,6 +2430,7 @@ extern "C" CUresult cuMemsetD16Async(CUdeviceptr dstDevice, unsigned short us, s
   req.put<unsigned short>(us);
   req.put<size_t>(N);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   return rgpu::call_async(rgpu::API_cuMemsetD16Async, req);
 }
 
@@ -2433,6 +2453,7 @@ extern "C" CUresult cuMemsetD2D16Async(CUdeviceptr dstDevice, size_t dstPitch, u
   req.put<size_t>(Width);
   req.put<size_t>(Height);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   return rgpu::call_async(rgpu::API_cuMemsetD2D16Async, req);
 }
 
@@ -2457,6 +2478,7 @@ extern "C" CUresult cuMemsetD2D32Async(CUdeviceptr dstDevice, size_t dstPitch, u
   req.put<size_t>(Width);
   req.put<size_t>(Height);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   return rgpu::call_async(rgpu::API_cuMemsetD2D32Async, req);
 }
 
@@ -2481,6 +2503,7 @@ extern "C" CUresult cuMemsetD2D8Async(CUdeviceptr dstDevice, size_t dstPitch, un
   req.put<size_t>(Width);
   req.put<size_t>(Height);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   return rgpu::call_async(rgpu::API_cuMemsetD2D8Async, req);
 }
 
@@ -2503,6 +2526,7 @@ extern "C" CUresult cuMemsetD32Async(CUdeviceptr dstDevice, unsigned int ui, siz
   req.put<unsigned int>(ui);
   req.put<size_t>(N);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   return rgpu::call_async(rgpu::API_cuMemsetD32Async, req);
 }
 
@@ -2523,6 +2547,7 @@ extern "C" CUresult cuMemsetD8Async(CUdeviceptr dstDevice, unsigned char uc, siz
   req.put<unsigned char>(uc);
   req.put<size_t>(N);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   return rgpu::call_async(rgpu::API_cuMemsetD8Async, req);
 }
 
@@ -2882,6 +2907,7 @@ extern "C" CUresult cuStreamAttachMemAsync(CUstream hStream, CUdeviceptr dptr, s
   req.put<CUdeviceptr>(dptr);
   req.put<size_t>(length);
   req.put<unsigned int>(flags);
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuStreamAttachMemAsync, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
@@ -2947,6 +2973,7 @@ extern "C" CUresult cuStreamDestroy_v2(CUstream hStream) {
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuStreamDestroy_v2, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
+  rgpu::settled(reinterpret_cast<uint64_t>(hStream));
   return r_;
 }
 
@@ -3090,6 +3117,7 @@ extern "C" CUresult cuStreamWaitEvent(CUstream hStream, CUevent hEvent, unsigned
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
   req.put<uint64_t>(reinterpret_cast<uint64_t>(hEvent));
   req.put<unsigned int>(Flags);
+  rgpu::work_on(reinterpret_cast<uint64_t>(hStream));
   return rgpu::call_async(rgpu::API_cuStreamWaitEvent, req);
 }
 
@@ -3099,6 +3127,7 @@ extern "C" CUresult cuStreamWaitValue32_v2(CUstream stream, CUdeviceptr addr, cu
   req.put<CUdeviceptr>(addr);
   req.put<cuuint32_t>(value);
   req.put<unsigned int>(flags);
+  rgpu::work_on(reinterpret_cast<uint64_t>(stream));
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuStreamWaitValue32_v2, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
@@ -3111,6 +3140,7 @@ extern "C" CUresult cuStreamWaitValue64_v2(CUstream stream, CUdeviceptr addr, cu
   req.put<CUdeviceptr>(addr);
   req.put<cuuint64_t>(value);
   req.put<unsigned int>(flags);
+  rgpu::work_on(reinterpret_cast<uint64_t>(stream));
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuStreamWaitValue64_v2, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
@@ -3123,6 +3153,7 @@ extern "C" CUresult cuStreamWriteValue32_v2(CUstream stream, CUdeviceptr addr, c
   req.put<CUdeviceptr>(addr);
   req.put<cuuint32_t>(value);
   req.put<unsigned int>(flags);
+  rgpu::work_on(reinterpret_cast<uint64_t>(stream));
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuStreamWriteValue32_v2, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;
@@ -3135,6 +3166,7 @@ extern "C" CUresult cuStreamWriteValue64_v2(CUstream stream, CUdeviceptr addr, c
   req.put<CUdeviceptr>(addr);
   req.put<cuuint64_t>(value);
   req.put<unsigned int>(flags);
+  rgpu::work_on(reinterpret_cast<uint64_t>(stream));
   rgpu::Buffer rsp;
   CUresult r_ = rgpu::call(rgpu::API_cuStreamWriteValue64_v2, req, &rsp);
   if (r_ != CUDA_SUCCESS) return r_;

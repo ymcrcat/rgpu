@@ -16,6 +16,8 @@
 #include <cublas_v2.h>
 #include <cublasLt.h>
 
+#include "client/pending.h"
+
 static int g_failures = 0;
 
 #define CHECK(call)                                                        \
@@ -24,6 +26,20 @@ static int g_failures = 0;
     if (s_ != CUBLAS_STATUS_SUCCESS) {                                     \
       std::fprintf(stderr, "FAIL %s:%d: %s -> %d\n", __FILE__, __LINE__,   \
                    #call, s_);                                            \
+      g_failures++;                                                        \
+    }                                                                      \
+  } while (0)
+
+// A compute call has to count as work on its stream, or a stream synchronize
+// after it would be queued instead of waiting (client/pending.h). The handle
+// here computes on the default stream.
+#define EXPECT_MARKS_STREAM_BUSY(call, what)                               \
+  do {                                                                     \
+    rgpu::settled_all();                                                   \
+    call;                                                                  \
+    if (rgpu::nothing_to_wait_for(0)) {                                    \
+      std::fprintf(stderr, "FAIL %s:%d: %s did not mark its stream busy\n", \
+                   __FILE__, __LINE__, what);                              \
       g_failures++;                                                        \
     }                                                                      \
   } while (0)
@@ -60,10 +76,12 @@ int main() {
   // The device pointers here are never dereferenced by anything; they stand
   // for values in the server's address space and only have to arrive intact.
   const float alpha = kAlpha, beta = kBeta;
-  CHECK(cublasSgemm(h, CUBLAS_OP_T, CUBLAS_OP_N, kM, kN, kK, &alpha,
-                    static_cast<const float*>(kA), kLda,
-                    static_cast<const float*>(kB), kLdb, &beta,
-                    static_cast<float*>(kC), kLdc));
+  EXPECT_MARKS_STREAM_BUSY(
+      CHECK(cublasSgemm(h, CUBLAS_OP_T, CUBLAS_OP_N, kM, kN, kK, &alpha,
+                        static_cast<const float*>(kA), kLda,
+                        static_cast<const float*>(kB), kLdb, &beta,
+                        static_cast<float*>(kC), kLdc)),
+      "cublasSgemm");
 
   // A wrong scalar must be rejected, or the check above proves nothing.
   const float wrong = kAlpha + 1.0f;
@@ -121,9 +139,11 @@ int main() {
     }
   }
 
-  CHECK(cublasLtMatmul(lt, desc, &alpha, kA, layout, kB, layout, &beta, kC,
-                       layout, kD, layout, &results[0].algo, kWorkspace,
-                       kWorkspaceSize, nullptr));
+  EXPECT_MARKS_STREAM_BUSY(
+      CHECK(cublasLtMatmul(lt, desc, &alpha, kA, layout, kB, layout, &beta, kC,
+                           layout, kD, layout, &results[0].algo, kWorkspace,
+                           kWorkspaceSize, nullptr)),
+      "cublasLtMatmul");
 
   CHECK(cublasLtMatmulPreferenceDestroy(pref));
   CHECK(cublasLtMatrixLayoutDestroy(layout));

@@ -13,6 +13,7 @@
 
 #include <cudnn.h>
 
+#include "client/pending.h"
 #include "client/rpc.h"
 #include "common/cudnn_ids.h"
 
@@ -24,6 +25,20 @@ static int g_failures = 0;
     if (s_ != CUDNN_STATUS_SUCCESS) {                                      \
       std::fprintf(stderr, "FAIL %s:%d: %s -> %d\n", __FILE__, __LINE__,   \
                    #call, s_);                                             \
+      g_failures++;                                                        \
+    }                                                                      \
+  } while (0)
+
+// A compute call has to count as work on its stream, or a stream synchronize
+// after it would be queued instead of waiting (client/pending.h). The handle
+// here computes on the default stream.
+#define EXPECT_MARKS_STREAM_BUSY(call, what)                               \
+  do {                                                                     \
+    rgpu::settled_all();                                                   \
+    call;                                                                  \
+    if (rgpu::nothing_to_wait_for(0)) {                                    \
+      std::fprintf(stderr, "FAIL %s:%d: %s did not mark its stream busy\n", \
+                   __FILE__, __LINE__, what);                              \
       g_failures++;                                                        \
     }                                                                      \
   } while (0)
@@ -109,7 +124,8 @@ int main() {
   cudnnBackendDescriptor_t plan = nullptr;
   CHECK(cudnnBackendCreateDescriptor(CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR,
                                      &plan));
-  CHECK(cudnnBackendExecute(h, plan, pack));
+  EXPECT_MARKS_STREAM_BUSY(CHECK(cudnnBackendExecute(h, plan, pack)),
+                           "cudnnBackendExecute");
 
   // Descriptor handles are minted on the client, so an attribute whose
   // elements are descriptors has to be translated on the way out and left

@@ -191,6 +191,15 @@ def emit_client_stub(f, plans, a):
     response = []
     for p, plan in zip(f["params"], plans):
         response += emit_client_response(p, plan)
+    # Recorded before the call goes out, so a call that fails still counts: a
+    # synchronize that waits when it need not have costs a round trip, and one
+    # that does not wait when it should have is the mistake.
+    work = ann.stream_work(f)
+    if work == "*":
+        lines.append("  rgpu::work_somewhere();")
+    elif work:
+        lines.append("  rgpu::work_on(reinterpret_cast<uint64_t>(%s));" % work)
+    done = ann.settles(f, a)
     if a.get("exec") == "async" and not response:
         lines.append("  return rgpu::call_async(rgpu::API_%s, req);" % name)
         lines.append("}")
@@ -203,6 +212,10 @@ def emit_client_stub(f, plans, a):
     lines.append("  CUresult r_ = rgpu::call(rgpu::API_%s, req, &rsp);" % name)
     lines.append("  if (r_ != CUDA_SUCCESS) return r_;")
     lines += response
+    if done == "*":
+        lines.append("  rgpu::settled_all();")
+    elif done:
+        lines.append("  rgpu::settled(reinterpret_cast<uint64_t>(%s));" % done)
     lines.append("  return r_;")
     lines.append("}")
     return lines
@@ -430,6 +443,7 @@ def main():
 
     # --- client stubs -----------------------------------------------------
     cl = [HEADER, "#include <cstring>", "#include <cuda.h>", "",
+          "#include \"client/pending.h\"",
           "#include \"client/rpc.h\"", "#include \"common/generated/api_ids.h\"",
           ""] + client_body
     write(a.root, "client/generated/client_stubs.cpp", cl)

@@ -582,14 +582,18 @@ bool flush_locked() {
   return ok;
 }
 
-bool lazy_sync() {
-  static bool v = env_int("RGPU_LAZY_SYNC", 0) != 0;
+SyncMode sync_mode() {
+  static const SyncMode v = [] {
+    const int set = env_int("RGPU_LAZY_SYNC", -1);
+    if (set < 0) return SyncMode::kAfterUploads;
+    return set == 0 ? SyncMode::kWait : SyncMode::kQueued;
+  }();
   return v;
 }
 
 // Sends whatever is still queued when the process exits. A queued call has an
 // effect even though nobody waits for it, and a program whose last act is a
-// queued synchronize - which RGPU_LAZY_SYNC=1 makes possible - would otherwise
+// queued synchronize - the usual case after an upload - would otherwise
 // leave with its last work unsent. Tried, not waited for: a thread still
 // inside a call holds the lock, and exiting must not hang on it.
 void arm_exit_flush() {

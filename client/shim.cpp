@@ -15,6 +15,7 @@
 
 #include <cuda.h>
 
+#include "client/pending.h"
 #include "client/rpc.h"
 #include "common/generated/api_ids.h"
 #include "common/internal_ids.h"
@@ -136,6 +137,9 @@ CUresult launch_common(CUfunction f, unsigned gx, unsigned gy, unsigned gz,
   req.put<uint32_t>(shmem);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(stream));
   req.put_sized(args, args_len);
+
+  // The work a synchronize of this stream exists to wait for.
+  rgpu::work_on(reinterpret_cast<uint64_t>(stream));
 
   // A launch returns nothing and its effect is only visible at the next
   // synchronization, so it goes without a reply. This is the round trip that
@@ -524,33 +528,44 @@ CUresult cuDevicePrimaryCtxSetFlags_v2(CUdevice dev, unsigned int flags) {
   return r;
 }
 
-// Waits for everything issued to a stream - unless RGPU_LAZY_SYNC=1, when it
-// is queued like the work it follows and returns at once.
+// Waits for everything issued to a stream - when there is something to wait
+// for.
 //
 // Waiting is one round trip, which is nothing next to a kernel and everything
 // to a program that synchronizes after each small upload: llama.cpp does so
 // about twenty times per generated token, and over a 50 ms link that is a
-// second per token spent waiting for work that was already in order.
+// second per token. Measured there, all twenty followed nothing but uploads.
+// An upload's bytes are taken from the caller when it is issued, so after
+// uploads alone there is nothing the caller could observe by waiting. Such a
+// synchronize is queued behind them and returns at once; the server still
+// runs it where it was issued. A synchronize after any other GPU work on the
+// stream waits, as it always did. client/pending.h keeps the record.
 //
-// Queued, the server still runs the synchronize where it was issued, and a
-// read of device memory is still a round trip that sees everything before it,
-// so results do not change. What changes is what the caller may conclude from
-// the return:
-//   - a failure in the queued work is not reported here, which has no reply
-//     to carry it, but by the next call that waits;
-//   - the work has not necessarily finished, so timing a launch by the
-//     synchronize after it measures nothing, and a loop that synchronizes to
-//     stay in step with the GPU no longer is.
-// cuCtxSynchronize, cuEventSynchronize and every call that returns data still
-// wait, so a program can always ask for the real thing.
+// What a queued synchronize gives up is the report of a failure, having no
+// reply to carry one: the next call that waits reports it. By default that
+// can only be an upload's own failure - a bad destination, say.
+//
+// RGPU_LAZY_SYNC=0 makes every synchronize wait. RGPU_LAZY_SYNC=1 queues every
+// one, whatever it follows; then a failure of any queued work is reported
+// late, the work may not have finished when this returns, and timing a kernel
+// by the synchronize after it measures nothing. cuCtxSynchronize,
+// cuEventSynchronize and every call that returns data wait in every mode.
 CUresult cuStreamSynchronize(CUstream hStream) {
+  const uint64_t stream = reinterpret_cast<uint64_t>(hStream);
   rgpu::Buffer req;
-  req.put<uint64_t>(reinterpret_cast<uint64_t>(hStream));
-  if (rgpu::lazy_sync()) {
+  req.put<uint64_t>(stream);
+  const rgpu::SyncMode mode = rgpu::sync_mode();
+  if (mode == rgpu::SyncMode::kQueued ||
+      (mode == rgpu::SyncMode::kAfterUploads &&
+       rgpu::nothing_to_wait_for(stream))) {
     return rgpu::call_async(rgpu::API_cuStreamSynchronize, req);
   }
   rgpu::Buffer rsp;
-  return rgpu::call(rgpu::API_cuStreamSynchronize, req, &rsp);
+  const CUresult r = rgpu::call(rgpu::API_cuStreamSynchronize, req, &rsp);
+  // The wait has returned, whatever it reported: nothing issued before it is
+  // still outstanding on this stream.
+  rgpu::settled(stream);
+  return r;
 }
 
 CUresult cuDevicePrimaryCtxGetState(CUdevice dev, unsigned int* flags,

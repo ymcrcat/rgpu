@@ -20,6 +20,7 @@
 
 #include <cublas_v2.h>
 
+#include "client/pending.h"
 #include "client/rpc.h"
 #include "common/cublas_ids.h"
 
@@ -36,6 +37,23 @@ namespace {
 // mode they are device pointers and pass through like any other.
 auto& g_mode_mu = *new std::mutex();
 auto& g_modes = *new std::map<cublasHandle_t, cublasPointerMode_t>();
+
+// The stream each handle computes on, so that a matrix multiply counts as work
+// on it: a stream synchronize after one has to wait (client/pending.h). A
+// handle not seen here computes on the default stream, as cuBLAS has it.
+// Never destroyed, like every global a caller can reach during exit.
+auto& g_streams_mu = *new std::mutex();
+auto& g_streams = *new std::map<cublasHandle_t, uint64_t>();
+
+void computes(cublasHandle_t handle) {
+  uint64_t stream = 0;
+  {
+    std::lock_guard<std::mutex> lk(g_streams_mu);
+    auto it = g_streams.find(handle);
+    if (it != g_streams.end()) stream = it->second;
+  }
+  rgpu::work_on(stream);
+}
 
 cublasPointerMode_t pointer_mode(cublasHandle_t h) {
   std::lock_guard<std::mutex> lk(g_mode_mu);
@@ -100,6 +118,12 @@ cublasStatus_t cublasDestroy_v2(cublasHandle_t handle) {
   rgpu::Buffer req, rsp;
   put_handle(req, handle);
   cublasStatus_t s = send(rgpu::API_cublasDestroy, req, &rsp);
+  {
+    // A later handle may be given this value, and starts on the default
+    // stream, not on whichever one this handle was last set to.
+    std::lock_guard<std::mutex> lk(g_streams_mu);
+    g_streams.erase(handle);
+  }
   std::lock_guard<std::mutex> lk(g_mode_mu);
   g_modes.erase(handle);
   return s;
@@ -109,7 +133,12 @@ cublasStatus_t cublasSetStream_v2(cublasHandle_t handle, cudaStream_t stream) {
   rgpu::Buffer req, rsp;
   put_handle(req, handle);
   req.put<uint64_t>(reinterpret_cast<uint64_t>(stream));
-  return send(rgpu::API_cublasSetStream, req, &rsp);
+  const cublasStatus_t s = send(rgpu::API_cublasSetStream, req, &rsp);
+  if (s == CUBLAS_STATUS_SUCCESS) {
+    std::lock_guard<std::mutex> lk(g_streams_mu);
+    g_streams[handle] = reinterpret_cast<uint64_t>(stream);
+  }
+  return s;
 }
 
 cublasStatus_t cublasGetStream_v2(cublasHandle_t handle,
@@ -241,6 +270,7 @@ cublasStatus_t cublasSgemm_v2(cublasHandle_t handle, cublasOperation_t transa,
   put_scalar(req, handle, beta, sizeof(float));
   put_devptr(req, C);
   req.put<int32_t>(ldc);
+  computes(handle);
   return send(rgpu::API_cublasSgemm, req, &rsp);
 }
 
@@ -264,6 +294,7 @@ cublasStatus_t cublasDgemm_v2(cublasHandle_t handle, cublasOperation_t transa,
   put_scalar(req, handle, beta, sizeof(double));
   put_devptr(req, C);
   req.put<int32_t>(ldc);
+  computes(handle);
   return send(rgpu::API_cublasDgemm, req, &rsp);
 }
 
@@ -311,6 +342,7 @@ cublasStatus_t cublasGemmEx(cublasHandle_t handle, cublasOperation_t transa,
   put_devptr(req, C);
   req.put<int32_t>(static_cast<int32_t>(Ctype));
   req.put<int32_t>(ldc);
+  computes(handle);
   return send(rgpu::API_cublasGemmEx, req, &rsp);
 }
 
@@ -346,6 +378,7 @@ cublasStatus_t cublasGemmStridedBatchedEx(
   req.put<int32_t>(static_cast<int32_t>(Ctype));
   req.put<int32_t>(ldc);
   req.put<int64_t>(strideC);
+  computes(handle);
   return send(rgpu::API_cublasGemmStridedBatchedEx, req, &rsp);
 }
 
@@ -374,6 +407,7 @@ cublasStatus_t cublasSgemmStridedBatched(
   put_devptr(req, C);
   req.put<int32_t>(ldc);
   req.put<int64_t>(strideC);
+  computes(handle);
   return send(rgpu::API_cublasSgemmStridedBatched, req, &rsp);
 }
 

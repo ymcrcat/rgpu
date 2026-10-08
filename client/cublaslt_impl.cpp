@@ -28,6 +28,7 @@
 
 #include <cublasLt.h>
 
+#include "client/pending.h"
 #include "client/rpc.h"
 #include "common/cublaslt_ids.h"
 
@@ -351,6 +352,8 @@ cublasStatus_t cublasLtMatmul(
     const void* C, cublasLtMatrixLayout_t Cdesc, void* D,
     cublasLtMatrixLayout_t Ddesc, const cublasLtMatmulAlgo_t* algo,
     void* workspace, size_t workspaceSizeInBytes, cudaStream_t stream) {
+  // Work on this stream, which a synchronize of it has to wait for.
+  rgpu::work_on(reinterpret_cast<uint64_t>(stream));
   const DescState st = desc_state(computeDesc);
   const size_t ss = scalar_size(st.scale_type);
 

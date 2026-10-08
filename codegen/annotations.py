@@ -87,8 +87,8 @@ HANDWRITTEN_CLIENT = {
     "cuDevicePrimaryCtxRelease_v2",
     "cuDevicePrimaryCtxReset_v2",
     "cuDevicePrimaryCtxSetFlags_v2",
-    # A round trip by default, queued with RGPU_LAZY_SYNC=1. The choice is the
-    # caller's to make, so it cannot be fixed in the generated code.
+    # Waits or is queued depending on what was issued to the stream since it
+    # last waited, and on RGPU_LAZY_SYNC, neither of which the generator knows.
     "cuStreamSynchronize",
 }
 
@@ -110,6 +110,43 @@ UNSUPPORTED = {
     "cuIpcGetMemHandle": "IPC handles are host-local",
     "cuIpcOpenEventHandle": "IPC handles are host-local",
     "cuIpcGetEventHandle": "IPC handles are host-local",
+}
+
+# Calls that take a stream and leave nothing on it for a synchronize to wait
+# for. Any other call that takes a stream is taken to put GPU work on it, which
+# is what makes the next cuStreamSynchronize of that stream wait rather than be
+# queued (see client/pending.h). So this list errs toward waiting: a call left
+# off it costs a round trip, and a call wrongly on it would let a synchronize
+# return before work the caller could observe.
+NO_STREAM_WORK = {
+    # Queries and settings.
+    "cuStreamGetAttribute", "cuStreamSetAttribute", "cuStreamCopyAttributes",
+    "cuStreamGetCaptureInfo_v2", "cuStreamGetCaptureInfo_v3",
+    "cuStreamGetCtx", "cuStreamGetCtx_v2", "cuStreamGetDevice",
+    "cuStreamGetFlags", "cuStreamGetGreenCtx", "cuStreamGetId",
+    "cuStreamGetPriority", "cuStreamIsCapturing", "cuStreamQuery",
+    # Capture control. What is captured runs when the graph is launched, and
+    # cuGraphLaunch takes a stream of its own.
+    "cuStreamBeginCapture_v2", "cuStreamBeginCaptureToGraph",
+    "cuStreamEndCapture", "cuStreamUpdateCaptureDependencies",
+    "cuStreamUpdateCaptureDependencies_v2",
+    # The synchronize itself, and the stream's end.
+    "cuStreamSynchronize", "cuStreamDestroy_v2",
+    # The upload. Its bytes are taken from the caller when it is issued, so a
+    # synchronize after it has nothing to wait for that the caller could see.
+    # This entry is the whole of the default rule.
+    "cuMemcpyHtoDAsync_v2",
+    # Waited for by the server before it replies (sync_stream), so it leaves
+    # the stream settled rather than busy.
+    "cuMemcpyDtoHAsync_v2",
+}
+
+# Calls after which nothing is outstanding: on the stream parameter named, or,
+# for "*", anywhere in the context. A call annotated sync_stream settles that
+# stream too, without being listed here.
+SETTLES = {
+    "cuCtxSynchronize": "*",
+    "cuStreamDestroy_v2": "hStream",
 }
 
 # name -> {"params": {param: annotation}, "exec": class, "record": bool}
@@ -203,3 +240,28 @@ def for_function(name):
     a.setdefault("record", False)
     a.setdefault("sync_stream", None)
     return a
+
+
+def stream_work(f):
+    """Where a call leaves GPU work a stream synchronize would wait for.
+
+    A parameter name, "*" for a stream that cannot be named, or None.
+    """
+    name = f["name"]
+    if name in NO_STREAM_WORK:
+        return None
+    streams = [p["name"] for p in f["params"] if p["type"].strip() == "CUstream"]
+    if streams:
+        return streams[0]
+    # The launch calls that predate streams run on whichever one the context
+    # had selected.
+    if name.startswith("cuLaunch"):
+        return "*"
+    return None
+
+
+def settles(f, a):
+    """What is known to be finished once a call has returned successfully."""
+    if f["name"] in SETTLES:
+        return SETTLES[f["name"]]
+    return a.get("sync_stream")

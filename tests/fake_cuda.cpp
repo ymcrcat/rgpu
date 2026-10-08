@@ -1067,6 +1067,15 @@ CUresult cuMemcpyHtoD_v2(CUdeviceptr dst, const void* src, size_t n) {
   return CUDA_SUCCESS;
 }
 
+// An upload on a stream. The fake runs it at once, like everything else; what
+// it checks is the stream, so a copy issued on one that was never made fails.
+CUresult cuMemcpyHtoDAsync_v2(CUdeviceptr dst, const void* src, size_t n,
+                              CUstream stream) {
+  CUresult r = stream_ok(stream);
+  if (r != CUDA_SUCCESS) return r;
+  return cuMemcpyHtoD_v2(dst, src, n);
+}
+
 CUresult cuMemcpyDtoH_v2(void* dst, CUdeviceptr src, size_t n) {
   if (!dst) return CUDA_ERROR_INVALID_VALUE;
   std::lock_guard<std::mutex> lk(g_mu);

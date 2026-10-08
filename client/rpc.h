@@ -30,10 +30,13 @@ CUresult call(uint32_t api_id, const Buffer& req, Buffer* rsp);
 // for anything that has to return data.
 CUresult call_async(uint32_t api_id, const Buffer& req);
 
-// Whether a stream synchronize is queued rather than waited for:
-// RGPU_LAZY_SYNC=1. Off unless asked for, because it changes what a caller can
-// conclude when cuStreamSynchronize returns. See its definition in shim.cpp.
-bool lazy_sync();
+// When cuStreamSynchronize waits for the server. RGPU_LAZY_SYNC unset is
+// kAfterUploads: it is queued when only uploads were issued to the stream
+// since it last waited, and waits otherwise. 0 is kWait, anything else
+// kQueued. See cuStreamSynchronize in shim.cpp for what each lets a caller
+// conclude.
+enum class SyncMode { kWait, kAfterUploads, kQueued };
+SyncMode sync_mode();
 
 // Logs the first occurrence of an unimplemented entry point and returns
 // CUDA_ERROR_NOT_SUPPORTED. The log is the worklist for filling the API out.
