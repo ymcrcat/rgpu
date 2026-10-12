@@ -362,6 +362,10 @@ find_library(CUDART_LIB cudart
 if(CUDART_LIB)
   add_executable(cudart_smoke tests/cudart_smoke.cpp)
   target_link_libraries(cudart_smoke PRIVATE ${CUDART_LIB})
+  # One token's worth of llama.cpp's CUDA calls, replayed against the fake
+  # driver to see what the remoting layer costs the client. Not a test.
+  add_executable(token_bench tests/token_bench.cpp)
+  target_link_libraries(token_bench PRIVATE ${CUDART_LIB})
   # cudart dlopens nothing here; it resolves libcuda.so.1 through the loader,
   # which LD_LIBRARY_PATH points at our shim.
 else()

@@ -1086,6 +1086,14 @@ CUresult cuMemcpyDtoH_v2(void* dst, CUdeviceptr src, size_t n) {
   return CUDA_SUCCESS;
 }
 
+// A download on a stream, run at once like the upload above.
+CUresult cuMemcpyDtoHAsync_v2(void* dst, CUdeviceptr src, size_t n,
+                              CUstream stream) {
+  CUresult r = stream_ok(stream);
+  if (r != CUDA_SUCCESS) return r;
+  return cuMemcpyDtoH_v2(dst, src, n);
+}
+
 CUresult cuMemsetD8_v2(CUdeviceptr dst, unsigned char value, size_t n) {
   rgpu_fake::count(rgpu_fake::kMemset, 1);
   std::lock_guard<std::mutex> lk(g_mu);

@@ -90,15 +90,33 @@ Earlier measurements with Ollama on the same machine as the server:
   generated tokens matched the native run exactly.
 - **Round trips.** One per generated token, the download of the result.
   Without the default [`RGPU_LAZY_SYNC`](/docs/configuration/) rule it is 21.
-- **Speed.** On an RTX 4090, 43 to 48 tokens per second
-  against 154 native, about 3.4 times slower, with client and server on the
-  same machine. The cause of that gap is unresolved, and it varied between
-  hosts. Local fake-driver measurements found too little client per-call work
-  to explain it. CPU contention reproduced a slowdown of similar size locally,
-  but has not been confirmed as the cause on the GPU host. Over a network,
-  add about one round trip of latency per token.
+- **Speed.** Set `num_thread` to 1; see below. On an A40 with client and
+  server on the same machine, Ollama then generated 112 tokens per second
+  through rGPU against 457 native, about 4 times slower. The remaining gap
+  has not been profiled. Over a network, add about one round trip of latency
+  per token.
 - **Cleanup.** A client killed mid-run has its GPU memory released when its
   session expires.
+
+### Use one CPU thread
+
+llama.cpp starts one CPU thread per core it can see, and they busy-wait
+between tokens even when the whole model is on the GPU. On a container that
+shows many cores but is allowed only a few, they use up the CPU allowance and
+the kernel pauses the whole process. This slows native runs too, but rGPU
+more, because each token also needs the client and the server woken.
+
+Measured on a pod showing 96 cores with an allowance of 8.5, in tokens per
+second:
+
+| | Default (48 threads) | `num_thread` 1 |
+| --- | --- | --- |
+| Native Ollama | 140 | 457 |
+| Ollama through rGPU | 38 | 112 |
+
+Set it per request with `"options": {"num_thread": 1}`, in `ollama run` with
+`/set parameter num_thread 1`, or in a Modelfile with `PARAMETER num_thread 1`.
+With llama.cpp's own server the flag is `-t 1`.
 
 ## Over a network
 
