@@ -4,14 +4,20 @@ description: Run Ollama on a remote GPU through the CUDA shim, and what to expec
 ---
 
 Ollama runs models with llama.cpp, whose CUDA backend loads the CUDA runtime
-and cuBLAS as shared libraries. Replacing those with the stand-ins sends its
-GPU work to `rgpu-server`. Build the shim and the server first, as the
-[CUDA shim](/docs/cuda-shim/) page describes.
+and cuBLAS as shared libraries. The `rgpu` launcher preloads stand-ins that
+send its GPU work to `rgpu-server`, without changing the Ollama installation.
+Build the shim and server first, as the [CUDA shim](/docs/cuda-shim/) page
+describes. The client must run Linux; on a Mac, use a Linux container.
 
-This was checked with Ollama 0.40.0 and 0.40.3 and `qwen2.5:0.5b`, two ways:
-with Ollama on the same Linux x86_64 machine as the server, and with Ollama in
-a Linux arm64 container on a Mac reaching the server through an SSH tunnel.
-Larger models have not been tried.
+The launcher below was verified with stock Ollama 0.40.3 and `qwen2.5:0.5b`
+on Linux x86_64 with an RTX 4090. All 34 generated tokens matched a native
+run at temperature 0 and seed 1. The runner loaded the rGPU libraries, Ollama
+reported the model in GPU memory, and its original CUDA libraries were unchanged.
+
+Earlier tests used a copied installation with Ollama 0.40.0 and 0.40.3, both
+on the GPU host and in a Linux arm64 container on a Mac over SSH. The launcher
+has not yet been checked end to end in that Mac-container setup. Larger models
+have not been tried.
 
 If the goal is only to use Ollama with a remote GPU, run Ollama on the GPU host
 and point `OLLAMA_HOST` at it. That is full speed and needs none of this. The
@@ -19,52 +25,78 @@ steps below exercise the shim.
 
 ## Set up
 
-Ollama loads its CUDA libraries from its own directory, so copy the
-installation and swap them there. `LD_PRELOAD` on `ollama serve` is not enough,
-because the libraries are loaded by a subprocess from a fixed path.
+### On the GPU host
+
+Start `rgpu-server` with the **real** CUDA 12 cuBLAS libraries. This example
+uses the libraries bundled with a stock Linux Ollama installation on the GPU
+host; adjust `REAL` if they are installed elsewhere. Run the server directly:
+wrapping it in `rgpu` would preload the client stand-ins into the server.
 
 ```sh
-REAL=/usr/local/lib/ollama/cuda_v12          # Ollama's own CUDA 12 libraries
-mkdir -p ~/ollama-rgpu/bin ~/ollama-rgpu/lib
-cp /usr/local/bin/ollama ~/ollama-rgpu/bin/
-cp -a /usr/local/lib/ollama ~/ollama-rgpu/lib/ollama
-rm -rf ~/ollama-rgpu/lib/ollama/cuda_v13 ~/ollama-rgpu/lib/ollama/vulkan
-cd ~/ollama-rgpu/lib/ollama/cuda_v12
-rm -f libcudart.so.12* libcublas.so.12* libcublasLt.so.12*
-cp ~/rgpu/build/libcudart.so.12 ~/rgpu/build/libcublas.so.12 \
-   ~/rgpu/build/libcublasLt.so.12 ~/rgpu/build/libcuda.so.1 .
-```
-
-Start the server with the real cuBLAS libraries, then Ollama from the copy:
-
-```sh
+REAL=/usr/local/lib/ollama/cuda_v12
 RGPU_CUBLAS=$REAL/libcublas.so.12 RGPU_CUBLASLT=$REAL/libcublasLt.so.12 \
-LD_LIBRARY_PATH=$REAL ~/rgpu/build/rgpu-server &
-
-GGML_CUDA_DISABLE_GRAPHS=1 RGPU_SERVER=127.0.0.1:9713 \
-  ~/ollama-rgpu/bin/ollama serve
+LD_LIBRARY_PATH=$REAL ~/rgpu/build/rgpu-server
 ```
+
+For a remote host, use the [SSH tunnel](/docs/cuda-shim/#run-a-smoke-test-through-a-tunnel).
+
+### On the Linux client
+
+Install the launcher once, from the rGPU checkout, using a build that matches
+the client's architecture:
+
+```sh
+sudo bash scripts/install.sh --from build
+```
+
+This installs the stand-ins under `/opt/rgpu` and the `rgpu` command in
+`/usr/local/bin`. It is separate from the Python `rgpu-run` command.
+
+Stop any existing Ollama service that occupies the client port, then start
+Ollama through the launcher:
+
+```sh
+OLLAMA_LLM_LIBRARY=cuda_v12 \
+GGML_CUDA_DISABLE_GRAPHS=1 \
+RGPU_SERVER=127.0.0.1:9713 \
+rgpu ollama serve
+```
+
+`OLLAMA_LLM_LIBRARY=cuda_v12` selects the CUDA 12 backend. You do not need to
+copy Ollama or delete its CUDA 13 or Vulkan directories. Ollama passes the
+launcher's `LD_PRELOAD` to its GPU-discovery and inference subprocesses.
 
 `GGML_CUDA_DISABLE_GRAPHS=1` is required. llama.cpp otherwise uses CUDA graph
 capture, and the shim does not implement `cudaGraphExecUpdate`.
 
-Ollama's log should name the GPU under `inference compute`, with
-`library=CUDA`. If it says `library=cpu`, a stand-in failed to load and Ollama
-fell back to the CPU without an error.
+In another client terminal, pull and run a model:
+
+```sh
+ollama run qwen2.5:0.5b "Explain why the sky is blue."
+ollama ps
+```
+
+Ollama's server log should name the GPU under `inference compute`, with
+`library=CUDA`, and `ollama ps` should show the model using GPU memory in the
+`PROCESSOR` column. A response alone is not proof: if the log says
+`library=cpu`, Ollama fell back to the CPU. Check the server connection, the
+client library architecture, and that `ollama serve` was started through `rgpu`.
 
 ## What to expect
 
-With Ollama on the same machine as the server:
+Earlier measurements with Ollama on the same machine as the server:
 
 - **Results.** With llama.cpp's server run directly at temperature 0, 320
   generated tokens matched the native run exactly.
 - **Round trips.** One per generated token, the download of the result.
   Without the default [`RGPU_LAZY_SYNC`](/docs/configuration/) rule it is 21.
-- **Speed.** On the one host measured, an RTX 4090, 43 to 48 tokens per second
+- **Speed.** On an RTX 4090, 43 to 48 tokens per second
   against 154 native, about 3.4 times slower, with client and server on the
-  same machine. The gap is per-call work on the client, which has not been
-  profiled, and it varied between hosts in earlier builds. Over a network, add
-  about one round trip of latency per token.
+  same machine. The cause of that gap is unresolved, and it varied between
+  hosts. Local fake-driver measurements found too little client per-call work
+  to explain it. CPU contention reproduced a slowdown of similar size locally,
+  but has not been confirmed as the cause on the GPU host. Over a network,
+  add about one round trip of latency per token.
 - **Cleanup.** A client killed mid-run has its GPU memory released when its
   session expires.
 
@@ -82,6 +114,9 @@ The link sets the pace. From a Mac to a GPU 123 ms away, with
 - **Results** matched the native run exactly, across the two machines and the
   two processor types.
 
-In the container, copy the stand-ins from an arm64 build of the shim
-(`./scripts/build_client.sh` makes one), skip the server step, and point
-`RGPU_SERVER` at the tunnel, such as `host.docker.internal:9713`.
+For a Linux arm64 container on a Mac, build matching stand-ins with
+`./scripts/build_client.sh`, then install the launcher **inside the container**.
+Point `RGPU_SERVER` at the tunnel, such as `host.docker.internal:9713`, and add
+`OLLAMA_LOAD_TIMEOUT=30m` to the launch command. The measurements above used
+the earlier copied-installation setup; they are not a separate validation of
+the launcher on arm64.
