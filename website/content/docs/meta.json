@@ -8,6 +8,7 @@
     "training",
     "nanogpt",
     "cuda-shim",
+    "ollama",
     "---Operate---",
     "operations",
     "troubleshooting",
