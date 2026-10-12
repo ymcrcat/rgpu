@@ -38,6 +38,13 @@ CUresult call_async(uint32_t api_id, const Buffer& req);
 enum class SyncMode { kWait, kAfterUploads, kQueued };
 SyncMode sync_mode();
 
+// Reads `n` attributes of a device in one round trip. answered[i] says whether
+// the driver knew attrs[i]; values[i] is its value, or zero. Returns false if
+// the server does not have the call - an older one - and the caller should
+// ask for them one at a time.
+bool device_attributes(CUdevice dev, const CUdevice_attribute* attrs, size_t n,
+                       int* values, bool* answered);
+
 // Logs the first occurrence of an unimplemented entry point and returns
 // CUDA_ERROR_NOT_SUPPORTED. The log is the worklist for filling the API out.
 CUresult unimplemented(const char* name, const char* why);

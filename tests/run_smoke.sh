@@ -95,6 +95,41 @@ if [[ -x "$BUILD/sync_smoke" ]]; then
   sync_mode wait 24 RGPU_LAZY_SYNC=0
   sync_mode uploads 12
   sync_mode lazy 0 RGPU_LAZY_SYNC=1
+  # Two threads, 200 synchronizes each, taking turns so that every upload's
+  # synchronize falls while the other stream is busy: the 200 after uploads
+  # are queued all the same, and the 200 after memsets waited for.
+  sync_mode threads 200
+
+  # Work still queued when a process ends has to be sent on the way out. Its
+  # own server, to read the fake driver's count of memsets that actually ran.
+  echo
+  EXIT_PORT=$((PORT + 41))
+  EXIT_STATS=$(mktemp "${TMPDIR:-/tmp}/rgpu-stats.XXXXXX")
+  RGPU_FAKE_STATS="$EXIT_STATS" "$BUILD/rgpu-server-fake" "$EXIT_PORT" \
+    >/dev/null 2>&1 &
+  EXIT_SRV=$!
+  for _ in $(seq 1 50); do
+    if (exec 3<>/dev/tcp/127.0.0.1/"$EXIT_PORT") 2>/dev/null; then
+      exec 3<&- 3>&-
+      break
+    fi
+    sleep 0.1
+  done
+  LD_LIBRARY_PATH="$BUILD" RGPU_SERVER="127.0.0.1:$EXIT_PORT" \
+    "$BUILD/sync_smoke" exit || rc=1
+  for _ in $(seq 1 30); do
+    grep -q "memsets=5" "$EXIT_STATS" 2>/dev/null && break
+    sleep 0.1
+  done
+  if grep -q "memsets=5" "$EXIT_STATS" 2>/dev/null; then
+    echo "PASS: five memsets queued at exit all reached the server"
+  else
+    echo "FAIL: work queued when the process exited did not all reach the"
+    echo "      server; found $(grep -o 'memsets=[0-9]*' "$EXIT_STATS" 2>/dev/null)"
+    rc=1
+  fi
+  kill $EXIT_SRV 2>/dev/null
+  rm -f "$EXIT_STATS" "$EXIT_STATS.tmp"
 fi
 
 if [[ -x "$BUILD/launch_smoke" ]]; then
@@ -779,9 +814,12 @@ if [[ -x "$BUILD/cudart_smoke" ]]; then
   }
   attrs=$(round_trips cuDeviceGetAttribute)
   occupancy=$(round_trips cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags)
-  if (( attrs > 150 )); then
+  # And that one pass is one round trip, not one per attribute: over a real
+  # link a hundred round trips is ten seconds or more, and Ollama gives GPU
+  # detection thirty for two such passes.
+  if (( attrs > 4 )); then
     echo "FAIL: cudaGetDeviceProperties asked the server $attrs times for"
-    echo "      attributes; a device's properties should be read once"
+    echo "      attributes; they should all be read in one call, once"
     rc=1
   fi
   if (( occupancy != 2 )); then

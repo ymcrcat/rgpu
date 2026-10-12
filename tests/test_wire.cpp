@@ -8,6 +8,10 @@
 #include <cstdint>
 #include <cstdio>
 
+#include <sys/socket.h>
+#include <unistd.h>
+
+#include "common/net.h"
 #include "common/sizes.h"
 #include "common/wire.h"
 
@@ -113,6 +117,31 @@ int main() {
   assert(rgpu::array_bytes(0, 12) == 0);
   assert(rgpu::array_bytes((size_t(1) << 62) + 1, 12) == SIZE_MAX);
   assert(rgpu::array_bytes(SIZE_MAX, 2) == SIZE_MAX);
+
+  // A frame goes out as one write, header and payload together. Sent as two,
+  // it is two packets, and anything between the two ends that holds a small
+  // packet until the one before it is acknowledged - an ssh tunnel does -
+  // turns every reply into two round trips of latency instead of one. A
+  // SEQPACKET socket keeps each write as its own message, so one receive
+  // shows how the frame was written.
+  {
+    int pair[2];
+    assert(::socketpair(AF_UNIX, SOCK_SEQPACKET, 0, pair) == 0);
+    rgpu::RspHeader head{};
+    Buffer payload;
+    payload.put<uint64_t>(0x1122334455667788ull);
+    payload.put<uint32_t>(42);
+    assert(rgpu::send_frame(pair[0], head, payload));
+    uint8_t got[256];
+    const ssize_t n = ::recv(pair[1], got, sizeof(got), 0);
+    assert(n == static_cast<ssize_t>(sizeof(head) + payload.size()));
+    rgpu::ReqHeader request{};
+    assert(rgpu::send_frame(pair[0], request, payload));
+    const ssize_t m = ::recv(pair[1], got, sizeof(got), 0);
+    assert(m == static_cast<ssize_t>(sizeof(request) + payload.size()));
+    ::close(pair[0]);
+    ::close(pair[1]);
+  }
 
   std::printf("wire round-trip OK\n");
   return 0;

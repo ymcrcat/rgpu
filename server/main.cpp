@@ -203,6 +203,28 @@ CUresult handle_hello(Buffer& req, Buffer* rsp) {
   return CUDA_SUCCESS;
 }
 
+// Many device attributes in one call. One the driver does not know is marked
+// unanswered rather than failing the rest, as a caller filling in a struct
+// from them would want.
+CUresult handle_device_attrs(Buffer& req, Buffer* rsp) {
+  int dev = 0;
+  uint32_t count = 0;
+  if (!req.get(&dev) || !req.get(&count)) return CUDA_ERROR_INVALID_VALUE;
+  // More than the driver has attributes by an order of magnitude, and small
+  // enough that a hostile count cannot make this loop or its reply large.
+  if (count > 4096) return CUDA_ERROR_INVALID_VALUE;
+  for (uint32_t i = 0; i < count; i++) {
+    int attr = 0;
+    if (!req.get(&attr)) return CUDA_ERROR_INVALID_VALUE;
+    int value = 0;
+    const CUresult r = cuDeviceGetAttribute(
+        &value, static_cast<CUdevice_attribute>(attr), static_cast<CUdevice>(dev));
+    rsp->put<uint8_t>(r == CUDA_SUCCESS ? 1 : 0);
+    rsp->put<int>(r == CUDA_SUCCESS ? value : 0);
+  }
+  return CUDA_SUCCESS;
+}
+
 bool dispatch_internal(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
   switch (id) {
     case API_rgpu_param_layout: *out = handle_param_layout(req, rsp); return true;
@@ -211,6 +233,7 @@ bool dispatch_internal(uint32_t id, Buffer& req, Buffer* rsp, CUresult* out) {
     case API_rgpu_capture_info: *out = handle_capture_info(req, rsp); return true;
     case API_rgpu_graph_nodes: *out = handle_graph_nodes(req, rsp); return true;
     case API_rgpu_capture_mode: *out = handle_capture_mode(req, rsp); return true;
+    case API_rgpu_device_attrs: *out = handle_device_attrs(req, rsp); return true;
     default: return false;
   }
 }

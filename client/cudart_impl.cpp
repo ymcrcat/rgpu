@@ -605,11 +605,24 @@ cudaError_t cudaGetDeviceProperties_v2(cudaDeviceProp* prop, int device) {
   built.totalGlobalMem = total;
   cuDeviceGetUuid(reinterpret_cast<CUuuid*>(&built.uuid), dev);
 
-  // One attribute the driver does not know leaves its field at zero rather
-  // than failing the whole query.
-  for (const PropField& f : kPropFields) {
-    int v = 0;
-    if (cuDeviceGetAttribute(&v, f.attr, dev) != CUDA_SUCCESS) continue;
+  // All of them in one round trip where the server has the call for it, and
+  // one at a time from an older server. One attribute the driver does not know
+  // leaves its field at zero rather than failing the whole query.
+  constexpr size_t kFields = sizeof(kPropFields) / sizeof(kPropFields[0]);
+  CUdevice_attribute wanted[kFields];
+  int values[kFields] = {};
+  bool answered[kFields] = {};
+  for (size_t i = 0; i < kFields; i++) wanted[i] = kPropFields[i].attr;
+  if (!rgpu::device_attributes(dev, wanted, kFields, values, answered)) {
+    for (size_t i = 0; i < kFields; i++) {
+      answered[i] =
+          cuDeviceGetAttribute(&values[i], wanted[i], dev) == CUDA_SUCCESS;
+    }
+  }
+  for (size_t i = 0; i < kFields; i++) {
+    const PropField& f = kPropFields[i];
+    if (!answered[i]) continue;
+    const int v = values[i];
     char* at = reinterpret_cast<char*>(&built) + f.offset;
     if (f.wide) {
       const size_t wide = static_cast<size_t>(v);

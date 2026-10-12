@@ -4,6 +4,7 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <sys/socket.h>
+#include <sys/uio.h>
 #include <unistd.h>
 
 #include <cerrno>
@@ -74,16 +75,50 @@ inline void tune_socket(int fd) {
   ::setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &one, sizeof(one));
 }
 
+// A header and its payload as one write. Written as two they are two packets,
+// and although this socket does not hold small packets back, whatever carries
+// the connection may: an ssh tunnel forwards the header and keeps the payload
+// until the header is acknowledged. That made every reply cost two round trips
+// of latency instead of one - 240 ms a call on a 123 ms link.
+inline bool write_two(int fd, const void* a, size_t na, const void* b,
+                      size_t nb) {
+  iovec parts[2] = {{const_cast<void*>(a), na}, {const_cast<void*>(b), nb}};
+  msghdr msg{};
+  msg.msg_iov = parts;
+  msg.msg_iovlen = nb ? 2 : 1;
+  size_t left = na + nb;
+  while (left > 0) {
+#ifdef MSG_NOSIGNAL
+    ssize_t r = ::sendmsg(fd, &msg, MSG_NOSIGNAL);
+#else
+    ssize_t r = ::sendmsg(fd, &msg, 0);
+#endif
+    if (r < 0 && errno == EINTR) continue;
+    if (r <= 0) return false;
+    left -= static_cast<size_t>(r);
+    // A short write: step past what went, and send the rest.
+    size_t sent = static_cast<size_t>(r);
+    while (sent > 0 && msg.msg_iovlen > 0) {
+      if (sent >= msg.msg_iov->iov_len) {
+        sent -= msg.msg_iov->iov_len;
+        msg.msg_iov++;
+        msg.msg_iovlen--;
+      } else {
+        msg.msg_iov->iov_base = static_cast<char*>(msg.msg_iov->iov_base) + sent;
+        msg.msg_iov->iov_len -= sent;
+        sent = 0;
+      }
+    }
+  }
+  return true;
+}
+
 inline bool send_frame(int fd, const ReqHeader& h, const Buffer& payload) {
-  if (!write_exact(fd, &h, sizeof(h))) return false;
-  if (payload.size() == 0) return true;
-  return write_exact(fd, payload.data().data(), payload.size());
+  return write_two(fd, &h, sizeof(h), payload.data().data(), payload.size());
 }
 
 inline bool send_frame(int fd, const RspHeader& h, const Buffer& payload) {
-  if (!write_exact(fd, &h, sizeof(h))) return false;
-  if (payload.size() == 0) return true;
-  return write_exact(fd, payload.data().data(), payload.size());
+  return write_two(fd, &h, sizeof(h), payload.data().data(), payload.size());
 }
 
 // Reads a header plus its payload. `max_payload` bounds a corrupt or hostile

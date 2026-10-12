@@ -108,9 +108,10 @@ Ollama runs models with llama.cpp, whose CUDA backend loads the CUDA runtime
 and cuBLAS as shared libraries. Replacing those with the stand-ins sends its
 GPU work to `rgpu-server`.
 
-This was checked with Ollama 0.40.0 and `qwen2.5:0.5b`, with Ollama on the
-same Linux x86_64 machine as the server. A client on another machine, a Mac in
-a container, and larger models have not been tried.
+This was checked with Ollama 0.40.0 and 0.40.3 and `qwen2.5:0.5b`, two ways:
+with Ollama on the same Linux x86_64 machine as the server, and with Ollama in
+a Linux arm64 container on a Mac reaching the server through an SSH tunnel.
+Larger models have not been tried.
 
 If the goal is only to use Ollama with a remote GPU, run Ollama on the GPU host
 and point `OLLAMA_HOST` at it. That is full speed and needs none of this. The
@@ -162,6 +163,22 @@ What to expect:
   about one round trip of latency per token.
 - **Cleanup.** A client killed mid-run has its GPU memory released when its
   session expires.
+
+Over a network, the link sets the pace. From a Mac to a GPU 123 ms away, with
+1.5 MiB/s of upload:
+
+- **Loading** took about seven minutes: the model's weights, 374 MiB here,
+  are uploaded through the tunnel. Ollama gives a load five minutes by
+  default, so set `OLLAMA_LOAD_TIMEOUT=30m` or the load is abandoned.
+- **Generation** ran at about 3 tokens per second. Each token is one round
+  trip, and llama.cpp downloads the model's full output for it, 0.58 MiB for
+  this model, to choose the token on the client.
+- **Results** matched the native run exactly, across the two machines and the
+  two processor types.
+
+In the container, copy the stand-ins from an arm64 build of the shim
+(`./scripts/build_client.sh` makes one), skip the server step, and point
+`RGPU_SERVER` at the tunnel, such as `host.docker.internal:9713`.
 
 ## Run PyTorch
 

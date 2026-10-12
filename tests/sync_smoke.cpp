@@ -19,10 +19,15 @@
 //   ... RGPU_LAZY_SYNC=1 ./sync_smoke lazy
 //
 // tests/run_smoke.sh runs all three and counts the round trips each made:
-// 24 waiting, 12 by default, none with everything queued.
+// 24 waiting, 12 by default, none with everything queued. It also runs
+// `sync_smoke threads` (two threads, two streams) and `sync_smoke exit` (work
+// still queued when the process ends).
 
 #include <cstdio>
+#include <condition_variable>
 #include <cstring>
+#include <mutex>
+#include <thread>
 #include <vector>
 
 #include <cuda.h>
@@ -75,13 +80,130 @@ static void expect_failure(CUstream stream, bool reported_by_sync,
   CHECK(cuCtxSynchronize());
 }
 
+// Two threads, a stream each: one only uploads, the other only memsets, and
+// each synchronizes its own stream after every call. The record of
+// outstanding work is kept per stream, so the uploader's synchronizes are all
+// queued whatever the other thread has outstanding, and exactly the other
+// thread's wait. A record shared between the streams would make the uploader
+// wait too.
+static int two_threads() {
+  CHECK(cuInit(0));
+  CUdevice dev = 0;
+  CHECK(cuDeviceGet(&dev, 0));
+  CUcontext ctx = nullptr;
+  CHECK(cuCtxCreate(&ctx, 0, dev));
+  const size_t n = 4096;
+  const int rounds = 200;
+  CUstream up = nullptr, set = nullptr;
+  CHECK(cuStreamCreate(&up, 0));
+  CHECK(cuStreamCreate(&set, 0));
+  CUdeviceptr uploaded = 0, filled = 0;
+  CHECK(cuMemAlloc(&uploaded, n));
+  CHECK(cuMemAlloc(&filled, n));
+  if (g_failures) return 1;
+
+  // In lockstep, so that every one of the uploader's synchronizes falls while
+  // the other stream has a memset outstanding: left to run freely, the
+  // uploader - which never waits - finishes before the other thread starts,
+  // and the two streams are never busy at once.
+  //   setter:   memset on its stream        (that stream is now busy)
+  //   uploader: upload, then synchronize    (must be queued all the same)
+  //   setter:   synchronize                 (waits)
+  std::mutex mu;
+  std::condition_variable cv;
+  enum Turn { kMemset, kUpload, kSync } turn = kMemset;
+  auto await = [&](Turn mine) {
+    std::unique_lock<std::mutex> lk(mu);
+    cv.wait(lk, [&] { return turn == mine; });
+  };
+  auto pass = [&](Turn next) {
+    { std::lock_guard<std::mutex> lk(mu); turn = next; }
+    cv.notify_all();
+  };
+
+  int upload_failures = 0, memset_failures = 0;
+  std::thread uploader([&] {
+    if (cuCtxSetCurrent(ctx) != CUDA_SUCCESS) upload_failures++;
+    std::vector<unsigned char> host(n);
+    for (int i = 1; i <= rounds; i++) {
+      await(kUpload);
+      std::memset(host.data(), i % 251, n);
+      if (cuMemcpyHtoDAsync(uploaded, host.data(), n, up) != CUDA_SUCCESS ||
+          cuStreamSynchronize(up) != CUDA_SUCCESS) {
+        upload_failures++;
+      }
+      pass(kSync);
+    }
+  });
+  std::thread setter([&] {
+    if (cuCtxSetCurrent(ctx) != CUDA_SUCCESS) memset_failures++;
+    for (int i = 1; i <= rounds; i++) {
+      await(kMemset);
+      if (cuMemsetD8Async(filled, static_cast<unsigned char>(i % 251), n, set) !=
+          CUDA_SUCCESS) {
+        memset_failures++;
+      }
+      pass(kUpload);
+      await(kSync);
+      if (cuStreamSynchronize(set) != CUDA_SUCCESS) memset_failures++;
+      pass(kMemset);
+    }
+  });
+  uploader.join();
+  setter.join();
+  EXPECT(upload_failures == 0, "the uploading thread saw a failure");
+  EXPECT(memset_failures == 0, "the memset thread saw a failure");
+
+  std::vector<unsigned char> back(n, 0);
+  size_t wrong = 0;
+  CHECK(cuMemcpyDtoH(back.data(), uploaded, n));
+  for (unsigned char b : back) wrong += b != rounds % 251;
+  CHECK(cuMemcpyDtoH(back.data(), filled, n));
+  for (unsigned char b : back) wrong += b != rounds % 251;
+  EXPECT(wrong == 0, "each buffer should hold its thread's last write");
+
+  CHECK(cuMemFree(uploaded));
+  CHECK(cuMemFree(filled));
+  CHECK(cuStreamDestroy(up));
+  CHECK(cuStreamDestroy(set));
+  CHECK(cuCtxDestroy(ctx));
+  if (g_failures) {
+    std::printf("\nFAILED: %d check(s)\n", g_failures);
+    return 1;
+  }
+  std::printf("PASS: stream synchronize, two threads on two streams\n");
+  return 0;
+}
+
+// Queues work and leaves, without one call that waits. Nothing has been sent
+// when main returns: five small memsets are far below the size at which the
+// queue is flushed on its own. They have to reach the server anyway, which is
+// what the flush at exit is for. tests/run_smoke.sh reads the fake driver's
+// count of memsets afterwards.
+static int queue_and_exit() {
+  CHECK(cuInit(0));
+  CUdevice dev = 0;
+  CHECK(cuDeviceGet(&dev, 0));
+  CUcontext ctx = nullptr;
+  CHECK(cuCtxCreate(&ctx, 0, dev));
+  CUstream stream = nullptr;
+  CHECK(cuStreamCreate(&stream, 0));
+  CUdeviceptr d = 0;
+  CHECK(cuMemAlloc(&d, 4096));
+  for (int i = 0; i < 5; i++) CHECK(cuMemsetD8Async(d, 0x5A, 4096, stream));
+  std::printf("sync_smoke: exiting with five memsets queued\n");
+  return g_failures ? 1 : 0;
+}
+
 int main(int argc, char** argv) {
+  if (argc > 1 && !std::strcmp(argv[1], "threads")) return two_threads();
+  if (argc > 1 && !std::strcmp(argv[1], "exit")) return queue_and_exit();
   Mode mode;
   if (argc > 1 && !std::strcmp(argv[1], "wait")) mode = kWait;
   else if (argc > 1 && !std::strcmp(argv[1], "uploads")) mode = kUploads;
   else if (argc > 1 && !std::strcmp(argv[1], "lazy")) mode = kLazy;
   else {
-    std::fprintf(stderr, "usage: sync_smoke wait|uploads|lazy\n");
+    std::fprintf(stderr, "usage: sync_smoke wait|uploads|lazy|threads|exit\n");
     return 2;
   }
 

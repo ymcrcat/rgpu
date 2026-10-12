@@ -38,6 +38,13 @@ enum InternalId : uint32_t {
   // without a reply, ahead of the next frame any thread queues; best-effort,
   // since a lost one only leaks a little until the session expires.
   API_rgpu_thread_gone = kInternalBase + 7,
+  // Many cuDeviceGetAttribute calls in one. cudaGetDeviceProperties reads
+  // about a hundred attributes, and one round trip each is ten seconds or more
+  // over a real link; Ollama allows GPU detection thirty, for two such passes.
+  // Request: the device, a uint32_t count, then that many attribute ids.
+  // Reply: for each, a uint8_t saying whether the driver answered, and the
+  // value.
+  API_rgpu_device_attrs = kInternalBase + 8,
 };
 
 // api_name() is generated from cuda.h and so knows only CUDA's own ids;
@@ -53,6 +60,7 @@ inline const char* call_name(uint32_t id) {
     case API_rgpu_graph_nodes: return "rgpu_graph_nodes";
     case API_rgpu_capture_mode: return "rgpu_capture_mode";
     case API_rgpu_thread_gone: return "rgpu_thread_gone";
+    case API_rgpu_device_attrs: return "rgpu_device_attrs";
     default: return api_name(id);
   }
 }

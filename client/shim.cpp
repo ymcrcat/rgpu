@@ -216,6 +216,28 @@ void note_missing(const char* symbol, int version) {
 
 }  // namespace
 
+namespace rgpu {
+
+bool device_attributes(CUdevice dev, const CUdevice_attribute* attrs, size_t n,
+                       int* values, bool* answered) {
+  Buffer req;
+  req.put<int>(static_cast<int>(dev));
+  req.put<uint32_t>(static_cast<uint32_t>(n));
+  for (size_t i = 0; i < n; i++) req.put<int>(static_cast<int>(attrs[i]));
+  Buffer rsp;
+  if (call(API_rgpu_device_attrs, req, &rsp) != CUDA_SUCCESS) return false;
+  for (size_t i = 0; i < n; i++) {
+    uint8_t ok = 0;
+    int value = 0;
+    if (!rsp.get(&ok) || !rsp.get(&value)) return false;
+    answered[i] = ok != 0;
+    values[i] = value;
+  }
+  return true;
+}
+
+}  // namespace rgpu
+
 extern "C" {
 
 CUresult cuGetProcAddress_v2(const char* symbol, void** pfn, int cudaVersion,
