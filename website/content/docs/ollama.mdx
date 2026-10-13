@@ -91,10 +91,9 @@ Earlier measurements with Ollama on the same machine as the server:
 - **Round trips.** One per generated token, the download of the result.
   Without the default [`RGPU_LAZY_SYNC`](/docs/configuration/) rule it is 21.
 - **Speed.** Set `num_thread` to 1; see below. On an A40 with client and
-  server on the same machine, Ollama then generated 112 tokens per second
-  through rGPU against 457 native, about 4 times slower. The remaining gap
-  has not been profiled. Over a network, add about one round trip of latency
-  per token.
+  server on the same machine, Ollama then generated about 180 tokens per
+  second through rGPU against about 445 native, 2.5 times slower. Over a
+  network, add about one round trip of latency per token.
 - **Cleanup.** A client killed mid-run has its GPU memory released when its
   session expires.
 
@@ -111,8 +110,8 @@ second:
 
 | | Default (48 threads) | `num_thread` 1 |
 | --- | --- | --- |
-| Native Ollama | 140 | 457 |
-| Ollama through rGPU | 38 | 112 |
+| Native Ollama | 161 | 437 to 450 |
+| Ollama through rGPU | 49 | 174 to 226 |
 
 Set it per request with `"options": {"num_thread": 1}`, in `ollama run` with
 `/set parameter num_thread 1`, or in a Modelfile with `PARAMETER num_thread 1`.

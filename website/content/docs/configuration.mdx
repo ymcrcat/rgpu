@@ -59,6 +59,7 @@ keep the default unless a valid encoded operation exceeds it.
 | `RGPU_VERBOSE` | Shim | Log forwarded calls |
 | `RGPU_STATS` | Client | When set, print round trips, one-way calls, transferred bytes and the busiest replying APIs at process exit |
 | `RGPU_BATCH` | Client | Batching enabled; set `0` for synchronous debugging |
+| `RGPU_FLUSH_BYTES` | Client | Queued calls are sent once they reach this many bytes; default `1024`. Larger sends fewer, bigger writes but starts the GPU later |
 | `RGPU_LAZY_SYNC` | Client | Unset: a stream synchronize waits unless only uploads preceded it. `0`: always wait. `1`: never wait |
 | `RGPU_CUBLAS`, `RGPU_CUBLASLT`, `RGPU_CUDNN` | Server | Override paths to real math libraries |
 | `RGPU_SESSION_GRACE` | Server | `120` seconds |
