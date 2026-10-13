@@ -97,10 +97,15 @@ void arm_stats_report() {
   std::call_once(once, [] { std::atexit([] { g_stats.report(); }); });
 }
 
-// Flushed automatically once the queue reaches this size, so a long stretch of
-// asynchronous work cannot grow it without bound. Otherwise it goes out with
-// the next call that needs a reply.
-constexpr size_t kQueueFlushBytes = 256 * 1024;
+// The queue is sent once it reaches this size, without waiting for a call
+// that needs a reply. Small on purpose: the server then works through a run of
+// launches while the program is still issuing the rest, as a GPU does natively.
+// Held back until the reply-needing call, a language model's ~450 launches per
+// token all started late, and it generated at 122 tokens a second where this
+// gives about 180 (A40, client and server on one machine). A send per call was
+// no better: the system calls cost what the overlap gained.
+// RGPU_FLUSH_BYTES overrides it.
+constexpr size_t kQueueFlushBytes = 1024;
 
 int env_int(const char* k, int dflt) {
   const char* v = std::getenv(k);
@@ -622,7 +627,9 @@ CUresult call_async(uint32_t api_id, const Buffer& req) {
 
   queue_frame_locked(api_id, req, kFlagNoReply, thread_id);
   g_stats.async_calls++;
-  if (g_queued.size() >= kQueueFlushBytes && !flush_locked()) {
+  static const size_t flush_bytes = static_cast<size_t>(
+      env_int("RGPU_FLUSH_BYTES", static_cast<int>(kQueueFlushBytes)));
+  if (g_queued.size() >= flush_bytes && !flush_locked()) {
     return CUDA_ERROR_UNKNOWN;
   }
   // The call has not run yet. CUDA says the same of any asynchronous call.

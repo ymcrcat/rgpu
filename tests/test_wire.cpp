@@ -9,6 +9,7 @@
 #include <cstdio>
 
 #include <sys/socket.h>
+#include <thread>
 #include <unistd.h>
 
 #include "common/net.h"
@@ -140,6 +141,62 @@ int main() {
     const ssize_t m = ::recv(pair[1], got, sizeof(got), 0);
     assert(m == static_cast<ssize_t>(sizeof(request) + payload.size()));
     ::close(pair[0]);
+    ::close(pair[1]);
+  }
+
+  // The server reads frames in large pieces, not two receives per frame: a
+  // client queues hundreds of small calls and sends them as one write, and a
+  // receive each for every header and payload was about a thousand system
+  // calls per generated token. So the first frame read takes everything that
+  // was sent with it off the socket.
+  {
+    int pair[2];
+    assert(::socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+    Buffer first, second;
+    first.put<uint32_t>(7);
+    second.put<uint64_t>(0x0102030405060708ull);
+    ReqHeader h1{}, h2{};
+    h1.magic = h2.magic = rgpu::kMagicReq;
+    h1.payload_len = static_cast<uint32_t>(first.size());
+    h2.payload_len = static_cast<uint32_t>(second.size());
+    std::vector<uint8_t> both;
+    for (const auto& [h, b] : {std::pair{&h1, &first}, std::pair{&h2, &second}}) {
+      const auto* hb = reinterpret_cast<const uint8_t*>(h);
+      both.insert(both.end(), hb, hb + sizeof(*h));
+      both.insert(both.end(), b->data().begin(), b->data().end());
+    }
+    assert(rgpu::write_exact(pair[0], both.data(), both.size()));
+
+    rgpu::FrameReader reader(pair[1]);
+    ReqHeader got{};
+    std::vector<uint8_t> payload;
+    assert(reader.recv_frame(rgpu::kMagicReq, &got, &payload));
+    assert(payload == first.data());
+    uint8_t byte;
+    assert(::recv(pair[1], &byte, 1, MSG_PEEK | MSG_DONTWAIT) < 0);  // drained
+    assert(reader.recv_frame(rgpu::kMagicReq, &got, &payload));
+    assert(payload == second.data());
+
+    // A payload larger than the reader's own buffer, arriving in pieces.
+    std::vector<uint8_t> big(300 * 1024);
+    for (size_t i = 0; i < big.size(); i++) big[i] = static_cast<uint8_t>(i * 31);
+    ReqHeader h3{};
+    h3.magic = rgpu::kMagicReq;
+    h3.payload_len = static_cast<uint32_t>(big.size());
+    std::thread writer([&] {
+      assert(rgpu::write_exact(pair[0], &h3, sizeof(h3)));
+      assert(rgpu::write_exact(pair[0], big.data(), big.size()));
+      assert(rgpu::write_exact(pair[0], both.data(), both.size()));
+      ::close(pair[0]);
+    });
+    assert(reader.recv_frame(rgpu::kMagicReq, &got, &payload));
+    assert(payload == big);
+    assert(reader.recv_frame(rgpu::kMagicReq, &got, &payload));
+    assert(payload == first.data());
+    assert(reader.recv_frame(rgpu::kMagicReq, &got, &payload));
+    assert(payload == second.data());
+    assert(!reader.recv_frame(rgpu::kMagicReq, &got, &payload));  // peer closed
+    writer.join();
     ::close(pair[1]);
   }
 

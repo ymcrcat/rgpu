@@ -187,6 +187,7 @@ endif()
 # ---------------------------------------------------------------------------
 enable_testing()
 add_executable(test_wire tests/test_wire.cpp)
+target_link_libraries(test_wire PRIVATE Threads::Threads)
 add_test(NAME wire COMMAND test_wire)
 
 # The record that decides whether a stream synchronize has to wait, on its own.

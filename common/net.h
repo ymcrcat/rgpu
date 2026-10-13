@@ -11,6 +11,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <vector>
 
 #include "common/wire.h"
 
@@ -133,5 +134,52 @@ bool recv_frame(int fd, uint32_t magic, Header* h, std::vector<uint8_t>* payload
   if (h->payload_len == 0) return true;
   return read_exact(fd, payload->data(), payload->size());
 }
+
+// Reads frames from a socket in large pieces. A client queues hundreds of
+// small calls and sends them as one write; a receive for each header and each
+// payload was about a thousand system calls per generated token of a language
+// model, and most of the server's time. One of these owns the reading side of
+// its connection: anything it has buffered is lost to a plain read_exact.
+class FrameReader {
+ public:
+  explicit FrameReader(int fd) : fd_(fd), buf_(64 * 1024) {}
+
+  template <typename Header>
+  bool recv_frame(uint32_t magic, Header* h, std::vector<uint8_t>* payload,
+                  size_t max_payload = 1ull << 32) {
+    if (!read(h, sizeof(*h))) return false;
+    if (h->magic != magic) return false;
+    if (h->payload_len > max_payload) return false;
+    payload->resize(h->payload_len);
+    return h->payload_len == 0 || read(payload->data(), payload->size());
+  }
+
+ private:
+  bool read(void* out, size_t n) {
+    auto* p = static_cast<uint8_t*>(out);
+    while (n > 0) {
+      if (begin_ == end_) {
+        // Nothing buffered. Something large goes straight to where it is
+        // wanted, not through the buffer.
+        if (n >= buf_.size()) return read_exact(fd_, p, n);
+        const ssize_t r = ::recv(fd_, buf_.data(), buf_.size(), 0);
+        if (r < 0 && errno == EINTR) continue;
+        if (r <= 0) return false;
+        begin_ = 0;
+        end_ = static_cast<size_t>(r);
+      }
+      const size_t take = n < end_ - begin_ ? n : end_ - begin_;
+      std::memcpy(p, buf_.data() + begin_, take);
+      begin_ += take;
+      p += take;
+      n -= take;
+    }
+    return true;
+  }
+
+  int fd_;
+  std::vector<uint8_t> buf_;
+  size_t begin_ = 0, end_ = 0;
+};
 
 }  // namespace rgpu

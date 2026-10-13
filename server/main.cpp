@@ -576,6 +576,7 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
   // its client threads' slots, a failure held for a thread - belongs to the
   // session, not to this connection, and outlives it: it goes only when the
   // session expires (serve_session).
+  FrameReader reader(fd);
   for (;;) {
     ReqHeader h{};
     std::vector<uint8_t> payload;
@@ -583,7 +584,7 @@ void serve(int fd, const std::shared_ptr<Session>& session, uint64_t key) {
     // than can be allocated ends this connection, not the server.
     bool received = false;
     try {
-      received = recv_frame(fd, kMagicReq, &h, &payload);
+      received = reader.recv_frame(kMagicReq, &h, &payload);
     } catch (const std::bad_alloc&) {
       logf("a frame declared more bytes than could be allocated; closing it");
     }
