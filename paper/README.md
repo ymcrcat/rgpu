@@ -2,6 +2,7 @@
 
 - `rgpu-paper.pdf`: rendered systems-paper draft.
 - `paper.md`: editable manuscript, references, and source provenance.
+- `cuda-observations.md`: supplied October CUDA measurement summary, source differences, and outstanding provenance.
 - `structure.md`: rationale for the structure, prior-art comparisons, and submission priorities.
 - `benchmark.py`: standalone CPU loopback experiment with numerical and counter assertions.
 - `results.json`: environment, summary, and all 35 raw timing samples.
@@ -18,9 +19,9 @@
 - `run_on_gpu_host.sh`: sets up torch on the GPU host, runs the native and colocated legs, and leaves an rgpu server bound to loopback for the WAN leg.
 - `dispatch_bench.py`, `dispatch.txt`: single-thread dispatch cost of ordinary CPU-tensor `torch.add` on the two client CPUs. It does not measure rGPU dispatch and does not explain the WAN-versus-colocated result; see Section 6.8.
 
-Source inspected: `/Users/yan/Documents/LlmGames/rgpu`, commit `7a8ba43ffd46edb7efa77c93593221f813a8b712`.
+Original source inspection: commit `7a8ba43ffd46edb7efa77c93593221f813a8b712`. Current revision: main at `ced62f546e7c3d6c63a3b7b5ead7caaedc05b2c9`, including changes after the paper branch base `58a0fa5`. The paper worktree retains its implementation base; it has not merged main.
 
-This directory contains the paper and its supporting artifacts. Historical GPU observations (H) are distinguished from fresh CPU measurements (F), analytical estimates (A), and the same-GPU L40S run (G) of Section 6.8.
+This directory contains the paper and its supporting artifacts. Historical GPU observations (H) are distinguished from fresh CPU measurements (F), analytical estimates (A), the same-GPU L40S runs (G) of Sections 6.8-6.9, and subsequent CUDA observations (C) in Section 6.10.
 
 To rerun the benchmark, use the rGPU Python environment:
 
@@ -38,7 +39,7 @@ python render.py
 
 ## Agent handoff
 
-The user requested a detailed systems-conference-style paper, including a Background reviewing prior work, performance evaluation, and a structure informed by related papers. The current PDF is thirteen pages; its layout was rendered and visually checked.
+The user requested a detailed systems-conference-style paper, including a Background reviewing prior work, performance evaluation, and a structure informed by related papers. The current PDF is sixteen pages. Its layout was rendered and visually checked for this revision.
 
 Start with `paper.md` and `structure.md`. Preserve the distinction between historical GPU results (H), fresh CPU measurements (F), analytical estimates (A), and the same-GPU run (G). The historical A40-versus-MPS result does not measure remoting overhead. The rGPU implementation was not modified.
 
@@ -61,3 +62,13 @@ Status as of September 27, 2026 (third pass, after external review):
 - The compiled-output conjugate/negative bit gap the review found was reproduced end to end and fixed in rGPU commit `c0318a3`; the second session ran at that commit.
 - Section 6.6 now carries the compression conclusions from the performance record and issue #11, tied to the finding that the client is the constraint.
 - Not measured, and listed in Section 7: a profile of the client's per-operation work, bandwidth and loss, larger batches, the CUDA path on a GPU, a coarse-RPC baseline, any prior system. Djinn's full text was still not retrieved.
+
+
+Status as of October 15, 2026 (current-state revision):
+
+- Updated the abstract, introduction, CUDA design and compatibility, evaluation, limitations, conclusion, and source provenance against main at `ced62f5`.
+- Section 6.10 reports CUDA inference separately from the original Python training datasets: stock Ollama launcher scope, VMM, cache/synchronization progression, transport changes, colocated A40 throughput, CPU throttling, WAN observations, and fake-driver timing limits.
+- `cuda-observations.md` preserves the supplied measurement summary and distinguishes it from the commit/documentation records. In particular, the supplied native Ollama one-thread range is 437-480 tokens/s while main's documentation records 437-450.
+- Real-GPU math checks and CUDA inference are now recorded evidence, not wholly missing future work. The older status lists above describe their dates, not today's outstanding work.
+- Remaining TODOs: raw CUDA trials, commands/builds and native graph settings; stock launcher verification on arm64; the final read/flush changes over WAN and with PyTorch; larger workloads, controlled bandwidth/loss and LAN tests, independent ablations, and matched boundary/coarse-RPC comparisons. The existing Djinn comparison remains outstanding; this revision does not refresh the literature review.
+- No new benchmark or remote hardware run was performed. Existing measurement JSONs and test logs are unchanged. Render with `python paper/render.py` from the worktree root using the dependencies listed above.

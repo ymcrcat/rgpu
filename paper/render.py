@@ -170,7 +170,7 @@ def page(canvas, doc):
     canvas.setAuthor("Research draft")
     canvas.setFont("Times-Roman", 8)
     canvas.setFillColor(colors.HexColor("#555555"))
-    canvas.drawString(42, 25, "rGPU | Research draft | September 27, 2026")
+    canvas.drawString(42, 25, "rGPU | Research draft | October 15, 2026")
     canvas.drawRightString(570, 25, str(doc.page))
     if doc.page == 1:
         canvas.setFillColor(colors.black)
@@ -178,7 +178,7 @@ def page(canvas, doc):
         canvas.drawCentredString(306, 744, "rGPU: Streaming Remote GPU Execution")
         canvas.drawCentredString(306, 720, "Across CUDA and PyTorch Boundaries")
         canvas.setFont("Times-Roman", 9)
-        canvas.drawCentredString(306, 699, "Systems paper draft | Preliminary evaluation | September 27, 2026")
+        canvas.drawCentredString(306, 699, "Systems paper draft | Preliminary evaluation | October 15, 2026")
     else:
         canvas.drawString(42, 765, "rGPU: Streaming Remote GPU Execution")
         canvas.setStrokeColor(colors.HexColor("#cccccc"))
