@@ -27,6 +27,10 @@ A40 pod, `qwen2.5:0.5b`, 320 generated tokens, client and server on the same mac
 - Fake-driver microbenchmark `tests/token_bench.cpp`: launch issue about 0.21 microseconds per call. The later 1 KiB flush adds about 0.25 microseconds per launch where there is no GPU time to overlap. Neither figure is completed GPU work.
 - Real-GPU `tests/hw/cublas_check.cu` and `cudnn_check.cu` pass through the shims via `tests/hw/math_check.sh`.
 
+## Flush-threshold comparison
+
+Measured with the 64 KiB server read buffer in place, llama.cpp server, one CPU thread, same A40 pod, `RGPU_FLUSH_BYTES` set per run. One session alternated 1 KiB and 256 KiB: 216.8 and 210.2 tok/s at 1 KiB, 123.9 and 131.1 at 256 KiB. An earlier sweep in the same pod (two rounds) gave 120.7-124.0 at 256 KiB, 134.1-138.3 at 64 KiB, 154.3-159.9 at 16 KiB, 154.8-160.3 at 4 KiB, 170.8-194.0 at 1 KiB and 186.2-198.3 with a send per call. Output was identical in every run.
+
 ## Repository corroboration and scope differences
 
 - `8453dbd` records detection counts/times and the header/payload fix.

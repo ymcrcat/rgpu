@@ -19,12 +19,6 @@
  },
  {
   "page": 1,
-  "gap": 1.023,
-  "text": "are recorded summaries, separate from the repeated training exper-",
-  "code_only": false
- },
- {
-  "page": 1,
   "gap": 1.03,
   "text": "amine that question rather than claim that API remoting, asynchro-",
   "code_only": false
@@ -73,12 +67,6 @@
  },
  {
   "page": 1,
-  "gap": 1.063,
-  "text": "tablish near-native GPU performance or superiority over prior sys-",
-  "code_only": false
- },
- {
-  "page": 1,
   "gap": 1.067,
   "text": "with a matched single-tensor optimizer, at about 6,500 logical pro-",
   "code_only": false
@@ -99,12 +87,6 @@
   "page": 1,
   "gap": 1.084,
   "text": "cation to a GPU server is straightforward when its data, dependen-",
-  "code_only": false
- },
- {
-  "page": 1,
-  "gap": 1.087,
-  "text": "reduced reply dependencies from 45 to one per token, but an earli-",
   "code_only": false
  },
  {
@@ -139,14 +121,8 @@
  },
  {
   "page": 1,
-  "gap": 1.16,
-  "text": "runs unchanged llama.cpp and stock Ollama with matching gener-",
-  "code_only": false
- },
- {
-  "page": 1,
   "gap": 1.166,
-  "text": "GPU model, one model, and one batch size. The CUDA path now",
+  "text": "GPU model, one model, and one batch size. The CUDA path runs",
   "code_only": false
  },
  {
@@ -175,6 +151,18 @@
  },
  {
   "page": 1,
+  "gap": 1.228,
+  "text": "379-390 native; flushing queued calls every 1 KiB rather than ev-",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.228,
+  "text": "separate from the repeated training experiments. This is an imple-",
+  "code_only": false
+ },
+ {
+  "page": 1,
   "gap": 1.23,
   "text": "GPU applications are often developed on machines different from",
   "code_only": false
@@ -187,6 +175,12 @@
  },
  {
   "page": 1,
+  "gap": 1.245,
+  "text": "output in the tested cases. On an A40 with one CPU thread, colo-",
+  "code_only": false
+ },
+ {
+  "page": 1,
   "gap": 1.277,
   "text": "when interactive state, development tools, or host-side integration",
   "code_only": false
@@ -195,12 +189,6 @@
   "page": 1,
   "gap": 1.284,
   "text": "Third, it reports historical GPU observations, a reproducible CPU",
-  "code_only": false
- },
- {
-  "page": 1,
-  "gap": 1.286,
-  "text": "379-390 native. Caching and upload-only queued synchronization",
   "code_only": false
  },
  {
@@ -236,6 +224,12 @@
  {
   "page": 1,
   "gap": 1.339,
+  "text": "ery 256 KiB accounts for a factor of about 1.7. Generation needs",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 1.339,
   "text": "plementation that introduces a reply at every submission destroys",
   "code_only": false
  },
@@ -259,12 +253,6 @@
  },
  {
   "page": 1,
-  "gap": 1.368,
-  "text": "does not propose a new remoting mechanism, and it does not es-",
-  "code_only": false
- },
- {
-  "page": 1,
   "gap": 1.372,
   "text": "dict many output shapes and strides locally. It therefore returns a",
   "code_only": false
@@ -277,14 +265,14 @@
  },
  {
   "page": 1,
-  "gap": 1.374,
-  "text": "ated output in the tested cases. On an A40 with one CPU thread,",
+  "gap": 1.383,
+  "text": "invoked by identifier. These are separate protocols and execution",
   "code_only": false
  },
  {
   "page": 1,
-  "gap": 1.383,
-  "text": "invoked by identifier. These are separate protocols and execution",
+  "gap": 1.395,
+  "text": "one reply per token, against 45 without the occupancy cache and",
   "code_only": false
  },
  {
@@ -355,8 +343,8 @@
  },
  {
   "page": 1,
-  "gap": 1.52,
-  "text": "MiB of logits downloaded per token. These CUDA observations",
+  "gap": 1.512,
+  "text": "mentation and characterization report: it does not propose a new",
   "code_only": false
  },
  {
@@ -379,6 +367,12 @@
  },
  {
   "page": 1,
+  "gap": 1.547,
+  "text": "unchanged llama.cpp and stock Ollama with matching generated",
+  "code_only": false
+ },
+ {
+  "page": 1,
   "gap": 1.577,
   "text": "signs remote tensor identifiers before execution, and streams or-",
   "code_only": false
@@ -387,18 +381,6 @@
   "page": 1,
   "gap": 1.58,
   "text": "incorporates main through ced62f5, including the changes since",
-  "code_only": false
- },
- {
-  "page": 1,
-  "gap": 1.594,
-  "text": "er WAN run remained link-bound at about 3 tokens/s with 0.58",
-  "code_only": false
- },
- {
-  "page": 1,
-  "gap": 1.603,
-  "text": "iments. This is an implementation and characterization report: it",
   "code_only": false
  },
  {
@@ -427,6 +409,12 @@
  },
  {
   "page": 1,
+  "gap": 1.659,
+  "text": "remoting mechanism, and it does not establish near-native GPU",
+  "code_only": false
+ },
+ {
+  "page": 1,
   "gap": 1.661,
   "text": "turn a fast accelerator into a slow distributed system. rGPU ex-",
   "code_only": false
@@ -439,12 +427,6 @@
  },
  {
   "page": 1,
-  "gap": 1.689,
-  "text": "llama.cpp generation from 105-121 to 210-217 tokens/s, against",
-  "code_only": false
- },
- {
-  "page": 1,
   "gap": 1.715,
   "text": "transformer training step was 8.9x slower than native execution",
   "code_only": false
@@ -453,12 +435,6 @@
   "page": 1,
   "gap": 1.727,
   "text": "sages to 41 and median completed execution from 45.42 ms to",
-  "code_only": false
- },
- {
-  "page": 1,
-  "gap": 1.732,
-  "text": "buffered server reads and earlier queue flushes raised colocated",
   "code_only": false
  },
  {
@@ -523,6 +499,12 @@
  },
  {
   "page": 1,
+  "gap": 1.929,
+  "text": "upload-only queued synchronization, yet a WAN run remained",
+  "code_only": false
+ },
+ {
+  "page": 1,
   "gap": 1.934,
   "text": "mechanism experiment, two same-GPU L40S experiments, one",
   "code_only": false
@@ -531,6 +513,12 @@
   "page": 1,
   "gap": 2.008,
   "text": "tion deliberately includes negative results: compilation reduced",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 2.009,
+  "text": "per token. These CUDA observations are recorded summaries,",
   "code_only": false
  },
  {
@@ -549,6 +537,12 @@
   "page": 1,
   "gap": 2.322,
   "text": "dered operations without awaiting individual replies. Optional",
+  "code_only": false
+ },
+ {
+  "page": 1,
+  "gap": 2.695,
+  "text": "cated llama.cpp generation reached 210-217 tokens/s against",
   "code_only": false
  },
  {
@@ -1543,14 +1537,14 @@
  },
  {
   "page": 4,
-  "gap": 1.149,
-  "text": "metadata bits. At the originally inspected commit, compiled-graph",
+  "gap": 1.15,
+  "text": "can infer them. The client therefore has enough information to ex-",
   "code_only": false
  },
  {
   "page": 4,
-  "gap": 1.15,
-  "text": "can infer them. The client therefore has enough information to ex-",
+  "gap": 1.151,
+  "text": "The eager wrapper and compiled-graph output reconstruction both",
   "code_only": false
  },
  {
@@ -1795,12 +1789,6 @@
  },
  {
   "page": 4,
-  "gap": 2.041,
-  "text": "The eager wrapper explicitly preserves conjugate and negative",
-  "code_only": false
- },
- {
-  "page": 4,
   "gap": 2.068,
   "text": "runs the operation on meta tensors. These carry shape, dtype,",
   "code_only": false
@@ -1837,32 +1825,14 @@
  },
  {
   "page": 5,
-  "gap": 1.004,
-  "text": "launches. This threshold was previously 256 KiB; it is independent",
-  "code_only": false
- },
- {
-  "page": 5,
   "gap": 1.006,
   "text": "upload bytes, and the server still executes the synchronize in order.",
   "code_only": false
  },
  {
   "page": 5,
-  "gap": 1.006,
-  "text": "served gains from these transport changes from the reduction in re-",
-  "code_only": false
- },
- {
-  "page": 5,
   "gap": 1.014,
   "text": "object is not freed ahead of an earlier queued operation that uses it.",
-  "code_only": false
- },
- {
-  "page": 5,
-  "gap": 1.015,
-  "text": "eager wrapper's. A dense non-contiguous tensor downloaded to the",
   "code_only": false
  },
  {
@@ -1879,14 +1849,20 @@
  },
  {
   "page": 5,
+  "gap": 1.035,
+  "text": "scatter/gather write, retrying short writes; written separately, a tun-",
+  "code_only": false
+ },
+ {
+  "page": 5,
   "gap": 1.048,
   "text": "flushes preceding operations first. Crossing a flush threshold sends",
   "code_only": false
  },
  {
   "page": 5,
-  "gap": 1.049,
-  "text": "rectness is thus not cosmetic: a missing conjugation bit can change",
+  "gap": 1.053,
+  "text": "selects its quantized matrix-multiplication kernels from limits such",
   "code_only": false
  },
  {
@@ -1909,12 +1885,6 @@
  },
  {
   "page": 5,
-  "gap": 1.077,
-  "text": "client has its layout reconstructed when appropriate. Metadata cor-",
-  "code_only": false
- },
- {
-  "page": 5,
   "gap": 1.082,
   "text": "meaningful. The client may still stall on encoding, locks, or socket",
   "code_only": false
@@ -1927,14 +1897,8 @@
  },
  {
   "page": 5,
-  "gap": 1.106,
-  "text": "CPU execution reports true. This gap was found by an external re-",
-  "code_only": false
- },
- {
-  "page": 5,
-  "gap": 1.118,
-  "text": "chronous-fallback reply of Section 4.2 likewise carries only dtype,",
+  "gap": 1.117,
+  "text": "quest reports the original failure instead of presenting a cascade of",
   "code_only": false
  },
  {
@@ -1957,32 +1921,14 @@
  },
  {
   "page": 5,
-  "gap": 1.138,
-  "text": "dtype, shape, stride, and offset only. A function compiled with the",
-  "code_only": false
- },
- {
-  "page": 5,
-  "gap": 1.153,
-  "text": "rgpu backend that returned a lazily conjugated or negated view of",
-  "code_only": false
- },
- {
-  "page": 5,
-  "gap": 1.154,
-  "text": "in the second L40S session. Neither benchmark uses complex ten-",
+  "gap": 1.14,
+  "text": "through an already-returned call. In the Python server, a failed op-",
   "code_only": false
  },
  {
   "page": 5,
   "gap": 1.157,
   "text": "produce B, and download B correctly without separate responses",
-  "code_only": false
- },
- {
-  "page": 5,
-  "gap": 1.158,
-  "text": "end to end against a CPU server. It was fixed after the original in-",
   "code_only": false
  },
  {
@@ -1995,18 +1941,6 @@
   "page": 5,
   "gap": 1.16,
   "text": "the configured device. Confusing these would either introduce un-",
-  "code_only": false
- },
- {
-  "page": 5,
-  "gap": 1.167,
-  "text": "spection in commit c0318a3, with three regression cases in test_",
-  "code_only": false
- },
- {
-  "page": 5,
-  "gap": 1.167,
-  "text": "imag, came back with the bit cleared: is_conj() was false where",
   "code_only": false
  },
  {
@@ -2025,6 +1959,12 @@
   "page": 5,
   "gap": 1.174,
   "text": "and flags and retained with the registered kernel. These caches re-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.178,
+  "text": "es. Property values must be exact, not merely plausible: llama.cpp",
   "code_only": false
  },
  {
@@ -2053,8 +1993,26 @@
  },
  {
   "page": 5,
+  "gap": 1.205,
+  "text": "reply of Section 4.2 likewise carries only dtype, shape, stride, and",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.226,
+  "text": "path uses the same setting name with a 256 KiB default. Flushing",
+  "code_only": false
+ },
+ {
+  "page": 5,
   "gap": 1.226,
   "text": "a batch but does not by itself require a reply. There is no periodic",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.229,
+  "text": "pected output slots. A dependent operation encountering poisoned",
   "code_only": false
  },
  {
@@ -2083,26 +2041,14 @@
  },
  {
   "page": 5,
-  "gap": 1.282,
-  "text": "an intermediate, such as ( x * 2). conj() or ( x * 2). conj().",
+  "gap": 1.286,
+  "text": "with the rgpu backend that returns a lazily conjugated or negated",
   "code_only": false
  },
  {
   "page": 5,
-  "gap": 1.289,
-  "text": "adds writes without adding replies. Section 6.10 separates the ob-",
-  "code_only": false
- },
- {
-  "page": 5,
-  "gap": 1.313,
-  "text": "how higher-level PyTorch operations interpret a tensor before the",
-  "code_only": false
- },
- {
-  "page": 5,
-  "gap": 1.316,
-  "text": "with a scatter/gather write, retrying short writes. The server reads",
+  "gap": 1.314,
+  "text": "dense non-contiguous tensor downloaded to the client has its lay-",
   "code_only": false
  },
  {
@@ -2125,6 +2071,12 @@
  },
  {
   "page": 5,
+  "gap": 1.333,
+  "text": "view of an intermediate, such as ( x * 2). conj() or ( x * 2).",
+  "code_only": false
+ },
+ {
+  "page": 5,
   "gap": 1.34,
   "text": "nication granularity: intermediates internal to the graph no longer",
   "code_only": false
@@ -2133,12 +2085,6 @@
   "page": 5,
   "gap": 1.341,
   "text": "than an unconditional completion barrier. With RGPU_ LAZY_ SYNC",
-  "code_only": false
- },
- {
-  "page": 5,
-  "gap": 1.356,
-  "text": "es. Accurate properties also affect numerical behavior: the earlier",
   "code_only": false
  },
  {
@@ -2155,8 +2101,8 @@
  },
  {
   "page": 5,
-  "gap": 1.366,
-  "text": "of the Python path's unchanged 256 KiB byte threshold. The two",
+  "gap": 1.37,
+  "text": "KiB, configurable with RGPU_ FLUSH_ BYTES, so remote execution",
   "code_only": false
  },
  {
@@ -2169,12 +2115,6 @@
   "page": 5,
   "gap": 1.373,
   "text": "pable graphs fall back to eager remote execution with a warning.",
-  "code_only": false
- },
- {
-  "page": 5,
-  "gap": 1.384,
-  "text": "view of this paper with a helper-level probe and then reproduced",
   "code_only": false
  },
  {
@@ -2192,7 +2132,31 @@
  {
   "page": 5,
   "gap": 1.405,
+  "text": "test_ compile. py checks these cases. The synchronous-fallback",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.405,
   "text": "repeated recompilation in a long-lived session accumulates graph",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.419,
+  "text": "eration records its first error and places poison objects in the ex-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.424,
+  "text": "begins while the application is still issuing launches. The Python",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.434,
+  "text": "but its metadata contract is narrower than the eager wrapper's. A",
   "code_only": false
  },
  {
@@ -2203,20 +2167,20 @@
  },
  {
   "page": 5,
+  "gap": 1.476,
+  "text": "offset; no reachable wrong result has been demonstrated from it,",
+  "code_only": false
+ },
+ {
+  "page": 5,
   "gap": 1.483,
   "text": "Protocol acknowledgement and GPU completion are distinct. An",
   "code_only": false
  },
  {
   "page": 5,
-  "gap": 1.487,
-  "text": "paths share the setting name, but use different defaults. Flushing",
-  "code_only": false
- },
- {
-  "page": 5,
-  "gap": 1.496,
-  "text": "calls every 1 KiB, configurable with RGPU_ FLUSH_ BYTES, so re-",
+  "gap": 1.517,
+  "text": "out reconstructed when appropriate. Metadata correctness is thus",
   "code_only": false
  },
  {
@@ -2257,8 +2221,8 @@
  },
  {
   "page": 5,
-  "gap": 1.594,
-  "text": "frames through a 64 KiB buffer. The client now flushes queued",
+  "gap": 1.6,
+  "text": "nel that holds a small packet until the previous one is acknowl-",
   "code_only": false
  },
  {
@@ -2269,14 +2233,20 @@
  },
  {
   "page": 5,
+  "gap": 1.675,
+  "text": "er-level PyTorch operations interpret a tensor before the remote",
+  "code_only": false
+ },
+ {
+  "page": 5,
   "gap": 1.689,
   "text": "submissions possible; the ordered session makes their execution",
   "code_only": false
  },
  {
   "page": 5,
-  "gap": 1.697,
-  "text": "The C++ transport sends a frame's header and payload together",
+  "gap": 1.722,
+  "text": "input skips execution and propagates poison. A later waited re-",
   "code_only": false
  },
  {
@@ -2287,8 +2257,20 @@
  },
  {
   "page": 5,
+  "gap": 1.773,
+  "text": "edged makes each reply cost two round trips. The server reads",
+  "code_only": false
+ },
+ {
+  "page": 5,
   "gap": 1.783,
   "text": "sender: a tail below both thresholds stays buffered until a later",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.824,
+  "text": "frames through a 64 KiB buffer rather than with a receive per",
   "code_only": false
  },
  {
@@ -2311,14 +2293,26 @@
  },
  {
   "page": 5,
-  "gap": 1.952,
-  "text": "ward ATen graphs. It serializes allowed graph nodes, registers",
+  "gap": 1.902,
+  "text": "conj(). imag, reports is_conj() as CPU execution does, and",
   "code_only": false
  },
  {
   "page": 5,
-  "gap": 1.98,
-  "text": "mote execution can begin while the application is still issuing",
+  "gap": 1.927,
+  "text": "The C++ transport sends a frame's header and payload as one",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.931,
+  "text": "not cosmetic: a missing conjugation bit can change how high-",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 1.952,
+  "text": "ward ATen graphs. It serializes allowed graph nodes, registers",
   "code_only": false
  },
  {
@@ -2331,6 +2325,12 @@
   "page": 5,
   "gap": 2.048,
   "text": "A synchronize following other GPU work waits. Work whose",
+  "code_only": false
+ },
+ {
+  "page": 5,
+  "gap": 2.089,
+  "text": "adds writes without adding replies. Section 6.10 measures the",
   "code_only": false
  },
  {
@@ -2359,14 +2359,8 @@
  },
  {
   "page": 5,
-  "gap": 2.227,
-  "text": "output reconstruction did not: it rebuilt output metadata from",
-  "code_only": false
- },
- {
-  "page": 5,
-  "gap": 2.229,
-  "text": "shape, stride, and offset; no reachable wrong result has been",
+  "gap": 2.198,
+  "text": "An asynchronous operation cannot report its execution failure",
   "code_only": false
  },
  {
@@ -2389,20 +2383,8 @@
  },
  {
   "page": 5,
-  "gap": 2.425,
-  "text": "sors, so the reported measurements are unaffected. The syn-",
-  "code_only": false
- },
- {
-  "page": 5,
   "gap": 2.546,
   "text": "backend is selected explicitly with torch. compile( model,",
-  "code_only": false
- },
- {
-  "page": 5,
-  "gap": 2.593,
-  "text": "omission of the opt-in shared-memory limit made llama.cpp",
   "code_only": false
  },
  {
@@ -2413,14 +2395,14 @@
  },
  {
   "page": 6,
-  "gap": 1.031,
-  "text": "tifact appendix maps each claim to source files. Handwritten anno-",
+  "gap": 1.007,
+  "text": "CUDA 12 shared-library path and supported calls, rather than arbi-",
   "code_only": false
  },
  {
   "page": 6,
-  "gap": 1.038,
-  "text": "status names and strings are answered locally, and the runtime PCI",
+  "gap": 1.031,
+  "text": "tifact appendix maps each claim to source files. Handwritten anno-",
   "code_only": false
  },
  {
@@ -2443,6 +2425,12 @@
  },
  {
   "page": 6,
+  "gap": 1.06,
+  "text": "with OLLAMA_ LLM_ LIBRARY=cuda_ v12 and GGML_ CUDA_ DISABLE_",
+  "code_only": false
+ },
+ {
+  "page": 6,
   "gap": 1.061,
   "text": "ment near a 48 MiB threshold when applicable. A single oversized",
   "code_only": false
@@ -2461,6 +2449,18 @@
  },
  {
   "page": 6,
+  "gap": 1.071,
+  "text": "cross-process export of shareable memory handles. cuBLAS status",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.071,
+  "text": "allocation, mapping, access control, queries, and release, including",
+  "code_only": false
+ },
+ {
+  "page": 6,
   "gap": 1.076,
   "text": "plemented entry points return an unsupported error. Some compat-",
   "code_only": false
@@ -2475,6 +2475,12 @@
   "page": 6,
   "gap": 1.079,
   "text": "session's thread state rather than a particular socket, so a reconnect",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.088,
+  "text": "cuMemAddressReserve, cuMemCreate, and cuMemMap. Session in-",
   "code_only": false
  },
  {
@@ -2498,6 +2504,12 @@
  {
   "page": 6,
   "gap": 1.104,
+  "text": "through the client launcher. Support remains bounded to the tested",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.104,
   "text": "and unregistration without the device-map flag (with the flag, they",
   "code_only": false
  },
@@ -2509,20 +2521,14 @@
  },
  {
   "page": 6,
-  "gap": 1.117,
-  "text": "quest reports the original failure instead of presenting a cascade of",
+  "gap": 1.11,
+  "text": "This supports llama.cpp's allocation pattern. It does not implement",
   "code_only": false
  },
  {
   "page": 6,
   "gap": 1.119,
   "text": "executing, so a SYNC that raises a deferred error has not completed",
-  "code_only": false
- },
- {
-  "page": 6,
-  "gap": 1.14,
-  "text": "through an already-returned call. In the Python server, a failed op-",
   "code_only": false
  },
  {
@@ -2575,12 +2581,6 @@
  },
  {
   "page": 6,
-  "gap": 1.216,
-  "text": "even when the client releases a handle immediately after mapping",
-  "code_only": false
- },
- {
-  "page": 6,
   "gap": 1.218,
   "text": "and caches the latest reply. After a connection loss, the client rec-",
   "code_only": false
@@ -2599,18 +2599,6 @@
  },
  {
   "page": 6,
-  "gap": 1.229,
-  "text": "pected output slots. A dependent operation encountering poisoned",
-  "code_only": false
- },
- {
-  "page": 6,
-  "gap": 1.23,
-  "text": "ment cross-process export of shareable memory handles. cuBLAS",
-  "code_only": false
- },
- {
-  "page": 6,
   "gap": 1.242,
   "text": "does not simply discard it. Maintaining per-thread context seman-",
   "code_only": false
@@ -2619,12 +2607,6 @@
   "page": 6,
   "gap": 1.246,
   "text": "Python session transport, server operation execution, graph serial-",
-  "code_only": false
- },
- {
-  "page": 6,
-  "gap": 1.253,
-  "text": "handles, and then frees address ranges; mappings must be tracked",
   "code_only": false
  },
  {
@@ -2665,6 +2647,18 @@
  },
  {
   "page": 6,
+  "gap": 1.311,
+  "text": "GRAPHS=1; it preloads the shims into Ollama's subprocesses with-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.323,
+  "text": "The CUDA implementation forwards virtual memory reservation,",
+  "code_only": false
+ },
+ {
+  "page": 6,
   "gap": 1.326,
   "text": "cess: the two runtime profiler calls, and host-memory registration",
   "code_only": false
@@ -2701,6 +2695,12 @@
  },
  {
   "page": 6,
+  "gap": 1.356,
+  "text": "out replacing installed libraries. Disabling CUDA graphs remains",
+  "code_only": false
+ },
+ {
+  "page": 6,
   "gap": 1.359,
   "text": "has acknowledged everything outstanding; and a waited C++ call",
   "code_only": false
@@ -2709,18 +2709,6 @@
   "page": 6,
   "gap": 1.363,
   "text": "tions prevent an obsolete connection from continuing to mutate a",
-  "code_only": false
- },
- {
-  "page": 6,
-  "gap": 1.368,
-  "text": "tion, allocation, mapping, access control, queries, and release, in-",
-  "code_only": false
- },
- {
-  "page": 6,
-  "gap": 1.369,
-  "text": "it. This supports llama.cpp's allocation pattern. It does not imple-",
   "code_only": false
  },
  {
@@ -2743,8 +2731,14 @@
  },
  {
   "page": 6,
-  "gap": 1.419,
-  "text": "eration records its first error and places poison objects in the ex-",
+  "gap": 1.394,
+  "text": "names and strings are answered locally, and the runtime PCI bus",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.395,
+  "text": "Unchanged llama.cpp and stock Ollama run through these shims.",
   "code_only": false
  },
  {
@@ -2757,12 +2751,6 @@
   "page": 6,
   "gap": 1.43,
   "text": "request that surfaces a deferred error reports that error instead of",
-  "code_only": false
- },
- {
-  "page": 6,
-  "gap": 1.437,
-  "text": "a CUDA context. On expiry it unmaps first, releases outstanding",
   "code_only": false
  },
  {
@@ -2787,6 +2775,12 @@
   "page": 6,
   "gap": 1.464,
   "text": "mode, and deferred asynchronous error. The error belongs to the",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.469,
+  "text": "ventory tracks mappings, allocation handles, and reserved ranges",
   "code_only": false
  },
  {
@@ -2821,12 +2815,6 @@
  },
  {
   "page": 6,
-  "gap": 1.571,
-  "text": "DISABLE_ GRAPHS=1; it preloads the shims into Ollama's subpro-",
-  "code_only": false
- },
- {
-  "page": 6,
   "gap": 1.586,
   "text": "tations and library wrappers supply semantics that cannot be in-",
   "code_only": false
@@ -2835,6 +2823,12 @@
   "page": 6,
   "gap": 1.599,
   "text": "wire format, and its replay contract differs: once its unacknowl-",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.603,
+  "text": "context. On expiry it unmaps first, releases outstanding handles,",
   "code_only": false
  },
  {
@@ -2863,8 +2857,8 @@
  },
  {
   "page": 6,
-  "gap": 1.694,
-  "text": "serve with OLLAMA_ LLM_ LIBRARY=cuda_ v12 and GGML_ CUDA_",
+  "gap": 1.697,
+  "text": "when the client releases a handle immediately after mapping it.",
   "code_only": false
  },
  {
@@ -2875,14 +2869,14 @@
  },
  {
   "page": 6,
-  "gap": 1.722,
-  "text": "input skips execution and propagates poison. A later waited re-",
+  "gap": 1.73,
+  "text": "able. Detached sessions normally expire after 120 seconds. The",
   "code_only": false
  },
  {
   "page": 6,
-  "gap": 1.73,
-  "text": "able. Detached sessions normally expire after 120 seconds. The",
+  "gap": 1.767,
+  "text": "The verified Linux x86_64 launcher uses rgpu ollama serve",
   "code_only": false
  },
  {
@@ -2899,8 +2893,8 @@
  },
  {
   "page": 6,
-  "gap": 1.826,
-  "text": "Unchanged llama.cpp and stock Ollama now run through these",
+  "gap": 1.822,
+  "text": "separately, because these resources are not owned by a CUDA",
   "code_only": false
  },
  {
@@ -2911,14 +2905,20 @@
  },
  {
   "page": 6,
-  "gap": 1.866,
-  "text": "shims. The verified Linux x86_64 launcher uses rgpu ollama",
+  "gap": 1.867,
+  "text": "The Python handshake identifies a session independently of its",
   "code_only": false
  },
  {
   "page": 6,
-  "gap": 1.867,
-  "text": "The Python handshake identifies a session independently of its",
+  "gap": 1.883,
+  "text": "and then frees address ranges; mappings must be tracked even",
+  "code_only": false
+ },
+ {
+  "page": 6,
+  "gap": 1.972,
+  "text": "server loads the real math libraries and is started directly, not",
   "code_only": false
  },
  {
@@ -2929,26 +2929,8 @@
  },
  {
   "page": 6,
-  "gap": 2.07,
-  "text": "Session inventory tracks mappings, allocation handles, and re-",
-  "code_only": false
- },
- {
-  "page": 6,
-  "gap": 2.198,
-  "text": "An asynchronous operation cannot report its execution failure",
-  "code_only": false
- },
- {
-  "page": 6,
-  "gap": 2.527,
-  "text": "cluding cuMemAddressReserve, cuMemCreate, and cuMemMap.",
-  "code_only": false
- },
- {
-  "page": 6,
-  "gap": 2.619,
-  "text": "cesses without replacing installed libraries. Disabling CUDA",
+  "gap": 2.663,
+  "text": "required because cudaGraphExecUpdate is unsupported. The",
   "code_only": false
  },
  {
@@ -2965,20 +2947,8 @@
  },
  {
   "page": 7,
-  "gap": 1.016,
-  "text": "graphs remains required because cudaGraphExecUpdate is unsup-",
-  "code_only": false
- },
- {
-  "page": 7,
   "gap": 1.02,
   "text": "ranges and CPU-throttling observations for this revision. These are",
-  "code_only": false
- },
- {
-  "page": 7,
-  "gap": 1.031,
-  "text": "the tested CUDA 12 shared-library path and supported calls, rather",
   "code_only": false
  },
  {
@@ -3253,12 +3223,6 @@
  },
  {
   "page": 7,
-  "gap": 1.47,
-  "text": "ported. The server loads the real math libraries and is started di-",
-  "code_only": false
- },
- {
-  "page": 7,
   "gap": 1.499,
   "text": "rate processes on the same host, communicating over TCP loop-",
   "code_only": false
@@ -3326,13 +3290,13 @@
  {
   "page": 7,
   "gap": 1.66,
-  "text": "en-trial datasets like G. Section 6.10 identifies the platform and",
+  "text": "tember 13-14, 2026 experiments using an Apple M3 client and,",
   "code_only": false
  },
  {
   "page": 7,
   "gap": 1.66,
-  "text": "tember 13-14, 2026 experiments using an Apple M3 client and,",
+  "text": "en-trial datasets like G. Section 6.10 identifies the platform and",
   "code_only": false
  },
  {
@@ -4675,12 +4639,6 @@
  },
  {
   "page": 11,
-  "gap": 1.168,
-  "text": "c0318a3, which differs from the originally inspected commit only",
-  "code_only": false
- },
- {
-  "page": 11,
   "gap": 1.172,
   "text": "vice comparison on a different GPU: on the L40S, eager remoting",
   "code_only": false
@@ -5504,25 +5462,19 @@
  {
   "page": 13,
   "gap": 1.014,
-  "text": "buffering so a reply cost two link round trips. These counts refer to",
+  "text": "or of a new mechanism, and they do not compare against any other",
   "code_only": false
  },
  {
   "page": 13,
-  "gap": 1.022,
-  "text": "smaller batches, not an inference-throughput estimate or a measure",
+  "gap": 1.042,
+  "text": "that flushed at 256 KiB and read each frame with two receives; the",
   "code_only": false
  },
  {
   "page": 13,
-  "gap": 1.026,
-  "text": "tive performance or of a new mechanism, and they do not compare",
-  "code_only": false
- },
- {
-  "page": 13,
-  "gap": 1.038,
-  "text": "detection fell from 117 round trips and 28.3 s to 20 round trips and",
+  "gap": 1.043,
+  "text": "to 256 KiB when there is no GPU work to overlap. This is a useful",
   "code_only": false
  },
  {
@@ -5533,20 +5485,20 @@
  },
  {
   "page": 13,
-  "gap": 1.046,
-  "text": "client queue every 1 KiB instead of 256 KiB lets the GPU start be-",
-  "code_only": false
- },
- {
-  "page": 13,
   "gap": 1.049,
   "text": "generated tokens. The llama.cpp comparison uses one CPU thread.",
   "code_only": false
  },
  {
   "page": 13,
-  "gap": 1.055,
-  "text": "the separate Python client bottleneck measured in Section 6.9. [S9,",
+  "gap": 1.054,
+  "text": "A token issues about 450 launches; with a 256 KiB flush threshold",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.063,
+  "text": "limits, loss, and jitter are untested and the only real link is one lap-",
   "code_only": false
  },
  {
@@ -5563,14 +5515,20 @@
  },
  {
   "page": 13,
-  "gap": 1.083,
-  "text": "launch-issue cost was about 0.21 microseconds per call; the later 1",
+  "gap": 1.076,
+  "text": "arate latency/bandwidth decomposition is available. It used a build",
   "code_only": false
  },
  {
   "page": 13,
   "gap": 1.084,
   "text": "Reducing Ollama's num_thread to 1 improved native execution as",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.084,
+  "text": "per token. They do not support a claim of near-native performance",
   "code_only": false
  },
  {
@@ -5605,6 +5563,24 @@
  },
  {
   "page": 13,
+  "gap": 1.124,
+  "text": "the client has issued them all. Flushing every 1 KiB lets the server",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.126,
+  "text": "in a Linux arm64 container on a Mac, reaching an x86 server over",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.127,
+  "text": "launch-issue cost was about 0.21 microseconds per call; the 1 KiB",
+  "code_only": false
+ },
+ {
+  "page": 13,
   "gap": 1.128,
   "text": "cation execution for the tested cases, not numerical identity for ar-",
   "code_only": false
@@ -5629,6 +5605,12 @@
  },
  {
   "page": 13,
+  "gap": 1.161,
+  "text": "adverse case for smaller batches, not an inference-throughput esti-",
+  "code_only": false
+ },
+ {
+  "page": 13,
   "gap": 1.162,
   "text": "poor default rates, but do not account for the remaining gap to na-",
   "code_only": false
@@ -5647,18 +5629,6 @@
  },
  {
   "page": 13,
-  "gap": 1.175,
-  "text": "there is no GPU work to overlap. This is a useful adverse case for",
-  "code_only": false
- },
- {
-  "page": 13,
-  "gap": 1.181,
-  "text": "spite one reply per token. They do not support a claim of near-na-",
-  "code_only": false
- },
- {
-  "page": 13,
   "gap": 1.188,
   "text": "with matching output across the two processor architectures. Each",
   "code_only": false
@@ -5671,38 +5641,8 @@
  },
  {
   "page": 13,
-  "gap": 1.217,
-  "text": "round trips per generated token, then 21 with the per-kernel occu-",
-  "code_only": false
- },
- {
-  "page": 13,
-  "gap": 1.227,
-  "text": "server over SSH; they do not verify the stock launcher end to end",
-  "code_only": false
- },
- {
-  "page": 13,
   "gap": 1.228,
   "text": "quiring an increased Ollama load timeout; the documented setting",
-  "code_only": false
- },
- {
-  "page": 13,
-  "gap": 1.23,
-  "text": "real-GPU math checks, and measured gains from caching, queued",
-  "code_only": false
- },
- {
-  "page": 13,
-  "gap": 1.266,
-  "text": "3.3 s after bulk attribute retrieval and frame-write changes. Previ-",
-  "code_only": false
- },
- {
-  "page": 13,
-  "gap": 1.271,
-  "text": "result does not isolate each change's contribution. Output was un-",
   "code_only": false
  },
  {
@@ -5713,32 +5653,14 @@
  },
  {
   "page": 13,
-  "gap": 1.282,
-  "text": "dates the 64 KiB read buffer and 1 KiB flush default; their WAN",
-  "code_only": false
- },
- {
-  "page": 13,
-  "gap": 1.284,
-  "text": "tive after thread and transport changes. They also do not overturn",
-  "code_only": false
- },
- {
-  "page": 13,
   "gap": 1.291,
   "text": "lidity are: one GPU model, one model, and one batch size, so the",
   "code_only": false
  },
  {
   "page": 13,
-  "gap": 1.303,
-  "text": "bitrary models. The WAN observations used an earlier copied in-",
-  "code_only": false
- },
- {
-  "page": 13,
-  "gap": 1.316,
-  "text": "KiB read buffer reduces that per-frame syscall work; flushing the",
+  "gap": 1.308,
+  "text": "two different constraints: CPU-quota throttling with default infer-",
   "code_only": false
  },
  {
@@ -5749,14 +5671,14 @@
  },
  {
   "page": 13,
-  "gap": 1.327,
-  "text": "KiB flush default adds about 0.25 microseconds per launch when",
+  "gap": 1.326,
+  "text": "bitrary models. The WAN observations used a copied installation",
   "code_only": false
  },
  {
   "page": 13,
   "gap": 1.352,
-  "text": "fore the client has issued all launches. The combined before/after",
+  "text": "client. Without the per-kernel occupancy cache it makes 45; with",
   "code_only": false
  },
  {
@@ -5767,8 +5689,8 @@
  },
  {
   "page": 13,
-  "gap": 1.357,
-  "text": "arate latency/bandwidth decomposition is available. This run pre-",
+  "gap": 1.365,
+  "text": "SSH; they do not verify the stock launcher end to end on arm64.",
   "code_only": false
  },
  {
@@ -5779,8 +5701,8 @@
  },
  {
   "page": 13,
-  "gap": 1.405,
-  "text": "the client. Startup benefited separately: over a 123 ms link, GPU",
+  "gap": 1.406,
+  "text": "flush rows were measured alternately in one session. In a sweep,",
   "code_only": false
  },
  {
@@ -5791,8 +5713,14 @@
  },
  {
   "page": 13,
-  "gap": 1.429,
-  "text": "stallation in a Linux arm64 container on a Mac, reaching an x86",
+  "gap": 1.437,
+  "text": "flush threshold adds about 0.25 microseconds per launch relative",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.438,
+  "text": "tive. They also do not overturn the separate Python client bottle-",
   "code_only": false
  },
  {
@@ -5803,8 +5731,20 @@
  },
  {
   "page": 13,
+  "gap": 1.45,
+  "text": "the cache but with every stream synchronize waiting, 21. Over a",
+  "code_only": false
+ },
+ {
+  "page": 13,
   "gap": 1.505,
   "text": "difference; and with client CPU held fixed, the round trip added",
+  "code_only": false
+ },
+ {
+  "page": 13,
+  "gap": 1.509,
+  "text": "real-GPU math checks, and measured effects of caching, queued",
   "code_only": false
  },
  {
@@ -5821,8 +5761,8 @@
  },
  {
   "page": 13,
-  "gap": 1.549,
-  "text": "pancy cache, then one with upload-only queued stream synchro-",
+  "gap": 1.534,
+  "text": "upload synchronization, and the flush threshold. They also show",
   "code_only": false
  },
  {
@@ -5835,12 +5775,6 @@
   "page": 13,
   "gap": 1.56,
   "text": "put. Loading 374 MiB of weights took about seven minutes, re-",
-  "code_only": false
- },
- {
-  "page": 13,
-  "gap": 1.58,
-  "text": "ceive syscalls for 320 tokens, about a thousand per token. A 64",
   "code_only": false
  },
  {
@@ -5869,26 +5803,32 @@
  },
  {
   "page": 13,
+  "gap": 1.624,
+  "text": "sweep used a userspace delay proxy on loopback, so bandwidth",
+  "code_only": false
+ },
+ {
+  "page": 13,
   "gap": 1.648,
   "text": "cost in per-operation work in the client. The subsequent CUDA",
   "code_only": false
  },
  {
   "page": 13,
-  "gap": 1.658,
-  "text": "nization. The remaining reply downloads logits for sampling on",
+  "gap": 1.66,
+  "text": "work through launches while the client issues the rest. The two",
   "code_only": false
  },
  {
   "page": 13,
-  "gap": 1.705,
-  "text": "Removing reply dependencies. The recorded progression is 45",
+  "gap": 1.674,
+  "text": "ence threads and link-bound WAN generation despite one reply",
   "code_only": false
  },
  {
   "page": 13,
-  "gap": 1.711,
-  "text": "Before the final transport changes, the server made 319,028 re-",
+  "gap": 1.742,
+  "text": "vice attributes queried one at a time and frames written in two",
   "code_only": false
  },
  {
@@ -5917,20 +5857,14 @@
  },
  {
   "page": 13,
-  "gap": 1.879,
-  "text": "They also show two different constraints: CPU-quota throttling",
-  "code_only": false
- },
- {
-  "page": 13,
   "gap": 1.884,
   "text": "at temperature 0 identical to a native run. A separate launcher",
   "code_only": false
  },
  {
   "page": 13,
-  "gap": 1.938,
-  "text": "ously, separate header and payload writes interacted with SSH",
+  "gap": 1.923,
+  "text": "needs a reply: the download of the logits for sampling on the",
   "code_only": false
  },
  {
@@ -5941,14 +5875,14 @@
  },
  {
   "page": 13,
-  "gap": 1.991,
-  "text": "upload synchronization, buffered reads, and earlier submission.",
+  "gap": 2.017,
+  "text": "was no faster, because the system calls cost what the overlap",
   "code_only": false
  },
  {
   "page": 13,
-  "gap": 2.05,
-  "text": "reply dependencies, not the much larger number of forwarded",
+  "gap": 2.036,
+  "text": "dependencies, not the much larger number of forwarded calls.",
   "code_only": false
  },
  {
@@ -5971,6 +5905,12 @@
  },
  {
   "page": 13,
+  "gap": 2.187,
+  "text": "Reply dependencies. Generating a token makes one call that",
+  "code_only": false
+ },
+ {
+  "page": 13,
   "gap": 3.001,
   "text": "--poll 0 addressed the busy-wait slowdown; OMP_ WAIT_",
   "code_only": false
@@ -5979,6 +5919,12 @@
   "page": 14,
   "gap": 1.005,
   "text": "istic comparison of training state. What they leave open is a profile",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.006,
+  "text": "with identical observation points; eager versus graph shipping with",
   "code_only": false
  },
  {
@@ -6013,20 +5959,14 @@
  },
  {
   "page": 14,
-  "gap": 1.05,
-  "text": "builds, raw trials, and native graph settings for the CUDA compar-",
-  "code_only": false
- },
- {
-  "page": 14,
   "gap": 1.063,
   "text": "bandwidth sweep and a lossy link; independent process-level repe-",
   "code_only": false
  },
  {
   "page": 14,
-  "gap": 1.063,
-  "text": "limits, loss, and jitter are untested and the only real link is one lap-",
+  "gap": 1.066,
+  "text": "observations every step versus every k steps. An RTT sweep and a",
   "code_only": false
  },
  {
@@ -6043,26 +5983,20 @@
  },
  {
   "page": 14,
-  "gap": 1.092,
-  "text": "isons; the present record does not establish identical graph settings",
-  "code_only": false
- },
- {
-  "page": 14,
   "gap": 1.103,
   "text": "moting baseline on the same hardware. Report incompatibilities as",
   "code_only": false
  },
  {
   "page": 14,
-  "gap": 1.117,
-  "text": "abled versus disabled; Python flush size with identical observation",
+  "gap": 1.119,
+  "text": "bandwidth sweep, and larger batch sizes. Whole-program SSH ex-",
   "code_only": false
  },
  {
   "page": 14,
-  "gap": 1.119,
-  "text": "bandwidth sweep, and larger batch sizes. Whole-program SSH ex-",
+  "gap": 1.124,
+  "text": "comparison. Still needed are the read buffer's separate effect and a",
   "code_only": false
  },
  {
@@ -6099,6 +6033,18 @@
   "page": 14,
   "gap": 1.16,
   "text": "p99 latency claim. Randomize experiment order and track thermal",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.167,
+  "text": "present record does not establish identical graph settings for every",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.171,
+  "text": "tions to estimate steady-state savings, not infer them from two ag-",
   "code_only": false
  },
  {
@@ -6145,6 +6091,12 @@
  },
  {
   "page": 14,
+  "gap": 1.294,
+  "text": "remain unvalidated. TODO: archive exact commands, builds, raw",
+  "code_only": false
+ },
+ {
+  "page": 14,
   "gap": 1.302,
   "text": "ger ATen remoting, shipped graphs, and that coarse RPC, includ-",
   "code_only": false
@@ -6153,12 +6105,6 @@
   "page": 14,
   "gap": 1.318,
   "text": "in two proxy conditions for reasons we do not know; the correct-",
-  "code_only": false
- },
- {
-  "page": 14,
-  "gap": 1.325,
-  "text": "ibility and performance. CUDA interception now runs unchanged",
   "code_only": false
  },
  {
@@ -6175,14 +6121,14 @@
  },
  {
   "page": 14,
-  "gap": 1.328,
-  "text": "models, and the new read/flush policy over a WAN and with Py-",
+  "gap": 1.339,
+  "text": "sessions ran on separately rented hosts; server CPU time doubled",
   "code_only": false
  },
  {
   "page": 14,
-  "gap": 1.339,
-  "text": "sessions ran on separately rented hosts; server CPU time doubled",
+  "gap": 1.35,
+  "text": "models, and the current transport over a WAN and with PyTorch",
   "code_only": false
  },
  {
@@ -6205,12 +6151,6 @@
  },
  {
   "page": 14,
-  "gap": 1.389,
-  "text": "pendent ablations of those changes and a flush-size sweep across",
-  "code_only": false
- },
- {
-  "page": 14,
   "gap": 1.396,
   "text": "coarse-grained RPC baseline that executes a whole step remotely",
   "code_only": false
@@ -6225,6 +6165,12 @@
   "page": 14,
   "gap": 1.397,
   "text": "batch receipt, after operation execution but before reply delivery,",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.414,
+  "text": "substantially for a repeated computation. On one L40S, eager re-",
   "code_only": false
  },
  {
@@ -6331,8 +6277,8 @@
  },
  {
   "page": 14,
-  "gap": 1.563,
-  "text": "points; eager versus graph shipping with server eager execution;",
+  "gap": 1.58,
+  "text": "caches and synchronization rule, and a colocated flush-threshold",
   "code_only": false
  },
  {
@@ -6361,20 +6307,14 @@
  },
  {
   "page": 14,
-  "gap": 1.604,
-  "text": "links. The remaining essential ablations are CUDA batching en-",
+  "gap": 1.598,
+  "text": "trials, and native graph settings for the CUDA comparisons; the",
   "code_only": false
  },
  {
   "page": 14,
   "gap": 1.606,
   "text": "the server; rGPU client and server colocated; rGPU over a con-",
-  "code_only": false
- },
- {
-  "page": 14,
-  "gap": 1.624,
-  "text": "sweep used a userspace delay proxy on loopback, so bandwidth",
   "code_only": false
  },
  {
@@ -6397,20 +6337,8 @@
  },
  {
   "page": 14,
-  "gap": 1.643,
-  "text": "should be varied independently. A graph break-even experiment",
-  "code_only": false
- },
- {
-  "page": 14,
-  "gap": 1.675,
-  "text": "server eager versus Inductor; and scalar observations every step",
-  "code_only": false
- },
- {
-  "page": 14,
-  "gap": 1.707,
-  "text": "a combined read-buffer/flush comparison. Still needed are inde-",
+  "gap": 1.732,
+  "text": "server eager execution; server eager versus Inductor; and scalar",
   "code_only": false
  },
  {
@@ -6423,6 +6351,12 @@
   "page": 14,
   "gap": 1.767,
   "text": "summary-level timing provenance, and no controlled bandwidth",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.769,
+  "text": "flush-size sweep across links. The remaining essential ablations",
   "code_only": false
  },
  {
@@ -6441,6 +6375,12 @@
   "page": 14,
   "gap": 1.835,
   "text": "Where compatible versions and artifacts are available, compare",
+  "code_only": false
+ },
+ {
+  "page": 14,
+  "gap": 1.84,
+  "text": "are CUDA batching enabled versus disabled; Python flush size",
   "code_only": false
  },
  {
@@ -6469,6 +6409,12 @@
  },
  {
   "page": 14,
+  "gap": 1.918,
+  "text": "Section 6.10 reports reply counts with and without the CUDA",
+  "code_only": false
+ },
+ {
+  "page": 14,
   "gap": 1.958,
   "text": "fact now includes gpu_ benchmark. py, which runs the native,",
   "code_only": false
@@ -6477,12 +6423,6 @@
   "page": 14,
   "gap": 2.006,
   "text": "model already measured in Section 6.10, with stated sampling",
-  "code_only": false
- },
- {
-  "page": 14,
-  "gap": 2.039,
-  "text": "versus every k steps. An RTT sweep and a bandwidth sweep",
   "code_only": false
  },
  {
@@ -6517,20 +6457,26 @@
  },
  {
   "page": 14,
-  "gap": 2.713,
-  "text": "Torch remain unvalidated. TODO: archive exact commands,",
+  "gap": 2.694,
+  "text": "ibility and performance. CUDA interception runs unchanged",
   "code_only": false
  },
  {
   "page": 14,
-  "gap": 2.831,
-  "text": "must include compilation and enough iterations to estimate",
+  "gap": 2.912,
+  "text": "bandwidth sweep should be varied independently. A graph",
   "code_only": false
  },
  {
   "page": 14,
   "gap": 2.933,
   "text": "framework/driver versions, client CPU utilization, RTT and",
+  "code_only": false
+ },
+ {
+  "page": 15,
+  "gap": 1.009,
+  "text": "raised colocated inference throughput, while reducing reply depen-",
   "code_only": false
  },
  {
@@ -6577,14 +6523,14 @@
  },
  {
   "page": 15,
-  "gap": 1.094,
-  "text": "6.4: counter-based claims are stable, timing ratios on a shared host",
+  "gap": 1.086,
+  "text": "this conclusion is workload-specific: submitting queued calls early",
   "code_only": false
  },
  {
   "page": 15,
   "gap": 1.094,
-  "text": "while reducing reply dependencies to one per token still left WAN",
+  "text": "6.4: counter-based claims are stable, timing ratios on a shared host",
   "code_only": false
  },
  {
@@ -6637,6 +6583,18 @@
  },
  {
   "page": 15,
+  "gap": 1.206,
+  "text": "path, vary batch size and bandwidth, and compare the two bound-",
+  "code_only": false
+ },
+ {
+  "page": 15,
+  "gap": 1.228,
+  "text": "dencies to one per token still left WAN generation constrained by",
+  "code_only": false
+ },
+ {
+  "page": 15,
   "gap": 1.23,
   "text": "labelled as a measurement of ced62f5. No remote machines were",
   "code_only": false
@@ -6685,18 +6643,6 @@
  },
  {
   "page": 15,
-  "gap": 1.413,
-  "text": "evaluation must profile that path, vary batch size and bandwidth,",
-  "code_only": false
- },
- {
-  "page": 15,
-  "gap": 1.414,
-  "text": "substantially for a repeated computation. On one L40S, eager re-",
-  "code_only": false
- },
- {
-  "page": 15,
   "gap": 1.429,
   "text": "[S2] Historical performance record, read together with website/",
   "code_only": false
@@ -6715,8 +6661,8 @@
  },
  {
   "page": 15,
-  "gap": 1.54,
-  "text": "and compare the two boundaries and a coarse RPC on the same",
+  "gap": 1.524,
+  "text": "logits transfer and latency. The next evaluation must profile that",
   "code_only": false
  },
  {
@@ -6781,32 +6727,20 @@
  },
  {
   "page": 15,
-  "gap": 1.818,
-  "text": "this conclusion is workload-specific: fewer receive syscalls and",
-  "code_only": false
- },
- {
-  "page": 15,
   "gap": 1.848,
   "text": "The original source inspection used rGPU commit 7a8ba43 on",
   "code_only": false
  },
  {
   "page": 15,
-  "gap": 1.88,
-  "text": "earlier queue submission raised colocated inference throughput,",
-  "code_only": false
- },
- {
-  "page": 15,
-  "gap": 1.938,
-  "text": "generation constrained by logits transfer and latency. The next",
-  "code_only": false
- },
- {
-  "page": 15,
   "gap": 2.055,
   "text": "moting of a training step was 8.9x slower than native with a",
+  "code_only": false
+ },
+ {
+  "page": 15,
+  "gap": 2.138,
+  "text": "output wrappers, layout restoration, finalization, conjugate and",
   "code_only": false
  },
  {
@@ -7095,12 +7029,6 @@
   "page": 16,
   "gap": 2.075,
   "text": "[S4] python/ rgpu/ session. py: one process connection, en-",
-  "code_only": false
- },
- {
-  "page": 16,
-  "gap": 2.138,
-  "text": "output wrappers, layout restoration, finalization, conjugate and",
   "code_only": false
  },
  {
