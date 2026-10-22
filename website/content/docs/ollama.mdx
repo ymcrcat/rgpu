@@ -14,10 +14,11 @@ on Linux x86_64 with an RTX 4090. All 34 generated tokens matched a native
 run at temperature 0 and seed 1. The runner loaded the rGPU libraries, Ollama
 reported the model in GPU memory, and its original CUDA libraries were unchanged.
 
-Earlier tests used a copied installation with Ollama 0.40.0 and 0.40.3, both
-on the GPU host and in a Linux arm64 container on a Mac over SSH. The launcher
-has not yet been checked end to end in that Mac-container setup. Larger models
-have not been tried.
+The launcher has also run end to end from a Linux arm64 container on an M3
+Mac to an RTX 4000 Ada over SSH, as recorded below. The model was loaded before
+recording; generation is at real speed. Larger models have not been tried.
+
+<img src="/ollama-demo.gif" alt="Stock Ollama in a Linux container on a Mac, generating on a remote NVIDIA GPU through rGPU" />
 
 If the goal is only to use Ollama with a remote GPU, run Ollama on the GPU host
 and point `OLLAMA_HOST` at it. That is full speed and needs none of this. The
@@ -134,6 +135,7 @@ The link sets the pace. From a Mac to a GPU 123 ms away, with
 For a Linux arm64 container on a Mac, build matching stand-ins with
 `./scripts/build_client.sh`, then install the launcher **inside the container**.
 Point `RGPU_SERVER` at the tunnel, such as `host.docker.internal:9713`, and add
-`OLLAMA_LOAD_TIMEOUT=30m` to the launch command. The measurements above used
-the earlier copied-installation setup; they are not a separate validation of
-the launcher on arm64.
+`OLLAMA_LOAD_TIMEOUT=30m` to the launch command. The measurements above came
+from an earlier build and a copied installation. The recording at the top of
+this page used the launcher and the current build: loading took about four
+minutes, and a 23-token reply ran at 9.8 tokens per second to an RTX 4000 Ada.

@@ -13,6 +13,13 @@ the client. It currently offers two paths:
 The PyTorch device is the simpler integration. The CUDA shim covers existing
 binaries but has a larger compatibility surface.
 
+![Stock Ollama in a Linux container on a Mac, generating on a remote NVIDIA GPU through rGPU](website/public/ollama-demo.gif)
+
+Stock Ollama in a Linux container on an M3 Mac, generating on a rented RTX 4000
+Ada over SSH through the CUDA shim. The model was loaded before recording;
+generation is at real speed. See [Ollama and llama.cpp](website/content/docs/ollama.mdx).
+The terminal recording is in [`ollama-demo/`](ollama-demo/).
+
 ## Documentation
 
 The Fumadocs site in [`website/`](website/) is the product documentation:
